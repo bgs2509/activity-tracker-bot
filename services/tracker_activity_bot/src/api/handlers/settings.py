@@ -5,6 +5,7 @@ from datetime import time as dt_time
 
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from src.api.states.settings import SettingsStates
 from src.infrastructure.http_clients.http_client import DataAPIClient
@@ -241,6 +242,126 @@ async def toggle_quiet_hours(callback: types.CallbackQuery):
             quiet_hours_end="07:00:00"
         )
         text = "✅ Тихие часы включены\n\nБот не будет беспокоить с 23:00 до 07:00"
+
+    await callback.message.answer(text, reply_markup=get_confirmation_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "quiet_time")
+async def show_quiet_time_selection(callback: types.CallbackQuery):
+    """Show selection between start and end time."""
+    text = (
+        "⏰ Изменить время тихих часов\n\n"
+        "Что хочешь изменить?"
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌙 Время начала", callback_data="quiet_select_start")],
+        [InlineKeyboardButton(text="🌅 Время окончания", callback_data="quiet_select_end")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="settings_quiet_hours")],
+    ])
+    await callback.message.answer(text, reply_markup=keyboard)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "quiet_select_start")
+async def show_quiet_start_selection(callback: types.CallbackQuery):
+    """Show quiet hours start time selection."""
+    user_service = UserService(api_client)
+    settings_service = UserSettingsService(api_client)
+    telegram_id = callback.from_user.id
+
+    user = await user_service.get_by_telegram_id(telegram_id)
+    settings = await settings_service.get_settings(user["id"])
+
+    current_start = settings["quiet_hours_start"]
+    current_text = current_start[:5] if current_start else "не установлено"
+
+    text = (
+        f"🌙 Время начала тихих часов\n\n"
+        f"Текущее время: {current_text}\n\n"
+        f"Выбери новое время начала тихих часов:"
+    )
+
+    await callback.message.answer(text, reply_markup=get_quiet_hours_start_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "quiet_select_end")
+async def show_quiet_end_selection(callback: types.CallbackQuery):
+    """Show quiet hours end time selection."""
+    user_service = UserService(api_client)
+    settings_service = UserSettingsService(api_client)
+    telegram_id = callback.from_user.id
+
+    user = await user_service.get_by_telegram_id(telegram_id)
+    settings = await settings_service.get_settings(user["id"])
+
+    current_end = settings["quiet_hours_end"]
+    current_text = current_end[:5] if current_end else "не установлено"
+
+    text = (
+        f"🌅 Время окончания тихих часов\n\n"
+        f"Текущее время: {current_text}\n\n"
+        f"Выбери новое время окончания тихих часов:"
+    )
+
+    await callback.message.answer(text, reply_markup=get_quiet_hours_end_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("quiet_start_"))
+async def set_quiet_start_time(callback: types.CallbackQuery):
+    """Set quiet hours start time."""
+    # Extract time from callback (e.g., "quiet_start_23:00" -> "23:00")
+    parts = callback.data.split("_")
+    if parts[-1] == "custom":
+        return  # Handle custom input separately
+
+    time_str = parts[-1]  # e.g., "23:00"
+
+    user_service = UserService(api_client)
+    settings_service = UserSettingsService(api_client)
+    telegram_id = callback.from_user.id
+
+    user = await user_service.get_by_telegram_id(telegram_id)
+    settings = await settings_service.get_settings(user["id"])
+
+    # Update with full time format (HH:MM:SS)
+    await settings_service.update_settings(
+        settings["id"],
+        quiet_hours_start=f"{time_str}:00"
+    )
+
+    text = f"✅ Время начала тихих часов обновлено!\n\nТеперь тихие часы начинаются в {time_str}"
+
+    await callback.message.answer(text, reply_markup=get_confirmation_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("quiet_end_"))
+async def set_quiet_end_time(callback: types.CallbackQuery):
+    """Set quiet hours end time."""
+    # Extract time from callback (e.g., "quiet_end_07:00" -> "07:00")
+    parts = callback.data.split("_")
+    if parts[-1] == "custom":
+        return  # Handle custom input separately
+
+    time_str = parts[-1]  # e.g., "07:00"
+
+    user_service = UserService(api_client)
+    settings_service = UserSettingsService(api_client)
+    telegram_id = callback.from_user.id
+
+    user = await user_service.get_by_telegram_id(telegram_id)
+    settings = await settings_service.get_settings(user["id"])
+
+    # Update with full time format (HH:MM:SS)
+    await settings_service.update_settings(
+        settings["id"],
+        quiet_hours_end=f"{time_str}:00"
+    )
+
+    text = f"✅ Время окончания тихих часов обновлено!\n\nТеперь тихие часы заканчиваются в {time_str}"
 
     await callback.message.answer(text, reply_markup=get_confirmation_keyboard())
     await callback.answer()
