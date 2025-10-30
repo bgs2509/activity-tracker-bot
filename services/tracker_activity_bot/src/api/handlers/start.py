@@ -77,6 +77,23 @@ async def cmd_start(message: types.Message):
             "Выбери действие:"
         )
     else:
+        # Check if user has settings (for backward compatibility with existing users)
+        settings = await settings_service.get_settings(user["id"])
+        if not settings:
+            logger.info(f"Creating missing settings for existing user {user['id']}")
+            settings = await settings_service.create_settings(user["id"])
+
+            # Schedule poll for existing user who didn't have settings
+            user_timezone = user.get("timezone", "Europe/Moscow")
+            from src.api.handlers.poll import send_automatic_poll
+            await scheduler_service.schedule_poll(
+                user_id=telegram_id,
+                settings=settings,
+                user_timezone=user_timezone,
+                send_poll_callback=lambda uid: send_automatic_poll(message.bot, uid)
+            )
+            logger.info(f"Scheduled poll for existing user {telegram_id}")
+
         # Welcome message for returning user
         text = (
             f"👋 С возвращением, {first_name}!\n\n"
