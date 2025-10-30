@@ -24,6 +24,7 @@ from src.api.keyboards.settings import (
     get_confirmation_keyboard,
 )
 from src.api.keyboards.main_menu import get_main_menu_keyboard
+from src.application.services.scheduler_service import scheduler_service
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -58,13 +59,43 @@ async def show_settings_menu(callback: types.CallbackQuery):
 
     reminder_status = "Включены ✅" if settings["reminder_enabled"] else "Выключены ❌"
 
+    # Get next poll time from scheduler
+    next_poll_text = ""
+    if telegram_id in scheduler_service.jobs:
+        job_id = scheduler_service.jobs[telegram_id]
+        try:
+            job = scheduler_service.scheduler.get_job(job_id)
+            if job and job.next_run_time:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                time_until = job.next_run_time - now
+                minutes = int(time_until.total_seconds() / 60)
+
+                if minutes < 60:
+                    next_poll_text = f"⏰ Следующий опрос через {minutes} минут"
+                else:
+                    hours = minutes // 60
+                    remaining_minutes = minutes % 60
+                    if remaining_minutes == 0:
+                        next_poll_text = f"⏰ Следующий опрос через {hours} час{'а' if 1 < hours < 5 else 'ов'}"
+                    else:
+                        next_poll_text = f"⏰ Следующий опрос через {hours}ч {remaining_minutes}м"
+        except Exception as e:
+            logger.debug(f"Could not get next poll time: {e}")
+
     text = (
         f"⚙️ Настройки бота\n\n"
         f"Текущие настройки:\n\n"
         f"📅 Интервалы опросов:\n"
         f"• Будни: каждые {weekday_h}ч\n"
-        f"• Выходные: каждые {weekend_h}ч\n\n"
-        f"🌙 Тихие часы:\n"
+        f"• Выходные: каждые {weekend_h}ч\n"
+    )
+
+    if next_poll_text:
+        text += f"• {next_poll_text}\n"
+
+    text += (
+        f"\n🌙 Тихие часы:\n"
         f"• {quiet_text}\n"
         f"(Бот не будет беспокоить в это время)\n\n"
         f"🔔 Напоминания:\n"
