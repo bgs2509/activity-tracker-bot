@@ -5,17 +5,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.config import settings
+from src.core.logging import setup_logging
 from src.api.v1.users import router as users_router
 from src.api.v1.categories import router as categories_router
 from src.api.v1.activities import router as activities_router
 from src.infrastructure.database.connection import engine
 from src.domain.models.base import Base
 
-# Configure logging
-logging.basicConfig(
-    level=settings.log_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configure structured JSON logging (MANDATORY for Level 1)
+setup_logging(service_name="data_postgres_api", log_level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app

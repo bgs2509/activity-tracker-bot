@@ -12,3 +12,6 @@ alembic==1.13.1
 # Utilities
 python-dateutil==2.8.2
 pytz==2024.1
+
+# Logging (MANDATORY for Level 1)
+python-json-logger==2.0.7

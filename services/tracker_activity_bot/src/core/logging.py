@@ -1,0 +1,86 @@
+"""Structured JSON logging setup for tracker_activity_bot.
+
+This module provides structured JSON logging using python-json-logger,
+which is MANDATORY for Level 1 (PoC) according to .framework/ requirements.
+
+Usage:
+    from src.core.logging import setup_logging
+
+    # Initialize logging FIRST in main.py
+    setup_logging(service_name="tracker_activity_bot", log_level="INFO")
+    logger = logging.getLogger(__name__)
+
+    # All logs will be in JSON format
+    logger.info("Bot started", extra={"telegram_id": 123456789})
+
+Output Example:
+    {"timestamp": "2025-10-30T12:00:00Z", "logger": "main",
+     "levelname": "INFO", "message": "Bot started",
+     "service": "tracker_activity_bot", "telegram_id": 123456789}
+
+Reference:
+    - .framework/docs/reference/maturity-levels.md (Level 1, lines 48-52)
+    - artifacts/prompts/step-01-v01.md (lines 1131-1234)
+"""
+import logging
+import sys
+from pythonjsonlogger import jsonlogger
+
+
+def setup_logging(service_name: str, log_level: str = "INFO") -> None:
+    """
+    Setup structured JSON logging for the service.
+
+    This function configures the root logger to output JSON-formatted logs
+    to stdout. All subsequent logging calls will produce structured JSON output.
+
+    Args:
+        service_name: Name of the service for log identification.
+                      Example: "tracker_activity_bot"
+        log_level: Logging level string (INFO, DEBUG, ERROR, WARNING, CRITICAL).
+                   Default: "INFO"
+
+    Why JSON Logging is Mandatory for Level 1:
+        1. Parsable by log aggregators (even without ELK on PoC)
+        2. Structured metadata via extra={} parameters
+        3. Preparation for Level 2 (Request ID tracking)
+        4. Production-ready (console logs not suitable for production)
+
+    Example:
+        >>> setup_logging(service_name="tracker_activity_bot")
+        >>> logger = logging.getLogger(__name__)
+        >>> logger.info("User registered", extra={"telegram_id": 123456789})
+        # Output: {"timestamp": "2025-10-30T12:00:00Z", "logger": "main",
+        #          "levelname": "INFO", "message": "User registered",
+        #          "service": "tracker_activity_bot", "telegram_id": 123456789}
+    """
+    # Get root logger
+    logger = logging.getLogger()
+    logger.setLevel(log_level.upper())
+
+    # Clear any existing handlers to avoid duplicate logs
+    logger.handlers = []
+
+    # Create console handler (stdout for Docker log capture)
+    handler = logging.StreamHandler(sys.stdout)
+
+    # Create JSON formatter with field renaming for consistency
+    formatter = jsonlogger.JsonFormatter(
+        fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
+        rename_fields={
+            "asctime": "timestamp",  # More standard field name
+            "name": "logger",        # Clearer than 'name'
+        },
+        static_fields={
+            "service": service_name  # Service identifier in every log
+        },
+    )
+
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    # Log initialization (this will be in JSON format)
+    logger.info(
+        f"Structured JSON logging initialized for {service_name}",
+        extra={"log_level": log_level}
+    )

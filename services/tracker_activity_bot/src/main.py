@@ -6,14 +6,13 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 
 from src.core.config import settings
+from src.core.logging import setup_logging
 from src.api.handlers.start import router as start_router
 from src.api.handlers.activity import router as activity_router
+from src.api.handlers.categories import router as categories_router
 
-# Configure logging
-logging.basicConfig(
-    level=settings.log_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configure structured JSON logging (MANDATORY for Level 1)
+setup_logging(service_name="tracker_activity_bot", log_level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +30,7 @@ async def main():
     # Register routers
     dp.include_router(start_router)
     dp.include_router(activity_router)
+    dp.include_router(categories_router)
 
     # Start polling
     logger.info("Bot started, polling...")

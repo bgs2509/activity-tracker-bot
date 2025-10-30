@@ -465,49 +465,8 @@ async def show_my_activities(callback: types.CallbackQuery):
         await callback.answer()
 
 
-@router.callback_query(F.data == "categories")
-async def show_categories(callback: types.CallbackQuery):
-    """Show user's categories."""
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
-
-    telegram_id = callback.from_user.id
-
-    try:
-        # Get user
-        user = await user_service.get_by_telegram_id(telegram_id)
-        if not user:
-            await callback.message.answer(
-                "⚠️ Пользователь не найден. Отправь /start для регистрации.",
-                reply_markup=get_main_menu_keyboard()
-            )
-            await callback.answer()
-            return
-
-        # Get user's categories
-        categories = await category_service.get_user_categories(user["id"])
-
-        if not categories:
-            text = "У тебя пока нет категорий."
-        else:
-            lines = ["📂 Твои категории:\n"]
-            for cat in categories:
-                emoji = cat.get("emoji", "")
-                name = cat["name"]
-                is_default = " (по умолчанию)" if cat.get("is_default") else ""
-                lines.append(f"{emoji} {name}{is_default}")
-            text = "\n".join(lines)
-
-        await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(f"Error fetching categories: {e}")
-        await callback.message.answer(
-            "⚠️ Произошла ошибка при получении категорий.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        await callback.answer()
+# NOTE: "categories" callback handler removed to avoid conflict with categories.py
+# The full-featured categories handler is in src/api/handlers/categories.py
 
 
 @router.callback_query(F.data == "help")
