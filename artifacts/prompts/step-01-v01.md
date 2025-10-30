@@ -25,9 +25,10 @@
 ✅ **Service separation** — каждый сервис в отдельном контейнере
 ✅ **3-part naming** — `{context}_{domain}_{type}`
 ✅ **Docker Compose** — для локальной разработки (PoC)
+✅ **Structured logging (JSON)** — ОБЯЗАТЕЛЬНО для Level 1 (python-json-logger)
+❌ **Request ID tracking** — НЕ требуется для PoC (только для Level 2+)
 ❌ **Nginx API Gateway** — НЕ требуется для PoC (только для Level 3+)
-❌ **Structured logging** — НЕ требуется для PoC (console logs OK)
-❌ **Prometheus/Grafana** — НЕ требуется для PoC
+❌ **Prometheus/Grafana** — НЕ требуется для PoC (только для Level 3+)
 
 ---
 
@@ -85,83 +86,102 @@
 
 ```
 activity-tracker-bot/
-├── .framework/                        # Git submodule (фреймворк)
-│   ├── docs/                          # Документация фреймворка
-│   ├── templates/                     # Шаблоны сервисов
-│   └── CLAUDE.md                      # Инструкции для AI
+├── .framework/                              # Git submodule (фреймворк)
+│   ├── docs/                                # Документация фреймворка
+│   ├── templates/                           # Шаблоны сервисов
+│   └── CLAUDE.md                            # Инструкции для AI
 │
 ├── services/
-│   ├── tracker_activity_bot/          # Aiogram bot service
-│   │   ├── main.py                    # Entry point
-│   │   ├── handlers/                  # Message & callback handlers
-│   │   │   ├── __init__.py
-│   │   │   ├── start.py               # /start command
-│   │   │   ├── activity.py            # Запись активности
-│   │   │   ├── categories.py          # Управление категориями
-│   │   │   └── list.py                # Просмотр списка
-│   │   ├── keyboards/                 # Inline keyboards
-│   │   │   ├── __init__.py
-│   │   │   ├── main_menu.py
-│   │   │   ├── categories.py
-│   │   │   └── time_select.py
-│   │   ├── states/                    # FSM states
-│   │   │   ├── __init__.py
-│   │   │   ├── activity.py            # States для записи активности
-│   │   │   └── category.py            # States для создания категории
-│   │   ├── services/                  # HTTP client для data API
-│   │   │   ├── __init__.py
-│   │   │   ├── http_client.py         # Base HTTP client
-│   │   │   ├── user_service.py        # Users API calls
-│   │   │   ├── category_service.py    # Categories API calls
-│   │   │   └── activity_service.py    # Activities API calls
-│   │   ├── utils/                     # Утилиты
-│   │   │   ├── __init__.py
-│   │   │   ├── time_parser.py         # Парсинг времени (14:30, 30м, 2ч)
-│   │   │   └── formatters.py          # Форматирование сообщений
-│   │   ├── config.py                  # Settings (from .env)
-│   │   ├── Dockerfile                 # Single-stage build (PoC)
-│   │   ├── requirements.txt
-│   │   ├── tests/                     # Pytest tests
+│   ├── tracker_activity_bot/                # Aiogram bot service
+│   │   ├── src/                             # ⚠️ ОБЯЗАТЕЛЬНАЯ src/ директория (DDD/Hexagonal)
+│   │   │   ├── api/                         # Transport adapters (handlers, keyboards, states)
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── handlers/                # Message & callback handlers
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── start.py            # /start command
+│   │   │   │   │   ├── activity.py         # Запись активности
+│   │   │   │   │   └── categories.py       # Управление категориями
+│   │   │   │   ├── keyboards/              # Inline keyboards
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── main_menu.py
+│   │   │   │   │   ├── categories.py
+│   │   │   │   │   └── time_select.py
+│   │   │   │   └── states/                 # FSM states
+│   │   │   │       ├── __init__.py
+│   │   │   │       ├── activity.py         # States для записи активности
+│   │   │   │       └── category.py         # States для создания категории
+│   │   │   ├── application/                # Use cases, orchestrators (пока пусто для PoC)
+│   │   │   │   └── __init__.py
+│   │   │   ├── domain/                     # Entities, value objects (пока пусто для PoC)
+│   │   │   │   └── __init__.py
+│   │   │   ├── infrastructure/             # Внешние адаптеры (HTTP clients, Redis)
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── http_clients/           # HTTP clients для data API
+│   │   │   │       ├── __init__.py
+│   │   │   │       ├── data_api_client.py  # Base HTTP client
+│   │   │   │       ├── user_client.py      # Users API calls
+│   │   │   │       ├── category_client.py  # Categories API calls
+│   │   │   │       └── activity_client.py  # Activities API calls
+│   │   │   ├── schemas/                    # Pydantic DTOs (если нужны)
+│   │   │   │   └── __init__.py
+│   │   │   └── core/                       # Config, logging, settings
+│   │   │       ├── __init__.py
+│   │   │       ├── config.py               # Settings (from .env)
+│   │   │       └── logging.py              # Structured JSON logging setup
+│   │   ├── main.py                         # Entry point
+│   │   ├── Dockerfile                      # Single-stage build (PoC)
+│   │   ├── requirements.txt                # aiogram, httpx, python-json-logger, pytz
+│   │   ├── tests/                          # Pytest tests
+│   │   │   ├── unit/
+│   │   │   └── __init__.py
 │   │   └── README.md
 │   │
-│   └── data_postgres_api/             # FastAPI data service
-│       ├── main.py                    # FastAPI app entry point
-│       ├── routers/                   # API routers
-│       │   ├── __init__.py
-│       │   ├── users.py               # /api/v1/users/*
-│       │   ├── categories.py          # /api/v1/categories/*
-│       │   └── activities.py          # /api/v1/activities/*
-│       ├── models/                    # SQLAlchemy models
-│       │   ├── __init__.py
-│       │   ├── user.py                # User model
-│       │   ├── category.py            # Category model
-│       │   └── activity.py            # Activity model
-│       ├── repositories/              # Repository pattern
-│       │   ├── __init__.py
-│       │   ├── base.py                # Base repository
-│       │   ├── user_repository.py
-│       │   ├── category_repository.py
-│       │   └── activity_repository.py
-│       ├── schemas/                   # Pydantic schemas (DTOs)
-│       │   ├── __init__.py
-│       │   ├── user.py                # UserCreate, UserResponse
-│       │   ├── category.py            # CategoryCreate, CategoryResponse
-│       │   └── activity.py            # ActivityCreate, ActivityResponse
-│       ├── database/                  # Database setup
-│       │   ├── __init__.py
-│       │   └── connection.py          # Async engine, sessionmaker
-│       ├── config.py                  # Settings (from .env)
-│       ├── Dockerfile                 # Single-stage build (PoC)
-│       ├── requirements.txt
-│       ├── tests/                     # Pytest tests
+│   └── data_postgres_api/                  # FastAPI data service
+│       ├── src/                            # ⚠️ ОБЯЗАТЕЛЬНАЯ src/ директория (DDD/Hexagonal)
+│       │   ├── api/                        # Transport adapters (HTTP routers)
+│       │   │   ├── __init__.py
+│       │   │   └── v1/                     # API версия 1
+│       │   │       ├── __init__.py
+│       │   │       ├── users.py            # /api/v1/users/*
+│       │   │       ├── categories.py       # /api/v1/categories/*
+│       │   │       └── activities.py       # /api/v1/activities/*
+│       │   ├── models/                     # SQLAlchemy models
+│       │   │   ├── __init__.py
+│       │   │   ├── user.py                 # User model
+│       │   │   ├── category.py             # Category model
+│       │   │   └── activity.py             # Activity model
+│       │   ├── repositories/               # Repository pattern
+│       │   │   ├── __init__.py
+│       │   │   ├── base.py                 # Base repository
+│       │   │   ├── user_repository.py
+│       │   │   ├── category_repository.py
+│       │   │   └── activity_repository.py
+│       │   ├── schemas/                    # Pydantic schemas (DTOs)
+│       │   │   ├── __init__.py
+│       │   │   ├── user.py                 # UserCreate, UserResponse
+│       │   │   ├── category.py             # CategoryCreate, CategoryResponse
+│       │   │   └── activity.py             # ActivityCreate, ActivityResponse
+│       │   └── core/                       # Config, database, logging
+│       │       ├── __init__.py
+│       │       ├── config.py               # Settings (from .env)
+│       │       ├── database.py             # Async engine, sessionmaker, get_db()
+│       │       └── logging.py              # Structured JSON logging setup
+│       ├── main.py                         # FastAPI app entry point
+│       ├── Dockerfile                      # Single-stage build (PoC)
+│       ├── requirements.txt                # fastapi, sqlalchemy[asyncio], asyncpg, python-json-logger
+│       ├── tests/                          # Pytest tests
+│       │   ├── unit/
+│       │   └── __init__.py
 │       └── README.md
 │
-├── docker-compose.yml                 # Local development setup
-├── .env.example                       # Environment variables template
+├── docker-compose.yml                      # Local development setup
+├── .env.example                            # Environment variables template
 ├── .gitignore
-├── Makefile                           # Development commands
-└── README.md                          # Project documentation
+├── Makefile                                # Development commands
+└── README.md                               # Project documentation
 ```
+
+> **⚠️ ВАЖНО**: Используется DDD/Hexagonal архитектура с обязательной `src/` директорией в обоих сервисах, согласно `.framework/docs/atomic/architecture/project-structure-patterns.md`. Это требование Level 1 для возможности эволюции без рефакторинга при переходе на Level 2/3/4.
 
 ---
 
@@ -562,7 +582,7 @@ duration_minutes = round((end_time - start_time).total_seconds() / 60)
 
 **Триггер**: Нажатие кнопки "📝 Записать активность"
 
-**FSM States** (в `tracker_activity_bot/states/activity.py`):
+**FSM States** (в `tracker_activity_bot/src/api/states/activity.py`):
 ```python
 class ActivityStates(StatesGroup):
     waiting_for_start_time = State()
@@ -595,7 +615,7 @@ class ActivityStates(StatesGroup):
 
 **State**: `ActivityStates.waiting_for_start_time`
 
-**Парсинг времени** (в `utils/time_parser.py`):
+**Парсинг времени** (в `src/application/utils/time_parser.py`):
 - `14:30`, `14-30` → 14 часов 30 минут сегодня (в timezone пользователя)
 - `30м`, `30` → текущее время минус 30 минут
 - `2ч`, `2h` → текущее время минус 2 часа
@@ -1040,7 +1060,7 @@ GET /api/v1/activities?user_id={user_id}&limit=10&offset=0
 2. **От пользователя (ввод)**: Считаем что время в **его timezone** (`Europe/Moscow` по умолчанию)
 3. **Для пользователя (вывод)**: Конвертируем UTC → его timezone
 
-**Пример конвертации** (в `utils/time_parser.py`):
+**Пример конвертации** (в `src/application/utils/time_parser.py`):
 
 ```python
 import pytz
@@ -1080,10 +1100,19 @@ def parse_user_time(time_str: str, user_timezone: str = "Europe/Moscow") -> date
 ```python
 # tracker_activity_bot/main.py
 
+from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
+from src.core.logging import setup_logging
+from src.core.config import settings
 
-storage = RedisStorage.from_url("redis://redis:6379/0")
+# Setup structured JSON logging (Level 1 requirement)
+setup_logging(service_name="tracker_activity_bot")
+logger = logging.getLogger(__name__)
+
+storage = RedisStorage.from_url(settings.REDIS_URL)
 dp = Dispatcher(storage=storage)
+
+logger.info("Bot initialized", extra={"service": "tracker_activity_bot"})
 ```
 
 **Формат данных в FSM**:
@@ -1099,58 +1128,203 @@ await state.update_data(
 
 ---
 
-### HTTP Client (для обращения к data API)
+### Structured Logging (Level 1 Requirement)
 
-**Base HTTP Client** (в `services/http_client.py`):
+**⚠️ ОБЯЗАТЕЛЬНО для Level 1**: Все сервисы ДОЛЖНЫ использовать structured JSON logging через `python-json-logger`.
+
+**Согласно `.framework/docs/reference/maturity-levels.md` (Level 1, строки 48-52)**:
+> "Observability:
+>  ✅ Structured logging (JSON format via python-json-logger)"
+
+#### Реализация для tracker_activity_bot
+
+**Файл**: `tracker_activity_bot/src/core/logging.py`
 
 ```python
+"""Structured JSON logging setup."""
+import logging
+import sys
+from pythonjsonlogger import jsonlogger
+
+
+def setup_logging(service_name: str, log_level: str = "INFO"):
+    """
+    Setup structured JSON logging for the service.
+
+    Args:
+        service_name: Name of the service for log identification
+        log_level: Logging level (INFO, DEBUG, ERROR, etc.)
+    """
+    logger = logging.getLogger()
+    logger.setLevel(log_level)
+
+    # Clear existing handlers
+    logger.handlers = []
+
+    # Create console handler with JSON formatter
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = jsonlogger.JsonFormatter(
+        "%(asctime)s %(name)s %(levelname)s %(message)s",
+        rename_fields={"asctime": "timestamp", "name": "logger"},
+        static_fields={"service": service_name}
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    logger.info(f"Structured JSON logging initialized for {service_name}")
+```
+
+**Использование в main.py**:
+
+```python
+# tracker_activity_bot/main.py
+import logging
+from src.core.logging import setup_logging
+from src.core.config import settings
+
+# Initialize structured logging ПЕРВЫМ делом
+setup_logging(service_name="tracker_activity_bot", log_level=settings.LOG_LEVEL)
+logger = logging.getLogger(__name__)
+
+# All logs будут в JSON формате
+logger.info("Starting bot", extra={"telegram_id": bot_id})
+logger.error("Failed to connect", extra={"error": str(e)}, exc_info=True)
+```
+
+**Пример логов** (JSON в stdout):
+```json
+{"timestamp": "2025-10-30T12:00:00Z", "logger": "main", "levelname": "INFO", "message": "Bot started", "service": "tracker_activity_bot"}
+{"timestamp": "2025-10-30T12:01:15Z", "logger": "handlers", "levelname": "INFO", "message": "User registered", "service": "tracker_activity_bot", "telegram_id": 123456789}
+```
+
+#### Реализация для data_postgres_api
+
+**Файл**: `data_postgres_api/src/core/logging.py` — аналогичный код
+
+**Использование в main.py**:
+
+```python
+# data_postgres_api/main.py
+from fastapi import FastAPI
+from src.core.logging import setup_logging
+
+setup_logging(service_name="data_postgres_api")
+logger = logging.getLogger(__name__)
+
+app = FastAPI()
+
+logger.info("FastAPI app started", extra={"service": "data_postgres_api"})
+```
+
+#### Requirements
+
+Добавить в `requirements.txt` для ОБОИХ сервисов:
+
+```txt
+python-json-logger==2.0.7
+```
+
+**Почему обязательно для Level 1?**
+
+1. **Парсинг логов**: JSON легко парсится log aggregators (даже без ELK на PoC)
+2. **Структурированные данные**: `extra={}` добавляет поля в JSON автоматически
+3. **Подготовка к Level 2+**: При переходе на Level 2 просто добавляем request_id в extra
+4. **Production-ready**: Console logs НЕ подходят для production даже для PoC
+
+---
+
+### HTTP Client (для обращения к data API)
+
+**Base HTTP Client** (в `src/infrastructure/http_clients/data_api_client.py`):
+
+```python
+"""Base HTTP client для обращения к data_postgres_api."""
+import logging
 import httpx
-from config import settings
+from src.core.config import settings
+
+logger = logging.getLogger(__name__)
+
 
 class DataAPIClient:
+    """Base async HTTP client для data API."""
+
     def __init__(self):
         self.base_url = settings.DATA_API_URL  # http://data_postgres_api:8000
         self.client = httpx.AsyncClient(base_url=self.base_url, timeout=10.0)
+        logger.info("DataAPIClient initialized", extra={"base_url": self.base_url})
 
     async def get(self, path: str, **kwargs):
+        """HTTP GET request."""
+        logger.debug(f"GET {path}", extra={"path": path})
         response = await self.client.get(path, **kwargs)
         response.raise_for_status()
         return response.json()
 
     async def post(self, path: str, **kwargs):
+        """HTTP POST request."""
+        logger.debug(f"POST {path}", extra={"path": path})
         response = await self.client.post(path, **kwargs)
         response.raise_for_status()
         return response.json()
 
     async def delete(self, path: str, **kwargs):
+        """HTTP DELETE request."""
+        logger.debug(f"DELETE {path}", extra={"path": path})
         response = await self.client.delete(path, **kwargs)
         response.raise_for_status()
         return response.status_code
+
+    async def close(self):
+        """Close HTTP client."""
+        await self.client.aclose()
+        logger.info("DataAPIClient closed")
 ```
 
-**User Service** (в `services/user_service.py`):
+**User Client** (в `src/infrastructure/http_clients/user_client.py`):
 
 ```python
-class UserService:
-    def __init__(self, client: DataAPIClient):
-        self.client = client
+"""HTTP client для работы с users API."""
+import logging
+import httpx
+from src.infrastructure.http_clients.data_api_client import DataAPIClient
+
+logger = logging.getLogger(__name__)
+
+
+class UserClient:
+    """Client для взаимодействия с /api/v1/users."""
+
+    def __init__(self, api_client: DataAPIClient):
+        self.api_client = api_client
 
     async def get_by_telegram_id(self, telegram_id: int):
+        """Получить пользователя по Telegram ID."""
         try:
-            return await self.client.get(f"/api/v1/users/by-telegram/{telegram_id}")
+            user = await self.api_client.get(f"/api/v1/users/by-telegram/{telegram_id}")
+            logger.info("User found", extra={"telegram_id": telegram_id})
+            return user
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
+                logger.info("User not found", extra={"telegram_id": telegram_id})
                 return None
+            logger.error("Error getting user", extra={"telegram_id": telegram_id, "error": str(e)})
             raise
 
-    async def create_user(self, telegram_id: int, username: str, first_name: str):
-        return await self.client.post("/api/v1/users", json={
+    async def create_user(self, telegram_id: int, username: str, first_name: str, timezone: str = "Europe/Moscow"):
+        """Создать нового пользователя."""
+        payload = {
             "telegram_id": telegram_id,
             "username": username,
             "first_name": first_name,
-            "timezone": "Europe/Moscow"
-        })
+            "timezone": timezone
+        }
+        user = await self.api_client.post("/api/v1/users", json=payload)
+        logger.info("User created", extra={"telegram_id": telegram_id, "user_id": user["id"]})
+        return user
 ```
+
+**ActivityClient, CategoryClient** — аналогичная структура в своих файлах.
 
 ---
 
@@ -1158,37 +1332,76 @@ class UserService:
 
 **Согласно `.framework/docs/atomic/services/fastapi/dependency-injection.md`**:
 
+**Файл**: `data_postgres_api/src/core/database.py`
+
 ```python
-# data_postgres_api/database/connection.py
-
+"""Database connection and session management."""
+import logging
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from src.core.config import settings
 
-engine = create_async_engine("postgresql+asyncpg://user:pass@postgres:5432/tracker_db")
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+logger = logging.getLogger(__name__)
+
+# Create async engine
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    pool_pre_ping=True
+)
+
+# Create sessionmaker
+async_session = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
 
 async def get_db() -> AsyncSession:
+    """Dependency для получения DB session в FastAPI роутерах."""
     async with async_session() as session:
-        yield session
+        logger.debug("Database session created")
+        try:
+            yield session
+        finally:
+            await session.close()
+            logger.debug("Database session closed")
+
+
+async def init_db():
+    """Initialize database tables (for PoC, создаём таблицы при старте)."""
+    from src.models import user, category, activity  # Import all models
+    async with engine.begin() as conn:
+        await conn.run_sync(user.Base.metadata.create_all)
+    logger.info("Database tables created")
 ```
 
-**В роутерах**:
+**В роутерах** (`src/api/v1/users.py`):
 
 ```python
-# data_postgres_api/routers/users.py
-
-from fastapi import APIRouter, Depends
+"""Users API endpoints."""
+import logging
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from database.connection import get_db
 
-router = APIRouter(prefix="/api/v1/users")
+from src.core.database import get_db
+from src.repositories.user_repository import UserRepository
+from src.schemas.user import UserCreate, UserResponse
 
-@router.post("/")
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/v1/users", tags=["users"])
+
+
+@router.post("/", response_model=UserResponse, status_code=201)
 async def create_user(
     user: UserCreate,
     db: AsyncSession = Depends(get_db)
 ):
+    """Создать нового пользователя."""
     repository = UserRepository(db)
-    return await repository.create(user)
+    new_user = await repository.create(user)
+    logger.info("User created", extra={"user_id": new_user.id, "telegram_id": user.telegram_id})
+    return new_user
 ```
 
 ---
@@ -1444,32 +1657,42 @@ pytest services/data_postgres_api/tests --cov=services/data_postgres_api --cov-r
 
 ### Этап 2: Data Service (data_postgres_api)
 
-- [ ] Создать FastAPI приложение (entry point)
-- [ ] Настроить SQLAlchemy async engine + sessionmaker
-- [ ] Создать модели: `User`, `Category`, `Activity`
-- [ ] Создать Pydantic schemas (DTOs)
-- [ ] Реализовать Repository Pattern (UserRepository, CategoryRepository, ActivityRepository)
-- [ ] Создать роутеры: `/api/v1/users`, `/api/v1/categories`, `/api/v1/activities`
-- [ ] Написать unit tests (coverage ≥ 60%)
+- [ ] Создать `src/` структуру (DDD/Hexagonal)
+- [ ] Создать `src/core/config.py` — Settings
+- [ ] Создать `src/core/logging.py` — **Structured JSON logging (ОБЯЗАТЕЛЬНО!)**
+- [ ] Создать `src/core/database.py` — SQLAlchemy async engine, sessionmaker, get_db()
+- [ ] Создать модели в `src/models/`: `User`, `Category`, `Activity`
+- [ ] Создать Pydantic schemas в `src/schemas/` (DTOs)
+- [ ] Реализовать Repository Pattern в `src/repositories/`
+- [ ] Создать роутеры в `src/api/v1/`: `users.py`, `categories.py`, `activities.py`
+- [ ] Создать `main.py` — FastAPI app entry point с logging setup
+- [ ] Добавить `python-json-logger==2.0.7` в requirements.txt
+- [ ] Написать unit tests в `tests/unit/` (coverage ≥ 60%)
 - [ ] Dockerfile (single-stage для PoC)
 
 ### Этап 3: Bot Service (tracker_activity_bot)
 
-- [ ] Создать Aiogram бот (entry point)
-- [ ] Настроить RedisStorage для FSM
-- [ ] Создать HTTP client для обращения к data API
-- [ ] Реализовать сервисы: UserService, CategoryService, ActivityService
-- [ ] Реализовать FSM states: ActivityStates, CategoryStates
-- [ ] Реализовать handlers:
-  - [ ] `/start` (регистрация + главное меню)
-  - [ ] Запись активности (5 шагов FSM)
-  - [ ] Управление категориями (добавить/удалить)
-  - [ ] Просмотр списка активностей
-  - [ ] Справка
-- [ ] Реализовать inline keyboards (главное меню, категории, быстрый выбор времени)
-- [ ] Реализовать `utils/time_parser.py` (парсинг времени)
-- [ ] Реализовать `utils/formatters.py` (форматирование сообщений)
-- [ ] Написать unit tests (coverage ≥ 60%)
+- [ ] Создать `src/` структуру (DDD/Hexagonal)
+- [ ] Создать `src/core/config.py` — Settings
+- [ ] Создать `src/core/logging.py` — **Structured JSON logging (ОБЯЗАТЕЛЬНО!)**
+- [ ] Создать `main.py` — Aiogram bot entry point с logging setup
+- [ ] Настроить RedisStorage для FSM в main.py
+- [ ] Создать HTTP clients в `src/infrastructure/http_clients/`:
+  - [ ] `data_api_client.py` — Base HTTP client
+  - [ ] `user_client.py` — Users API calls
+  - [ ] `category_client.py` — Categories API calls
+  - [ ] `activity_client.py` — Activities API calls
+- [ ] Реализовать FSM states в `src/api/states/`: ActivityStates, CategoryStates
+- [ ] Реализовать handlers в `src/api/handlers/`:
+  - [ ] `start.py` — /start (регистрация + главное меню)
+  - [ ] `activity.py` — Запись активности (5 шагов FSM)
+  - [ ] `categories.py` — Управление категориями (добавить/удалить)
+- [ ] Реализовать inline keyboards в `src/api/keyboards/`
+- [ ] Реализовать утилиты в `src/application/utils/`:
+  - [ ] `time_parser.py` — Парсинг времени (14:30, 30м, 2ч)
+  - [ ] `formatters.py` — Форматирование сообщений
+- [ ] Добавить `python-json-logger==2.0.7` в requirements.txt
+- [ ] Написать unit tests в `tests/unit/` (coverage ≥ 60%)
 - [ ] Dockerfile (single-stage для PoC)
 
 ### Этап 4: Quality Gates
@@ -1502,13 +1725,16 @@ pytest services/data_postgres_api/tests --cov=services/data_postgres_api --cov-r
 
 ### Упрощения для PoC (Level 1)
 
-1. **Логирование**: Console logs (print statements допустимы)
+1. **Логирование**: ✅ Structured JSON logs (python-json-logger) — **ОБЯЗАТЕЛЬНО для Level 1**
+   - ❌ Request ID tracking НЕ требуется (добавится в Level 2)
+   - Logs в stdout, парсятся Docker
 2. **Аутентификация**: НЕТ (каждый пользователь Telegram — уникальный user_id)
-3. **Secrets management**: `.env` файл (НЕ production-ready)
-4. **Error handling**: Базовый (без Sentry)
-5. **Monitoring**: НЕТ Prometheus/Grafana
-6. **API Gateway**: НЕТ Nginx (прямой доступ к портам)
+3. **Secrets management**: `.env` файл (НЕ production-ready, хватит для PoC)
+4. **Error handling**: Базовый (без Sentry, но с proper exception handling)
+5. **Monitoring**: НЕТ Prometheus/Grafana (добавится в Level 3)
+6. **API Gateway**: НЕТ Nginx (прямой доступ к портам, добавится в Level 3)
 7. **SSL/TLS**: НЕТ (HTTP only для локальной разработки)
+8. **Health endpoints**: НЕТ `/health` и `/ready` (добавится в Level 2)
 
 ### Что НЕ включено в Шаг 1
 
