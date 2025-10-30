@@ -28,10 +28,6 @@ class User(Base):
         nullable=False,
         server_default=func.now(),
     )
-    last_poll_time: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=True),
-        nullable=True,
-    )
 
     # Relationships
     categories: Mapped[List["Category"]] = relationship(
