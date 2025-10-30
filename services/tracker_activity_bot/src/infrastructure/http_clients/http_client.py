@@ -22,6 +22,12 @@ class DataAPIClient:
         response.raise_for_status()
         return response.json()
 
+    async def patch(self, path: str, **kwargs):
+        """Make PATCH request."""
+        response = await self.client.patch(path, **kwargs)
+        response.raise_for_status()
+        return response.json()
+
     async def delete(self, path: str, **kwargs):
         """Make DELETE request."""
         response = await self.client.delete(path, **kwargs)
