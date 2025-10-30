@@ -413,9 +413,6 @@ async def save_activity(message: types.Message, state: FSMContext, user_id: int,
             end_time=end_time
         )
 
-        # Update last_poll_time to track user activity
-        await user_service.update_user(user_id, last_poll_time=datetime.now(timezone.utc))
-
         duration_minutes = int((end_time - start_time).total_seconds() / 60)
         duration_str = format_duration(duration_minutes)
 

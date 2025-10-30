@@ -99,9 +99,6 @@ async def handle_poll_skip(callback: types.CallbackQuery, state: FSMContext):
             await callback.answer()
             return
 
-        # Update last_poll_time
-        await user_service.update_user(user["id"], last_poll_time=datetime.now(timezone.utc))
-
         # Schedule next poll
         user_timezone = user.get("timezone", "Europe/Moscow")
         await scheduler_service.schedule_poll(
@@ -181,9 +178,6 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
             start_time=start_time,
             end_time=end_time
         )
-
-        # Update last_poll_time
-        await user_service.update_user(user["id"], last_poll_time=end_time)
 
         # Schedule next poll
         user_timezone = user.get("timezone", "Europe/Moscow")
