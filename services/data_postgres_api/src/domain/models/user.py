@@ -28,6 +28,10 @@ class User(Base):
         nullable=False,
         server_default=func.now(),
     )
+    last_poll_time: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
 
     # Relationships
     categories: Mapped[List["Category"]] = relationship(
@@ -38,6 +42,12 @@ class User(Base):
     activities: Mapped[List["Activity"]] = relationship(
         "Activity",
         back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    settings: Mapped["UserSettings"] = relationship(
+        "UserSettings",
+        back_populates="user",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 

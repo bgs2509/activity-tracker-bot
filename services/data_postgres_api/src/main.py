@@ -9,6 +9,7 @@ from src.core.logging import setup_logging
 from src.api.v1.users import router as users_router
 from src.api.v1.categories import router as categories_router
 from src.api.v1.activities import router as activities_router
+from src.api.v1.user_settings import router as user_settings_router
 from src.infrastructure.database.connection import engine
 from src.domain.models.base import Base
 
@@ -53,6 +54,7 @@ async def shutdown_event():
 app.include_router(users_router, prefix=settings.api_v1_prefix)
 app.include_router(categories_router, prefix=settings.api_v1_prefix)
 app.include_router(activities_router, prefix=settings.api_v1_prefix)
+app.include_router(user_settings_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")
