@@ -6,7 +6,9 @@ from aiogram.filters import Command
 from src.infrastructure.http_clients.http_client import DataAPIClient
 from src.infrastructure.http_clients.user_service import UserService
 from src.infrastructure.http_clients.category_service import CategoryService
+from src.infrastructure.http_clients.user_settings_service import UserSettingsService
 from src.api.keyboards.main_menu import get_main_menu_keyboard
+from src.application.services.scheduler_service import scheduler_service
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -20,6 +22,7 @@ async def cmd_start(message: types.Message):
     """Handle /start command."""
     user_service = UserService(api_client)
     category_service = CategoryService(api_client)
+    settings_service = UserSettingsService(api_client)
 
     telegram_id = message.from_user.id
     username = message.from_user.username
@@ -44,6 +47,21 @@ async def cmd_start(message: types.Message):
         ]
         await category_service.bulk_create_categories(user["id"], default_categories)
 
+        # Create user settings with defaults
+        settings = await settings_service.create_settings(user["id"])
+        logger.info(f"Created settings for user {user['id']}: {settings}")
+
+        # Schedule first automatic poll
+        user_timezone = user.get("timezone", "Europe/Moscow")
+        from src.api.handlers.poll import send_automatic_poll
+        await scheduler_service.schedule_poll(
+            user_id=telegram_id,
+            settings=settings,
+            user_timezone=user_timezone,
+            send_poll_callback=lambda uid: send_automatic_poll(message.bot, uid)
+        )
+        logger.info(f"Scheduled first poll for user {telegram_id}")
+
         # Welcome message for new user
         text = (
             f"👋 Привет, {first_name}!\n\n"
@@ -51,6 +69,11 @@ async def cmd_start(message: types.Message):
             "Для тебя уже созданы базовые категории:\n"
             "💼 Работа  🏃 Спорт  🎮 Отдых\n"
             "📚 Обучение  😴 Сон  🍽️ Еда\n\n"
+            "⚙️ Настроены автоматические опросы:\n"
+            "• Будни: каждые 2 часа\n"
+            "• Выходные: каждые 3 часа\n"
+            "• Тихие часы: 23:00 — 07:00 (бот не будет беспокоить)\n\n"
+            "Изменить настройки можно в разделе \"Настройки\".\n\n"
             "Выбери действие:"
         )
     else:

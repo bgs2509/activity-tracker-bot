@@ -10,6 +10,9 @@ from src.core.logging import setup_logging
 from src.api.handlers.start import router as start_router
 from src.api.handlers.activity import router as activity_router
 from src.api.handlers.categories import router as categories_router
+from src.api.handlers.settings import router as settings_router
+from src.api.handlers.poll import router as poll_router
+from src.application.services.scheduler_service import scheduler_service
 
 # Configure structured JSON logging (MANDATORY for Level 1)
 setup_logging(service_name="tracker_activity_bot", log_level=settings.log_level)
@@ -31,12 +34,22 @@ async def main():
     dp.include_router(start_router)
     dp.include_router(activity_router)
     dp.include_router(categories_router)
+    dp.include_router(settings_router)
+    dp.include_router(poll_router)
+
+    # Start scheduler for automatic polls
+    scheduler_service.start()
+    logger.info("Scheduler started for automatic polls")
 
     # Start polling
     logger.info("Bot started, polling...")
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
+        # Shutdown scheduler
+        scheduler_service.stop()
+        logger.info("Scheduler stopped")
+
         await bot.session.close()
         await storage.close()
 

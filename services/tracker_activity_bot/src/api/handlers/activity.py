@@ -383,6 +383,7 @@ async def process_category(message: types.Message, state: FSMContext):
 async def save_activity(message: types.Message, state: FSMContext, user_id: int, category_id: int | None):
     """Save activity to database."""
     activity_service = ActivityService(api_client)
+    user_service = UserService(api_client)
 
     data = await state.get_data()
     start_time_str = data.get("start_time")
@@ -411,6 +412,9 @@ async def save_activity(message: types.Message, state: FSMContext, user_id: int,
             start_time=start_time,
             end_time=end_time
         )
+
+        # Update last_poll_time to track user activity
+        await user_service.update_user(user_id, last_poll_time=datetime.now(timezone.utc))
 
         duration_minutes = int((end_time - start_time).total_seconds() / 60)
         duration_str = format_duration(duration_minutes)
@@ -513,10 +517,18 @@ async def show_help(callback: types.CallbackQuery):
         "• Время начала (14:30, 30м назад, 2ч назад)\n"
         "• Время окончания (16:00, 30м, сейчас)\n"
         "• Описание и категорию\n\n"
+        "⏰ Автоматические опросы\n"
+        "Бот периодически спрашивает о твоей активности:\n"
+        "• В будни: каждые 2 часа (по умолчанию)\n"
+        "• В выходные: каждые 3 часа (по умолчанию)\n"
+        "• С учётом тихих часов (23:00 — 07:00)\n"
+        "Настроить интервалы можно в разделе \"Настройки\"\n\n"
         "📋 Мои записи\n"
         "Просмотр последних 10 записанных активностей\n\n"
         "📂 Категории\n"
         "Список всех твоих категорий\n\n"
+        "⚙️ Настройки\n"
+        "Настройка интервалов опросов, тихих часов и напоминаний\n\n"
         "Примеры форматов времени:\n"
         "• 14:30 или 14-30 — точное время\n"
         "• 30м или 30 — минут назад\n"

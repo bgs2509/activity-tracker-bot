@@ -24,7 +24,7 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
         # Management and configuration
         [
             InlineKeyboardButton(text="📂 Категории", callback_data="categories"),
-            InlineKeyboardButton(text="📊 Статистика", callback_data="statistics"),
+            InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings"),
         ],
         # Auxiliary - full width for visual separation
         [
