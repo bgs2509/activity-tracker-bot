@@ -310,12 +310,22 @@ async def show_quiet_end_selection(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("quiet_start_"))
-async def set_quiet_start_time(callback: types.CallbackQuery):
+async def set_quiet_start_time(callback: types.CallbackQuery, state: FSMContext):
     """Set quiet hours start time."""
     # Extract time from callback (e.g., "quiet_start_23:00" -> "23:00")
     parts = callback.data.split("_")
     if parts[-1] == "custom":
-        return  # Handle custom input separately
+        # Handle custom input - ask user to enter time
+        text = (
+            "🌙 Укажи время начала тихих часов\n\n"
+            "Введи время в формате ЧЧ:ММ\n"
+            "Например: 23:00 или 22:30\n\n"
+            "Или отправь /cancel для отмены"
+        )
+        await callback.message.answer(text)
+        await state.set_state(SettingsStates.waiting_for_quiet_hours_start_custom)
+        await callback.answer()
+        return
 
     time_str = parts[-1]  # e.g., "23:00"
 
@@ -339,12 +349,22 @@ async def set_quiet_start_time(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("quiet_end_"))
-async def set_quiet_end_time(callback: types.CallbackQuery):
+async def set_quiet_end_time(callback: types.CallbackQuery, state: FSMContext):
     """Set quiet hours end time."""
     # Extract time from callback (e.g., "quiet_end_07:00" -> "07:00")
     parts = callback.data.split("_")
     if parts[-1] == "custom":
-        return  # Handle custom input separately
+        # Handle custom input - ask user to enter time
+        text = (
+            "🌅 Укажи время окончания тихих часов\n\n"
+            "Введи время в формате ЧЧ:ММ\n"
+            "Например: 07:00 или 08:30\n\n"
+            "Или отправь /cancel для отмены"
+        )
+        await callback.message.answer(text)
+        await state.set_state(SettingsStates.waiting_for_quiet_hours_end_custom)
+        await callback.answer()
+        return
 
     time_str = parts[-1]  # e.g., "07:00"
 
@@ -457,6 +477,72 @@ async def set_reminder_delay(callback: types.CallbackQuery):
 
     await callback.message.answer(text, reply_markup=get_confirmation_keyboard())
     await callback.answer()
+
+
+@router.message(SettingsStates.waiting_for_quiet_hours_start_custom)
+async def process_custom_quiet_start(message: types.Message, state: FSMContext):
+    """Process custom quiet hours start time input."""
+    time_str = message.text.strip()
+
+    # Validate time format (HH:MM)
+    if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', time_str):
+        await message.answer(
+            "⚠️ Неверный формат времени!\n\n"
+            "Введи время в формате ЧЧ:ММ\n"
+            "Например: 23:00 или 22:30"
+        )
+        return
+
+    user_service = UserService(api_client)
+    settings_service = UserSettingsService(api_client)
+    telegram_id = message.from_user.id
+
+    user = await user_service.get_by_telegram_id(telegram_id)
+    settings = await settings_service.get_settings(user["id"])
+
+    # Update with full time format (HH:MM:SS)
+    await settings_service.update_settings(
+        settings["id"],
+        quiet_hours_start=f"{time_str}:00"
+    )
+
+    text = f"✅ Время начала тихих часов обновлено!\n\nТеперь тихие часы начинаются в {time_str}"
+
+    await message.answer(text, reply_markup=get_confirmation_keyboard())
+    await state.clear()
+
+
+@router.message(SettingsStates.waiting_for_quiet_hours_end_custom)
+async def process_custom_quiet_end(message: types.Message, state: FSMContext):
+    """Process custom quiet hours end time input."""
+    time_str = message.text.strip()
+
+    # Validate time format (HH:MM)
+    if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', time_str):
+        await message.answer(
+            "⚠️ Неверный формат времени!\n\n"
+            "Введи время в формате ЧЧ:ММ\n"
+            "Например: 07:00 или 08:30"
+        )
+        return
+
+    user_service = UserService(api_client)
+    settings_service = UserSettingsService(api_client)
+    telegram_id = message.from_user.id
+
+    user = await user_service.get_by_telegram_id(telegram_id)
+    settings = await settings_service.get_settings(user["id"])
+
+    # Update with full time format (HH:MM:SS)
+    await settings_service.update_settings(
+        settings["id"],
+        quiet_hours_end=f"{time_str}:00"
+    )
+
+    text = f"✅ Время окончания тихих часов обновлено!\n\nТеперь тихие часы заканчиваются в {time_str}"
+
+    await message.answer(text, reply_markup=get_confirmation_keyboard())
+    await state.clear()
 
 
 @router.callback_query(F.data == "main_menu")
