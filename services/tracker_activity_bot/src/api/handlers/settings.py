@@ -61,15 +61,20 @@ async def show_settings_menu(callback: types.CallbackQuery):
 
     # Get next poll time from scheduler
     next_poll_text = ""
+    logger.info(f"Checking next poll for user {telegram_id}, jobs dict: {scheduler_service.jobs}")
+
     if telegram_id in scheduler_service.jobs:
         job_id = scheduler_service.jobs[telegram_id]
+        logger.info(f"Found job_id for user {telegram_id}: {job_id}")
         try:
             job = scheduler_service.scheduler.get_job(job_id)
+            logger.info(f"Got job from scheduler: {job}, next_run_time: {job.next_run_time if job else None}")
             if job and job.next_run_time:
                 from datetime import datetime, timezone
                 now = datetime.now(timezone.utc)
                 time_until = job.next_run_time - now
                 minutes = int(time_until.total_seconds() / 60)
+                logger.info(f"Time until next poll: {minutes} minutes")
 
                 if minutes < 60:
                     next_poll_text = f"⏰ Следующий опрос через {minutes} минут"
@@ -80,8 +85,11 @@ async def show_settings_menu(callback: types.CallbackQuery):
                         next_poll_text = f"⏰ Следующий опрос через {hours} час{'а' if 1 < hours < 5 else 'ов'}"
                     else:
                         next_poll_text = f"⏰ Следующий опрос через {hours}ч {remaining_minutes}м"
+                logger.info(f"Generated next_poll_text: {next_poll_text}")
         except Exception as e:
-            logger.debug(f"Could not get next poll time: {e}")
+            logger.warning(f"Could not get next poll time: {e}", exc_info=True)
+    else:
+        logger.info(f"User {telegram_id} not found in scheduler_service.jobs")
 
     text = (
         f"⚙️ Настройки бота\n\n"
@@ -93,6 +101,41 @@ async def show_settings_menu(callback: types.CallbackQuery):
 
     if next_poll_text:
         text += f"• {next_poll_text}\n"
+    else:
+        # If no poll scheduled, schedule one now
+        from src.api.handlers.poll import send_automatic_poll
+        try:
+            await scheduler_service.schedule_poll(
+                user_id=telegram_id,
+                settings=settings,
+                user_timezone=user.get("timezone", "Europe/Moscow"),
+                send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+            )
+            logger.info(f"Scheduled poll for user {telegram_id} from settings menu")
+
+            # Now get the time
+            if telegram_id in scheduler_service.jobs:
+                job_id = scheduler_service.jobs[telegram_id]
+                job = scheduler_service.scheduler.get_job(job_id)
+                if job and job.next_run_time:
+                    from datetime import datetime, timezone
+                    now = datetime.now(timezone.utc)
+                    time_until = job.next_run_time - now
+                    minutes = int(time_until.total_seconds() / 60)
+
+                    if minutes < 60:
+                        next_poll_text = f"⏰ Следующий опрос через {minutes} минут"
+                    else:
+                        hours = minutes // 60
+                        remaining_minutes = minutes % 60
+                        if remaining_minutes == 0:
+                            next_poll_text = f"⏰ Следующий опрос через {hours} час{'а' if 1 < hours < 5 else 'ов'}"
+                        else:
+                            next_poll_text = f"⏰ Следующий опрос через {hours}ч {remaining_minutes}м"
+
+                    text += f"• {next_poll_text}\n"
+        except Exception as e:
+            logger.error(f"Failed to schedule poll: {e}", exc_info=True)
 
     text += (
         f"\n🌙 Тихие часы:\n"
@@ -156,6 +199,17 @@ async def set_weekday_interval(callback: types.CallbackQuery):
 
     await settings_service.update_settings(settings["id"], poll_interval_weekday=interval)
 
+    # Fetch updated settings and reschedule poll with new interval
+    updated_settings = await settings_service.get_settings(user["id"])
+    from src.api.handlers.poll import send_automatic_poll
+    await scheduler_service.schedule_poll(
+        user_id=telegram_id,
+        settings=updated_settings,
+        user_timezone=user.get("timezone", "Europe/Moscow"),
+        send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+    )
+    logger.info(f"Rescheduled poll for user {telegram_id} after weekday interval change to {interval} minutes")
+
     hours = interval // 60
     text = (
         f"✅ Интервал для будних дней обновлён!\n\n"
@@ -202,6 +256,17 @@ async def set_weekend_interval(callback: types.CallbackQuery):
     settings = await settings_service.get_settings(user["id"])
 
     await settings_service.update_settings(settings["id"], poll_interval_weekend=interval)
+
+    # Fetch updated settings and reschedule poll with new interval
+    updated_settings = await settings_service.get_settings(user["id"])
+    from src.api.handlers.poll import send_automatic_poll
+    await scheduler_service.schedule_poll(
+        user_id=telegram_id,
+        settings=updated_settings,
+        user_timezone=user.get("timezone", "Europe/Moscow"),
+        send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+    )
+    logger.info(f"Rescheduled poll for user {telegram_id} after weekend interval change to {interval} minutes")
 
     hours = interval // 60
     text = (
