@@ -82,7 +82,14 @@ async def process_start_time(message: types.Message, state: FSMContext):
 @router.callback_query(F.data.startswith("time_start_"))
 async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
     """Handle quick time selection for start time."""
-    time_map = {"30m": "30м", "1h": "1ч", "2h": "2ч"}
+    time_map = {
+        "5m": "5м",
+        "15m": "15м",
+        "30m": "30м",
+        "1h": "1ч",
+        "2h": "2ч",
+        "3h": "3ч",
+    }
     time_key = callback.data.replace("time_start_", "")
     time_str = time_map.get(time_key)
 
@@ -131,6 +138,9 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
         if time_key == "now":
             # "Сейчас" - current time
             end_time = datetime.now(timezone.utc)
+        elif time_key == "15m":
+            # "15м длилось" - duration 15 minutes
+            end_time = parse_duration("15м", start_time)
         elif time_key == "30m":
             # "30м длилось" - duration 30 minutes
             end_time = parse_duration("30м", start_time)
@@ -140,6 +150,12 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
         elif time_key == "2h":
             # "2ч длилось" - duration 2 hours
             end_time = parse_duration("2ч", start_time)
+        elif time_key == "3h":
+            # "3ч длилось" - duration 3 hours
+            end_time = parse_duration("3ч", start_time)
+        elif time_key == "4h":
+            # "4ч длилось" - duration 4 hours
+            end_time = parse_duration("4ч", start_time)
         else:
             await callback.answer("⚠️ Неизвестная команда")
             return
@@ -467,6 +483,23 @@ async def show_my_activities(callback: types.CallbackQuery):
 
 # NOTE: "categories" callback handler removed to avoid conflict with categories.py
 # The full-featured categories handler is in src/api/handlers/categories.py
+
+
+@router.callback_query(F.data == "statistics")
+async def show_statistics(callback: types.CallbackQuery):
+    """Show user statistics (placeholder for future implementation)."""
+    text = (
+        "📊 Статистика\n\n"
+        "⚠️ Эта функция находится в разработке.\n\n"
+        "В будущем здесь будет:\n"
+        "• Общее время активностей\n"
+        "• Распределение по категориям\n"
+        "• Графики и визуализации\n"
+        "• Топ активностей за период"
+    )
+
+    await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
+    await callback.answer()
 
 
 @router.callback_query(F.data == "help")
