@@ -448,7 +448,7 @@ async def show_my_activities(callback: types.CallbackQuery):
 
         # Get user's activities
         response = await activity_service.get_user_activities(user["id"], limit=10)
-        activities = response.get("activities", [])
+        activities = response.get("items", [])
 
         # Format and send
         text = format_activity_list(activities)
