@@ -1,0 +1,83 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: tracker_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tracker_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tracker_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tracker_db}
+    env_file:
+      - ./.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tracker_user} -d ${POSTGRES_DB:-tracker_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tracker_network
+
+  # Redis (for FSM storage)
+  redis:
+    image: redis:7-alpine
+    container_name: tracker_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tracker_network
+
+  # FastAPI Data Service
+  data_postgres_api:
+    build:
+      context: .
+      dockerfile: services/data_postgres_api/Dockerfile
+    container_name: data_postgres_api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tracker_user}:${POSTGRES_PASSWORD:-tracker_password}@postgres:5432/${POSTGRES_DB:-tracker_db}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    env_file:
+      - ./.env
+    ports:
+      - "8080:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tracker_network
+
+  # Aiogram Telegram Bot
+  tracker_activity_bot:
+    build:
+      context: .
+      dockerfile: services/tracker_activity_bot/Dockerfile
+    container_name: tracker_activity_bot
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DATA_API_URL: http://data_postgres_api:8000
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+      - data_postgres_api
+    restart: unless-stopped
+    networks:
+      - tracker_network
+
+volumes:
+  postgres_data:
+
+networks:
+  tracker_network:
+    driver: bridge
