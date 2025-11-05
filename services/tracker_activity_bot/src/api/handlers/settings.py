@@ -535,7 +535,7 @@ async def show_quiet_time_selection(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌙 Время начала", callback_data="quiet_select_start")],
         [InlineKeyboardButton(text="🌅 Время окончания", callback_data="quiet_select_end")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="settings_quiet_hours")],
+        [InlineKeyboardButton(text="🔙 К тихим часам", callback_data="settings_quiet_hours")],
     ])
     await callback.message.answer(text, reply_markup=keyboard)
     await callback.answer()

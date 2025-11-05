@@ -18,7 +18,7 @@ def get_interval_type_keyboard() -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📅 Будние дни (Пн-Пт)", callback_data="interval_weekday")],
         [InlineKeyboardButton(text="🎉 Выходные (Сб-Вс)", callback_data="interval_weekend")],
-        [InlineKeyboardButton(text="🔙 Назад к настройкам", callback_data="settings")],
+        [InlineKeyboardButton(text="🔙 К настройкам", callback_data="settings")],
     ])
     return keyboard
 
@@ -39,7 +39,7 @@ def get_weekday_interval_keyboard(current: int = 120) -> InlineKeyboardMarkup:
         )])
 
     buttons.append([InlineKeyboardButton(text="✏️ Указать своё время", callback_data="weekday_custom")])
-    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="settings_intervals")])
+    buttons.append([InlineKeyboardButton(text="🔙 К интервалам", callback_data="settings_intervals")])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -60,7 +60,7 @@ def get_weekend_interval_keyboard(current: int = 180) -> InlineKeyboardMarkup:
         )])
 
     buttons.append([InlineKeyboardButton(text="✏️ Указать своё время", callback_data="weekend_custom")])
-    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="settings_intervals")])
+    buttons.append([InlineKeyboardButton(text="🔙 К интервалам", callback_data="settings_intervals")])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -147,7 +147,7 @@ def get_reminder_delay_keyboard(current: int = 30) -> InlineKeyboardMarkup:
         )])
 
     buttons.append([InlineKeyboardButton(text="✏️ Указать своё время", callback_data="reminder_delay_custom")])
-    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="settings_reminders")])
+    buttons.append([InlineKeyboardButton(text="🔙 К напоминаниям", callback_data="settings_reminders")])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

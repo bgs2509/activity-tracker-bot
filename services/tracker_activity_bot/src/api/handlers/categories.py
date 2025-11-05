@@ -361,7 +361,7 @@ async def delete_category_select(callback: types.CallbackQuery):
             buttons[-1].append(button)
 
     # Add cancel buttons
-    buttons.append([InlineKeyboardButton(text="🔙 Назад к списку категорий", callback_data="categories")])
+    buttons.append([InlineKeyboardButton(text="🔙 К категориям", callback_data="categories")])
     buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
