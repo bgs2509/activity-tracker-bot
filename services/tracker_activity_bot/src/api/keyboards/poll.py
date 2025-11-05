@@ -34,8 +34,11 @@ def get_poll_category_keyboard(categories: List[dict]) -> InlineKeyboardMarkup:
         row = []
         for j in range(i, min(i + 2, len(categories))):
             category = categories[j]
+            emoji = category.get("emoji", "")
+            name = category["name"]
+            button_text = f"{emoji} {name}" if emoji else name
             row.append(InlineKeyboardButton(
-                text=category["name"],
+                text=button_text,
                 callback_data=f"poll_category_{category['id']}"
             ))
         buttons.append(row)
