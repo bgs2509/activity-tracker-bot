@@ -12,6 +12,7 @@ from src.infrastructure.http_clients.category_service import CategoryService
 from src.infrastructure.http_clients.user_service import UserService
 from src.api.keyboards.time_select import get_start_time_keyboard, get_end_time_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
+from src.api.keyboards.poll import get_poll_category_keyboard
 from src.application.utils.time_parser import parse_time_input, parse_duration
 from src.application.utils.formatters import format_time, format_duration, extract_tags, format_activity_list
 
@@ -294,22 +295,21 @@ async def process_description(message: types.Message, state: FSMContext):
             await save_activity(message, state, user["id"], None)
             return
 
-        # For PoC, ask user to reply with category name or number
-        category_list = "\n".join([
-            f"{i+1}. {cat.get('emoji', '')} {cat['name']}"
-            for i, cat in enumerate(categories)
-        ])
-
-        await state.update_data(categories=categories)
-
-        text = (
-            f"📂 Выбери категорию\n\n"
-            f"{category_list}\n\n"
-            f"Отправь номер категории или название.\n"
-            f"Или отправь \"0\" чтобы пропустить."
+        # Store categories and user_id for callback handlers
+        await state.update_data(
+            categories=categories,
+            user_id=user["id"]
         )
 
-        await message.answer(text)
+        text = (
+            "📂 Выбери категорию\n\n"
+            "Или отправь \"0\" чтобы пропустить."
+        )
+
+        await message.answer(
+            text,
+            reply_markup=get_poll_category_keyboard(categories)
+        )
 
     except Exception as e:
         logger.error(f"Error in process_description: {e}")
@@ -320,65 +320,89 @@ async def process_description(message: types.Message, state: FSMContext):
         await state.clear()
 
 
+@router.callback_query(ActivityStates.waiting_for_category, F.data.startswith("poll_category_"))
+async def process_category_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Process category selection via inline button.
+
+    User selected category from inline keyboard. Extract category_id
+    from callback_data and proceed to time selection.
+    """
+    category_id = int(callback.data.split("_")[-1])
+
+    data = await state.get_data()
+    categories = data.get("categories", [])
+    user_id = data.get("user_id")
+
+    # Find selected category for display
+    selected_category = next(
+        (cat for cat in categories if cat["id"] == category_id),
+        None
+    )
+
+    if not selected_category:
+        await callback.message.answer("⚠️ Категория не найдена.")
+        await callback.answer()
+        return
+
+    # Save activity with selected category
+    await save_activity(callback.message, state, user_id, category_id)
+    await callback.answer()
+
+
+@router.callback_query(ActivityStates.waiting_for_category, F.data == "poll_cancel")
+async def cancel_category_selection(callback: types.CallbackQuery, state: FSMContext):
+    """Handle cancel button in category selection.
+
+    User clicked cancel button - clear state and return to main menu.
+    """
+    await state.clear()
+    await callback.message.answer(
+        "❌ Запись активности отменена.",
+        reply_markup=get_main_menu_keyboard()
+    )
+    await callback.answer()
+
+
 @router.message(ActivityStates.waiting_for_category)
 async def process_category(message: types.Message, state: FSMContext):
-    """Process category selection (text message)."""
-    user_service = UserService(api_client)
-    telegram_id = message.from_user.id
+    """Process category selection (text message).
 
-    try:
-        user = await user_service.get_by_telegram_id(telegram_id)
-        if not user:
+    Fallback text handler - only allows "0" to skip category.
+    Main selection should be done via inline buttons.
+    """
+    text = message.text.strip()
+
+    # Only allow "0" to skip category - main selection via inline buttons
+    if text == "0":
+        user_service = UserService(api_client)
+        telegram_id = message.from_user.id
+
+        try:
+            user = await user_service.get_by_telegram_id(telegram_id)
+            if not user:
+                await message.answer(
+                    "⚠️ Пользователь не найден.",
+                    reply_markup=get_main_menu_keyboard()
+                )
+                await state.clear()
+                return
+
+            # Save activity without category
+            await save_activity(message, state, user["id"], None)
+
+        except Exception as e:
+            logger.error(f"Error in process_category: {e}")
             await message.answer(
-                "⚠️ Пользователь не найден.",
+                "⚠️ Произошла ошибка.",
                 reply_markup=get_main_menu_keyboard()
             )
             await state.clear()
-            return
-
-        data = await state.get_data()
-        categories = data.get("categories", [])
-
-        category_id = None
-
-        # Check if user wants to skip
-        if message.text.strip() == "0":
-            category_id = None
-        else:
-            # Try to parse as number
-            try:
-                category_num = int(message.text.strip())
-                if 1 <= category_num <= len(categories):
-                    category_id = categories[category_num - 1]["id"]
-                else:
-                    await message.answer(
-                        f"⚠️ Неверный номер. Выбери от 1 до {len(categories)} или отправь \"0\"."
-                    )
-                    return
-            except ValueError:
-                # Try to match by name
-                category_name = message.text.strip().lower()
-                for cat in categories:
-                    if cat["name"].lower() == category_name:
-                        category_id = cat["id"]
-                        break
-
-                if category_id is None:
-                    await message.answer(
-                        "⚠️ Категория не найдена. Попробуй ещё раз или отправь \"0\" чтобы пропустить."
-                    )
-                    return
-
-        # Save activity
-        await save_activity(message, state, user["id"], category_id)
-
-    except Exception as e:
-        logger.error(f"Error in process_category: {e}")
+    else:
+        # Ignore other text input - user should use inline buttons
         await message.answer(
-            "⚠️ Произошла ошибка.",
-            reply_markup=get_main_menu_keyboard()
+            "⚠️ Пожалуйста, используй кнопки для выбора категории.\n"
+            "Или отправь \"0\" чтобы пропустить."
         )
-        await state.clear()
 
 
 async def save_activity(message: types.Message, state: FSMContext, user_id: int, category_id: int | None):
