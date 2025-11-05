@@ -121,10 +121,28 @@ async def send_automatic_poll(bot: Bot, user_id: int):
             # If FSM check fails, continue with poll anyway
             logger.warning(f"Could not check FSM state for user {user_id}: {e}")
 
+        # Calculate time since last poll for accurate message
+        is_weekend = datetime.now(timezone.utc).weekday() >= 5
+        interval_minutes = (
+            settings["poll_interval_weekend"]
+            if is_weekend
+            else settings["poll_interval_weekday"]
+        )
+
+        hours = interval_minutes // 60
+        minutes = interval_minutes % 60
+
+        if hours > 0 and minutes > 0:
+            time_str = f"{hours}ч {minutes}м"
+        elif hours > 0:
+            time_str = f"{hours}ч"
+        else:
+            time_str = f"{minutes}м"
+
         # Send poll message
         text = (
             "⏰ Время проверки активности!\n\n"
-            "Чем ты занимался последние часы?\n\n"
+            f"Чем ты занимался последние {time_str}?\n\n"
             "Выбери один из вариантов:"
         )
 
