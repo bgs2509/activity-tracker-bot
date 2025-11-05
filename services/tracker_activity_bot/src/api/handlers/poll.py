@@ -270,6 +270,156 @@ async def handle_poll_reminder_ok(callback: types.CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data == "poll_activity")
+async def handle_poll_activity_start(callback: types.CallbackQuery, state: FSMContext):
+    """Handle 'I was doing something' poll response.
+
+    Start activity recording from poll. User will select category,
+    and activity will be created with automatic time calculation.
+    """
+    user_service = UserService(api_client)
+    category_service = CategoryService(api_client)
+    telegram_id = callback.from_user.id
+
+    try:
+        # Get user
+        user = await user_service.get_by_telegram_id(telegram_id)
+        if not user:
+            await callback.message.answer("⚠️ Пользователь не найден.")
+            await callback.answer()
+            return
+
+        # Get categories
+        categories = await category_service.get_user_categories(user["id"])
+
+        if not categories:
+            await callback.message.answer(
+                "⚠️ У тебя нет категорий. Сначала создай категорию.",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await callback.answer()
+            return
+
+        # Store user_id in state for later use
+        await state.update_data(user_id=user["id"])
+        await state.set_state(PollStates.waiting_for_poll_category)
+
+        text = (
+            "✏️ Чем ты занимался?\n\n"
+            "Выбери категорию активности:"
+        )
+
+        await callback.message.answer(
+            text,
+            reply_markup=get_poll_category_keyboard(categories)
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Error in handle_poll_activity_start: {e}")
+        await callback.message.answer("⚠️ Произошла ошибка.")
+        await callback.answer()
+
+
+@router.callback_query(PollStates.waiting_for_poll_category, F.data.startswith("poll_category_"))
+async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMContext):
+    """Handle category selection in poll activity recording.
+
+    Creates activity with automatic time calculation based on poll interval.
+    """
+    category_id = int(callback.data.split("_")[-1])
+
+    user_service = UserService(api_client)
+    settings_service = UserSettingsService(api_client)
+    activity_service = ActivityService(api_client)
+    telegram_id = callback.from_user.id
+
+    try:
+        # Get user and settings
+        user = await user_service.get_by_telegram_id(telegram_id)
+        if not user:
+            await callback.message.answer("⚠️ Пользователь не найден.")
+            await callback.answer()
+            await state.clear()
+            return
+
+        settings = await settings_service.get_settings(user["id"])
+        if not settings:
+            await callback.message.answer("⚠️ Настройки не найдены.")
+            await callback.answer()
+            await state.clear()
+            return
+
+        # Calculate time range based on poll interval
+        end_time = datetime.now(timezone.utc)
+
+        # Use appropriate interval based on day of week
+        is_weekend = end_time.weekday() >= 5  # Saturday=5, Sunday=6
+        interval_minutes = (
+            settings["poll_interval_weekend"]
+            if is_weekend
+            else settings["poll_interval_weekday"]
+        )
+
+        start_time = end_time - timedelta(minutes=interval_minutes)
+
+        # Create activity with generic description
+        await activity_service.create_activity(
+            user_id=user["id"],
+            category_id=category_id,
+            description="Активность",
+            tags=[],
+            start_time=start_time,
+            end_time=end_time
+        )
+
+        # Schedule next poll
+        user_timezone = user.get("timezone", "Europe/Moscow")
+        await scheduler_service.schedule_poll(
+            user_id=telegram_id,
+            settings=settings,
+            user_timezone=user_timezone,
+            send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+        )
+
+        # Format duration
+        duration_minutes = interval_minutes
+        hours = duration_minutes // 60
+        minutes = duration_minutes % 60
+        if hours > 0 and minutes > 0:
+            duration_str = f"{hours}ч {minutes}м"
+        elif hours > 0:
+            duration_str = f"{hours}ч"
+        else:
+            duration_str = f"{minutes}м"
+
+        await callback.message.answer(
+            f"✅ Активность сохранена!\n\n"
+            f"Продолжительность: {duration_str}\n\n"
+            f"Следующий опрос придёт по расписанию.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Error in handle_poll_category_select: {e}")
+        await callback.message.answer("⚠️ Произошла ошибка при сохранении.")
+        await state.clear()
+        await callback.answer()
+
+
+@router.callback_query(PollStates.waiting_for_poll_category, F.data == "poll_cancel")
+async def handle_poll_cancel(callback: types.CallbackQuery, state: FSMContext):
+    """Handle cancellation of poll activity recording."""
+    await state.clear()
+    await callback.message.answer(
+        "❌ Запись активности отменена.",
+        reply_markup=get_main_menu_keyboard()
+    )
+    await callback.answer()
+
+
 async def send_reminder(bot: Bot, user_id: int):
     """Send reminder to user.
 
@@ -294,15 +444,3 @@ async def send_reminder(bot: Bot, user_id: int):
 
     except Exception as e:
         logger.error(f"Error sending reminder to user {user_id}: {e}")
-
-
-# Note: In simplified PoC, we're not implementing the full
-# "I was doing something" flow with category selection.
-# This would require additional FSM states and handlers.
-# For now, the 3 main scenarios (skip, sleep, remind) are implemented.
-
-# Future enhancement: Add handler for "I was doing something" option
-# This would:
-# 1. Set FSM state to waiting_for_poll_category
-# 2. Show category selection keyboard
-# 3. Handle category selection and save activity

@@ -10,6 +10,7 @@ def get_poll_response_keyboard() -> InlineKeyboardMarkup:
         Keyboard with Skip, Sleep, and Remind Later buttons
     """
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✏️ Занимался чем-то", callback_data="poll_activity")],
         [InlineKeyboardButton(text="⏭ Пропустить (ничего не делал)", callback_data="poll_skip")],
         [InlineKeyboardButton(text="😴 Спал", callback_data="poll_sleep")],
         [InlineKeyboardButton(text="⏸ Напомнить позже", callback_data="poll_remind")],
