@@ -24,6 +24,21 @@ echo ""
 echo "🔨 Building and starting production containers..."
 docker compose up --build -d
 
+# Wait for database to be ready
+echo ""
+echo "⏳ Waiting for database to be ready..."
+sleep 5
+
+# Run database migrations
+echo ""
+echo "🗄️  Running database migrations..."
+docker exec data_postgres_api alembic upgrade head
+
+# Verify migration was applied
+echo ""
+echo "✅ Verifying database schema..."
+docker exec tracker_db psql -U tracker_user -d tracker_db -c "\d users" | grep last_poll_time || echo "⚠️  Warning: last_poll_time column may not exist"
+
 echo ""
 echo "================================================"
 echo "✅ DOCKER SYSTEM PRUNE -FORCE!"
