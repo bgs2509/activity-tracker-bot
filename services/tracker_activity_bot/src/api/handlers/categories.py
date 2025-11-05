@@ -19,6 +19,7 @@ from src.infrastructure.http_clients.category_service import CategoryService
 from src.infrastructure.http_clients.user_service import UserService
 from src.api.states.category import CategoryStates
 from src.api.keyboards.main_menu import get_main_menu_keyboard
+from src.application.utils.decorators import with_typing_action
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ api_client = DataAPIClient()
 # ============================================================================
 
 @router.callback_query(F.data == "categories")
+@with_typing_action
 async def show_categories_list(callback: types.CallbackQuery):
     """
     Show list of user's categories.
@@ -75,6 +77,7 @@ async def show_categories_list(callback: types.CallbackQuery):
 # ============================================================================
 
 @router.callback_query(F.data == "add_category")
+@with_typing_action
 async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
     """
     Start adding a new category.
@@ -225,6 +228,7 @@ async def add_category_name(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(CategoryStates.waiting_for_emoji, F.data.startswith("emoji:"))
+@with_typing_action
 async def add_category_emoji_button(callback: types.CallbackQuery, state: FSMContext):
     """
     Process emoji selection from keyboard.
@@ -319,6 +323,7 @@ async def create_category_final(telegram_id: int, state: FSMContext, emoji: str 
 # ============================================================================
 
 @router.callback_query(F.data == "delete_category_start")
+@with_typing_action
 async def delete_category_select(callback: types.CallbackQuery):
     """
     Show category selection for deletion.
@@ -366,6 +371,7 @@ async def delete_category_select(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("delete_cat:"))
+@with_typing_action
 async def delete_category_confirm(callback: types.CallbackQuery):
     """
     Request confirmation for category deletion.
@@ -411,6 +417,7 @@ async def delete_category_confirm(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("delete_confirm:"))
+@with_typing_action
 async def delete_category_execute(callback: types.CallbackQuery):
     """
     Execute category deletion.
@@ -512,6 +519,7 @@ async def cancel_category_fsm(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(F.data == "main_menu")
+@with_typing_action
 async def show_main_menu(callback: types.CallbackQuery):
     """Return to main menu."""
     text = "Выбери действие:"

@@ -26,6 +26,7 @@ from src.api.keyboards.settings import (
 )
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.services.scheduler_service import scheduler_service
+from src.application.utils.decorators import with_typing_action
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ api_client = DataAPIClient()
 
 
 @router.callback_query(F.data == "settings")
+@with_typing_action
 async def show_settings_menu(callback: types.CallbackQuery):
     """Show main settings menu."""
     user_service = UserService(api_client)
@@ -173,6 +175,7 @@ async def show_settings_menu(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "settings_intervals")
+@with_typing_action
 async def show_interval_type(callback: types.CallbackQuery):
     """Show interval type selection."""
     text = (
@@ -185,6 +188,7 @@ async def show_interval_type(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "interval_weekday")
+@with_typing_action
 async def show_weekday_intervals(callback: types.CallbackQuery):
     """Show weekday interval selection."""
     user_service = UserService(api_client)
@@ -208,6 +212,7 @@ async def show_weekday_intervals(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("set_weekday_"))
+@with_typing_action
 async def set_weekday_interval(callback: types.CallbackQuery):
     """Set weekday interval."""
     interval = int(callback.data.split("_")[2])
@@ -243,6 +248,7 @@ async def set_weekday_interval(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "weekday_custom")
+@with_typing_action
 async def show_weekday_custom_input(callback: types.CallbackQuery, state: FSMContext):
     """Show custom weekday interval input prompt."""
     text = (
@@ -317,6 +323,7 @@ async def process_weekday_custom_input(message: types.Message, state: FSMContext
 
 
 @router.callback_query(F.data == "interval_weekend")
+@with_typing_action
 async def show_weekend_intervals(callback: types.CallbackQuery):
     """Show weekend interval selection."""
     user_service = UserService(api_client)
@@ -340,6 +347,7 @@ async def show_weekend_intervals(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("set_weekend_"))
+@with_typing_action
 async def set_weekend_interval(callback: types.CallbackQuery):
     """Set weekend interval."""
     interval = int(callback.data.split("_")[2])
@@ -375,6 +383,7 @@ async def set_weekend_interval(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "weekend_custom")
+@with_typing_action
 async def show_weekend_custom_input(callback: types.CallbackQuery, state: FSMContext):
     """Show custom weekend interval input prompt."""
     text = (
@@ -449,6 +458,7 @@ async def process_weekend_custom_input(message: types.Message, state: FSMContext
 
 
 @router.callback_query(F.data == "settings_quiet_hours")
+@with_typing_action
 async def show_quiet_hours(callback: types.CallbackQuery):
     """Show quiet hours configuration."""
     user_service = UserService(api_client)
@@ -481,6 +491,7 @@ async def show_quiet_hours(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "quiet_toggle")
+@with_typing_action
 async def toggle_quiet_hours(callback: types.CallbackQuery):
     """Toggle quiet hours on/off."""
     user_service = UserService(api_client)
@@ -514,6 +525,7 @@ async def toggle_quiet_hours(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "quiet_time")
+@with_typing_action
 async def show_quiet_time_selection(callback: types.CallbackQuery):
     """Show selection between start and end time."""
     text = (
@@ -530,6 +542,7 @@ async def show_quiet_time_selection(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "quiet_select_start")
+@with_typing_action
 async def show_quiet_start_selection(callback: types.CallbackQuery):
     """Show quiet hours start time selection."""
     user_service = UserService(api_client)
@@ -553,6 +566,7 @@ async def show_quiet_start_selection(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "quiet_select_end")
+@with_typing_action
 async def show_quiet_end_selection(callback: types.CallbackQuery):
     """Show quiet hours end time selection."""
     user_service = UserService(api_client)
@@ -576,6 +590,7 @@ async def show_quiet_end_selection(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("quiet_start_"))
+@with_typing_action
 async def set_quiet_start_time(callback: types.CallbackQuery, state: FSMContext):
     """Set quiet hours start time."""
     # Extract time from callback (e.g., "quiet_start_23:00" -> "23:00")
@@ -615,6 +630,7 @@ async def set_quiet_start_time(callback: types.CallbackQuery, state: FSMContext)
 
 
 @router.callback_query(F.data.startswith("quiet_end_"))
+@with_typing_action
 async def set_quiet_end_time(callback: types.CallbackQuery, state: FSMContext):
     """Set quiet hours end time."""
     # Extract time from callback (e.g., "quiet_end_07:00" -> "07:00")
@@ -654,6 +670,7 @@ async def set_quiet_end_time(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "settings_reminders")
+@with_typing_action
 async def show_reminders(callback: types.CallbackQuery):
     """Show reminder configuration."""
     user_service = UserService(api_client)
@@ -679,6 +696,7 @@ async def show_reminders(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "reminder_toggle")
+@with_typing_action
 async def toggle_reminders(callback: types.CallbackQuery):
     """Toggle reminders on/off."""
     user_service = UserService(api_client)
@@ -699,6 +717,7 @@ async def toggle_reminders(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "reminder_delay")
+@with_typing_action
 async def show_reminder_delay(callback: types.CallbackQuery):
     """Show reminder delay selection."""
     user_service = UserService(api_client)
@@ -721,6 +740,7 @@ async def show_reminder_delay(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("reminder_delay_"))
+@with_typing_action
 async def set_reminder_delay(callback: types.CallbackQuery, state: FSMContext):
     """Set reminder delay."""
     # Extract delay from callback data (e.g., "reminder_delay_30" -> 30)
@@ -885,6 +905,7 @@ async def cancel_settings_fsm(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(F.data == "main_menu")
+@with_typing_action
 async def return_to_main_menu(callback: types.CallbackQuery, state: FSMContext):
     """Return to main menu."""
     await state.clear()

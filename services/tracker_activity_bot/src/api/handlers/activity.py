@@ -15,6 +15,7 @@ from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.api.keyboards.poll import get_poll_category_keyboard
 from src.application.utils.time_parser import parse_time_input, parse_duration
 from src.application.utils.formatters import format_time, format_duration, extract_tags, format_activity_list
+from src.application.utils.decorators import with_typing_action
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ api_client = DataAPIClient()
 
 
 @router.callback_query(F.data == "add_activity")
+@with_typing_action
 async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
     """Start activity recording process."""
     await state.set_state(ActivityStates.waiting_for_start_time)
@@ -82,6 +84,7 @@ async def process_start_time(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("time_start_"))
+@with_typing_action
 async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
     """Handle quick time selection for start time."""
     time_map = {
@@ -116,6 +119,7 @@ async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("time_end_"))
+@with_typing_action
 async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
     """Handle quick time selection for end time."""
     time_key = callback.data.replace("time_end_", "")
@@ -321,6 +325,7 @@ async def process_description(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(ActivityStates.waiting_for_category, F.data.startswith("poll_category_"))
+@with_typing_action
 async def process_category_callback(callback: types.CallbackQuery, state: FSMContext):
     """Process category selection via inline button.
 
@@ -350,6 +355,7 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
 
 
 @router.callback_query(ActivityStates.waiting_for_category, F.data == "poll_cancel")
+@with_typing_action
 async def cancel_category_selection(callback: types.CallbackQuery, state: FSMContext):
     """Handle cancel button in category selection.
 
@@ -459,6 +465,7 @@ async def save_activity(message: types.Message, state: FSMContext, user_id: int,
 
 
 @router.callback_query(F.data == "cancel")
+@with_typing_action
 async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
     """Cancel current action."""
     await state.clear()
@@ -470,6 +477,7 @@ async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "my_activities")
+@with_typing_action
 async def show_my_activities(callback: types.CallbackQuery):
     """Show user's recent activities."""
     user_service = UserService(api_client)
@@ -512,6 +520,7 @@ async def show_my_activities(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "statistics")
+@with_typing_action
 async def show_statistics(callback: types.CallbackQuery):
     """Show user statistics (placeholder for future implementation)."""
     text = (
@@ -551,6 +560,7 @@ async def cancel_activity_fsm(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(F.data == "help")
+@with_typing_action
 async def show_help(callback: types.CallbackQuery):
     """Show help message."""
     text = (

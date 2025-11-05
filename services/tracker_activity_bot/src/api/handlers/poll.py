@@ -20,6 +20,7 @@ from src.api.keyboards.poll import (
 )
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.services.scheduler_service import scheduler_service
+from src.application.utils.decorators import with_typing_action
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -148,6 +149,7 @@ async def send_automatic_poll(bot: Bot, user_id: int):
 
 
 @router.callback_query(F.data == "poll_skip")
+@with_typing_action
 async def handle_poll_skip(callback: types.CallbackQuery, state: FSMContext):
     """Handle 'Skip' poll response - user did nothing."""
     user_service = UserService(api_client)
@@ -190,6 +192,7 @@ async def handle_poll_skip(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "poll_sleep")
+@with_typing_action
 async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
     """Handle 'Sleep' poll response - user was sleeping."""
     user_service = UserService(api_client)
@@ -280,6 +283,7 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "poll_remind")
+@with_typing_action
 async def handle_poll_remind(callback: types.CallbackQuery, state: FSMContext):
     """Handle 'Remind Later' poll response."""
     user_service = UserService(api_client)
@@ -337,6 +341,7 @@ async def handle_poll_remind(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "poll_reminder_ok")
+@with_typing_action
 async def handle_poll_reminder_ok(callback: types.CallbackQuery):
     """Handle reminder confirmation."""
     await callback.message.answer(
@@ -347,6 +352,7 @@ async def handle_poll_reminder_ok(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data == "poll_activity")
+@with_typing_action
 async def handle_poll_activity_start(callback: types.CallbackQuery, state: FSMContext):
     """Handle 'I was doing something' poll response.
 
@@ -398,6 +404,7 @@ async def handle_poll_activity_start(callback: types.CallbackQuery, state: FSMCo
 
 
 @router.callback_query(PollStates.waiting_for_poll_category, F.data.startswith("poll_category_"))
+@with_typing_action
 async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMContext):
     """Handle category selection in poll activity recording.
 
@@ -486,6 +493,7 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
 
 
 @router.callback_query(PollStates.waiting_for_poll_category, F.data == "poll_cancel")
+@with_typing_action
 async def handle_poll_cancel(callback: types.CallbackQuery, state: FSMContext):
     """Handle cancellation of poll activity recording."""
     await state.clear()
