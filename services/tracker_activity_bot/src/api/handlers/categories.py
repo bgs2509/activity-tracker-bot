@@ -9,6 +9,7 @@ Reference: artifacts/prompts/step-01-v01.md (lines 797-955)
 """
 import logging
 from aiogram import Router, types, F
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import httpx
@@ -487,6 +488,28 @@ async def delete_category_execute(callback: types.CallbackQuery):
 # ============================================================================
 # 4. MAIN MENU NAVIGATION
 # ============================================================================
+
+@router.message(Command("cancel"))
+async def cancel_category_fsm(message: types.Message, state: FSMContext):
+    """Cancel category creation process.
+
+    Handles /cancel command to exit from category management FSM.
+    """
+    current_state = await state.get_state()
+
+    if current_state is None or not current_state.startswith("CategoryStates"):
+        await message.answer(
+            "Нечего отменять. Ты сейчас не создаёшь категорию.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return
+
+    await state.clear()
+    await message.answer(
+        "❌ Создание категории отменено.",
+        reply_markup=get_main_menu_keyboard()
+    )
+
 
 @router.callback_query(F.data == "main_menu")
 async def show_main_menu(callback: types.CallbackQuery):

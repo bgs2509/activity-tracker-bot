@@ -2,6 +2,7 @@
 import logging
 from datetime import datetime, timezone
 from aiogram import Router, types, F
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from src.api.states.activity import ActivityStates
@@ -501,6 +502,28 @@ async def show_statistics(callback: types.CallbackQuery):
 
     await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
     await callback.answer()
+
+
+@router.message(Command("cancel"))
+async def cancel_activity_fsm(message: types.Message, state: FSMContext):
+    """Cancel activity recording process.
+
+    Handles /cancel command to exit from activity recording FSM.
+    """
+    current_state = await state.get_state()
+
+    if current_state is None or not current_state.startswith("ActivityStates"):
+        await message.answer(
+            "Нечего отменять. Ты сейчас не записываешь активность.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return
+
+    await state.clear()
+    await message.answer(
+        "❌ Запись активности отменена.",
+        reply_markup=get_main_menu_keyboard()
+    )
 
 
 @router.callback_query(F.data == "help")

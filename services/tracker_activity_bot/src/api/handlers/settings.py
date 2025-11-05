@@ -4,6 +4,7 @@ import re
 from datetime import time as dt_time
 
 from aiogram import Router, types, F
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -856,6 +857,31 @@ async def process_custom_quiet_end(message: types.Message, state: FSMContext):
 
     await message.answer(text, reply_markup=get_confirmation_keyboard())
     await state.clear()
+
+
+@router.message(Command("cancel"))
+async def cancel_settings_fsm(message: types.Message, state: FSMContext):
+    """Cancel any active FSM state in settings.
+
+    Handles /cancel command to exit from:
+    - Custom interval input
+    - Custom quiet hours time input
+    - Custom reminder delay input
+    """
+    current_state = await state.get_state()
+
+    if current_state is None:
+        await message.answer(
+            "Нечего отменять. Ты сейчас не в процессе настройки.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return
+
+    await state.clear()
+    await message.answer(
+        "❌ Настройка отменена.",
+        reply_markup=get_main_menu_keyboard()
+    )
 
 
 @router.callback_query(F.data == "main_menu")
