@@ -14,7 +14,7 @@ from src.domain.models.user import User  # noqa
 from src.domain.models.category import Category  # noqa
 from src.domain.models.activity import Activity  # noqa
 from src.domain.models.user_settings import UserSettings  # noqa
-from src.core.config import get_settings
+from src.core.config import settings
 
 # this is the Alembic Config object
 config = context.config
@@ -24,8 +24,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Set sqlalchemy.url from environment
-settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace('+asyncpg', ''))
+# Keep asyncpg for async migrations
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata
