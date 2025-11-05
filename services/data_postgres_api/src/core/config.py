@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str
+    enable_db_auto_create: bool = False  # Only for dev/test, use migrations in production
 
     # Application
     app_name: str = "data_postgres_api"

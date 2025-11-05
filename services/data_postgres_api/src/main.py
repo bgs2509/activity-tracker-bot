@@ -36,11 +36,15 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Create database tables on startup."""
+    """Application startup tasks."""
     logger.info("Starting data_postgres_api service")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables created")
+    # Database schema is managed by Alembic migrations
+    # For development/testing with auto-creation, set ENABLE_DB_AUTO_CREATE=true
+    if settings.enable_db_auto_create:
+        logger.warning("Auto-creating database tables (development mode only!)")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    logger.info("Application startup complete")
 
 
 @app.on_event("shutdown")

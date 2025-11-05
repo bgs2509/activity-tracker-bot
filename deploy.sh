@@ -32,7 +32,6 @@ sleep 5
 # Run database migrations
 echo ""
 echo "🗄️  Running database migrations..."
-docker exec data_postgres_api alembic stamp head 2>/dev/null || true
 docker exec data_postgres_api alembic upgrade head
 
 echo ""
