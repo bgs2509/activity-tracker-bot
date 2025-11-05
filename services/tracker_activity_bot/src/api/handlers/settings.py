@@ -241,6 +241,80 @@ async def set_weekday_interval(callback: types.CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data == "weekday_custom")
+async def show_weekday_custom_input(callback: types.CallbackQuery, state: FSMContext):
+    """Show custom weekday interval input prompt."""
+    text = (
+        "📅 Укажи свой интервал для будних дней\n\n"
+        "Введи количество минут (от 30 до 480).\n\n"
+        "Примеры:\n"
+        "• 90 — каждые 1.5 часа\n"
+        "• 150 — каждые 2.5 часа\n\n"
+        "Или отправь /cancel для отмены"
+    )
+
+    await callback.message.answer(text)
+    await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
+    await callback.answer()
+
+
+@router.message(SettingsStates.waiting_for_weekday_interval_custom)
+async def process_weekday_custom_input(message: types.Message, state: FSMContext):
+    """Process custom weekday interval input."""
+    try:
+        interval = int(message.text.strip())
+
+        # Validation
+        if interval < 30 or interval > 480:
+            await message.answer(
+                "⚠️ Интервал должен быть от 30 до 480 минут (0.5-8 часов).\n"
+                "Попробуй ещё раз:"
+            )
+            return
+
+        user_service = UserService(api_client)
+        settings_service = UserSettingsService(api_client)
+        telegram_id = message.from_user.id
+
+        user = await user_service.get_by_telegram_id(telegram_id)
+        settings = await settings_service.get_settings(user["id"])
+
+        await settings_service.update_settings(settings["id"], poll_interval_weekday=interval)
+
+        # Fetch updated settings and reschedule poll
+        updated_settings = await settings_service.get_settings(user["id"])
+        from src.api.handlers.poll import send_automatic_poll
+        await scheduler_service.schedule_poll(
+            user_id=telegram_id,
+            settings=updated_settings,
+            user_timezone=user.get("timezone", "Europe/Moscow"),
+            send_poll_callback=lambda uid: send_automatic_poll(message.bot, uid)
+        )
+        logger.info(f"Rescheduled poll for user {telegram_id} with custom weekday interval {interval}")
+
+        hours = interval // 60
+        minutes = interval % 60
+        if hours > 0 and minutes > 0:
+            interval_str = f"{hours}ч {minutes}м"
+        elif hours > 0:
+            interval_str = f"{hours}ч"
+        else:
+            interval_str = f"{minutes}м"
+
+        text = (
+            f"✅ Интервал для будних дней обновлён!\n\n"
+            f"Теперь бот будет спрашивать каждые {interval_str} в будние дни."
+        )
+
+        await message.answer(text, reply_markup=get_confirmation_keyboard())
+        await state.clear()
+
+    except ValueError:
+        await message.answer(
+            "⚠️ Неверный формат! Введи целое число (например: 90):"
+        )
+
+
 @router.callback_query(F.data == "interval_weekend")
 async def show_weekend_intervals(callback: types.CallbackQuery):
     """Show weekend interval selection."""
@@ -297,6 +371,80 @@ async def set_weekend_interval(callback: types.CallbackQuery):
 
     await callback.message.answer(text, reply_markup=get_confirmation_keyboard())
     await callback.answer()
+
+
+@router.callback_query(F.data == "weekend_custom")
+async def show_weekend_custom_input(callback: types.CallbackQuery, state: FSMContext):
+    """Show custom weekend interval input prompt."""
+    text = (
+        "🎉 Укажи свой интервал для выходных\n\n"
+        "Введи количество минут (от 30 до 600).\n\n"
+        "Примеры:\n"
+        "• 120 — каждые 2 часа\n"
+        "• 210 — каждые 3.5 часа\n\n"
+        "Или отправь /cancel для отмены"
+    )
+
+    await callback.message.answer(text)
+    await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
+    await callback.answer()
+
+
+@router.message(SettingsStates.waiting_for_weekend_interval_custom)
+async def process_weekend_custom_input(message: types.Message, state: FSMContext):
+    """Process custom weekend interval input."""
+    try:
+        interval = int(message.text.strip())
+
+        # Validation
+        if interval < 30 or interval > 600:
+            await message.answer(
+                "⚠️ Интервал должен быть от 30 до 600 минут (0.5-10 часов).\n"
+                "Попробуй ещё раз:"
+            )
+            return
+
+        user_service = UserService(api_client)
+        settings_service = UserSettingsService(api_client)
+        telegram_id = message.from_user.id
+
+        user = await user_service.get_by_telegram_id(telegram_id)
+        settings = await settings_service.get_settings(user["id"])
+
+        await settings_service.update_settings(settings["id"], poll_interval_weekend=interval)
+
+        # Fetch updated settings and reschedule poll
+        updated_settings = await settings_service.get_settings(user["id"])
+        from src.api.handlers.poll import send_automatic_poll
+        await scheduler_service.schedule_poll(
+            user_id=telegram_id,
+            settings=updated_settings,
+            user_timezone=user.get("timezone", "Europe/Moscow"),
+            send_poll_callback=lambda uid: send_automatic_poll(message.bot, uid)
+        )
+        logger.info(f"Rescheduled poll for user {telegram_id} with custom weekend interval {interval}")
+
+        hours = interval // 60
+        minutes = interval % 60
+        if hours > 0 and minutes > 0:
+            interval_str = f"{hours}ч {minutes}м"
+        elif hours > 0:
+            interval_str = f"{hours}ч"
+        else:
+            interval_str = f"{minutes}м"
+
+        text = (
+            f"✅ Интервал для выходных обновлён!\n\n"
+            f"Теперь бот будет спрашивать каждые {interval_str} в выходные дни."
+        )
+
+        await message.answer(text, reply_markup=get_confirmation_keyboard())
+        await state.clear()
+
+    except ValueError:
+        await message.answer(
+            "⚠️ Неверный формат! Введи целое число (например: 120):"
+        )
 
 
 @router.callback_query(F.data == "settings_quiet_hours")
@@ -572,12 +720,26 @@ async def show_reminder_delay(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("reminder_delay_"))
-async def set_reminder_delay(callback: types.CallbackQuery):
+async def set_reminder_delay(callback: types.CallbackQuery, state: FSMContext):
     """Set reminder delay."""
     # Extract delay from callback data (e.g., "reminder_delay_30" -> 30)
     parts = callback.data.split("_")
+
     if parts[-1] == "custom":
-        return  # Handle custom input separately
+        # Handle custom input - show input prompt
+        text = (
+            "⏱ Укажи свою задержку напоминания\n\n"
+            "Введи количество минут (от 5 до 120).\n\n"
+            "Примеры:\n"
+            "• 10 — напомнить через 10 минут\n"
+            "• 45 — напомнить через 45 минут\n\n"
+            "Или отправь /cancel для отмены"
+        )
+
+        await callback.message.answer(text)
+        await state.set_state(SettingsStates.waiting_for_reminder_delay_custom)
+        await callback.answer()
+        return
 
     delay = int(parts[-1])
 
@@ -594,6 +756,40 @@ async def set_reminder_delay(callback: types.CallbackQuery):
 
     await callback.message.answer(text, reply_markup=get_confirmation_keyboard())
     await callback.answer()
+
+
+@router.message(SettingsStates.waiting_for_reminder_delay_custom)
+async def process_reminder_delay_custom(message: types.Message, state: FSMContext):
+    """Process custom reminder delay input."""
+    try:
+        delay = int(message.text.strip())
+
+        # Validation
+        if delay < 5 or delay > 120:
+            await message.answer(
+                "⚠️ Задержка должна быть от 5 до 120 минут.\n"
+                "Попробуй ещё раз:"
+            )
+            return
+
+        user_service = UserService(api_client)
+        settings_service = UserSettingsService(api_client)
+        telegram_id = message.from_user.id
+
+        user = await user_service.get_by_telegram_id(telegram_id)
+        settings = await settings_service.get_settings(user["id"])
+
+        await settings_service.update_settings(settings["id"], reminder_delay_minutes=delay)
+
+        text = f"✅ Задержка напоминания обновлена!\n\nТеперь бот будет напоминать через {delay} минут."
+
+        await message.answer(text, reply_markup=get_confirmation_keyboard())
+        await state.clear()
+
+    except ValueError:
+        await message.answer(
+            "⚠️ Неверный формат! Введи целое число (например: 45):"
+        )
 
 
 @router.message(SettingsStates.waiting_for_quiet_hours_start_custom)
