@@ -16,6 +16,7 @@ from src.api.keyboards.poll import get_poll_category_keyboard
 from src.application.utils.time_parser import parse_time_input, parse_duration
 from src.application.utils.formatters import format_time, format_duration, extract_tags, format_activity_list
 from src.application.utils.decorators import with_typing_action
+from src.core.constants import MAX_ACTIVITY_LIMIT
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -497,7 +498,7 @@ async def show_my_activities(callback: types.CallbackQuery):
             return
 
         # Get user's activities
-        response = await activity_service.get_user_activities(user["id"], limit=10)
+        response = await activity_service.get_user_activities(user["id"], limit=MAX_ACTIVITY_LIMIT)
         activities = response.get("items", [])
 
         # Format and send

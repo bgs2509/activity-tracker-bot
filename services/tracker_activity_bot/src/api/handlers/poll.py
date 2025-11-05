@@ -21,6 +21,7 @@ from src.api.keyboards.poll import (
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.services.scheduler_service import scheduler_service
 from src.application.utils.decorators import with_typing_action
+from src.core.constants import POLL_POSTPONE_MINUTES
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -87,14 +88,14 @@ async def send_automatic_poll(bot: Bot, user_id: int):
             current_state = await storage.get_state(key)
 
             if current_state:
-                # User is in active dialog - postpone poll by 10 minutes
+                # User is in active dialog - postpone poll
                 logger.info(
                     f"User {user_id} is in FSM state '{current_state}', "
-                    f"postponing poll by 10 minutes"
+                    f"postponing poll by {POLL_POSTPONE_MINUTES} minutes"
                 )
 
-                # Reschedule poll in 10 minutes
-                next_poll_time = datetime.now(timezone.utc) + timedelta(minutes=10)
+                # Reschedule poll
+                next_poll_time = datetime.now(timezone.utc) + timedelta(minutes=POLL_POSTPONE_MINUTES)
 
                 # Remove existing job if any
                 if user_id in scheduler_service.jobs:
