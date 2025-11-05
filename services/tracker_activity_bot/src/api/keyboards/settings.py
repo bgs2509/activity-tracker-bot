@@ -72,11 +72,18 @@ def get_quiet_hours_main_keyboard(enabled: bool = True) -> InlineKeyboardMarkup:
         callback_data="quiet_toggle"
     )
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    buttons = [
         [toggle_button],
-        [InlineKeyboardButton(text="⏰ Изменить время", callback_data="quiet_time")] if enabled else [],
-        [InlineKeyboardButton(text="🔙 Назад к настройкам", callback_data="settings")],
-    ])
+    ]
+
+    # Add time change button only if enabled
+    if enabled:
+        buttons.append([InlineKeyboardButton(text="⏰ Изменить время", callback_data="quiet_time")])
+
+    # Add back button
+    buttons.append([InlineKeyboardButton(text="🔙 Назад к настройкам", callback_data="settings")])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
 
 
@@ -111,11 +118,18 @@ def get_reminders_keyboard(enabled: bool = True) -> InlineKeyboardMarkup:
         callback_data="reminder_toggle"
     )
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    buttons = [
         [toggle_button],
-        [InlineKeyboardButton(text="⏱ Изменить задержку", callback_data="reminder_delay")] if enabled else [],
-        [InlineKeyboardButton(text="🔙 Назад к настройкам", callback_data="settings")],
-    ])
+    ]
+
+    # Add delay change button only if enabled
+    if enabled:
+        buttons.append([InlineKeyboardButton(text="⏱ Изменить задержку", callback_data="reminder_delay")])
+
+    # Add back button
+    buttons.append([InlineKeyboardButton(text="🔙 Назад к настройкам", callback_data="settings")])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
 
 
