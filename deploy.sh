@@ -12,7 +12,7 @@ echo "================================================"
 # Stop and remove existing containers
 echo ""
 echo "🛑 Stopping existing containers..."
-docker-compose down
+docker compose down
 
 # Pull latest changes from git
 echo ""
@@ -22,7 +22,7 @@ sudo GIT_SSH_COMMAND='ssh -i /home/bgs/.ssh/HenryBud_Ubuntu_Lenovo73 -o Identiti
 # Build and start production containers
 echo ""
 echo "🔨 Building and starting production containers..."
-docker-compose up --build -d
+docker compose up --build -d
 
 echo ""
 echo "================================================"
