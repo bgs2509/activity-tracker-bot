@@ -51,8 +51,29 @@ async def show_settings_menu(callback: types.CallbackQuery):
         await callback.answer()
         return
 
-    weekday_h = settings["poll_interval_weekday"] // 60
-    weekend_h = settings["poll_interval_weekend"] // 60
+    # Format weekday interval
+    weekday_minutes = settings["poll_interval_weekday"]
+    if weekday_minutes < 60:
+        weekday_str = f"{weekday_minutes}м"
+    else:
+        weekday_h = weekday_minutes // 60
+        weekday_m = weekday_minutes % 60
+        if weekday_m == 0:
+            weekday_str = f"{weekday_h}ч"
+        else:
+            weekday_str = f"{weekday_h}ч {weekday_m}м"
+
+    # Format weekend interval
+    weekend_minutes = settings["poll_interval_weekend"]
+    if weekend_minutes < 60:
+        weekend_str = f"{weekend_minutes}м"
+    else:
+        weekend_h = weekend_minutes // 60
+        weekend_m = weekend_minutes % 60
+        if weekend_m == 0:
+            weekend_str = f"{weekend_h}ч"
+        else:
+            weekend_str = f"{weekend_h}ч {weekend_m}м"
 
     quiet_enabled = settings["quiet_hours_start"] is not None
     quiet_text = f"С {settings['quiet_hours_start'][:5]} до {settings['quiet_hours_end'][:5]}" if quiet_enabled else "Выключены"
@@ -95,8 +116,8 @@ async def show_settings_menu(callback: types.CallbackQuery):
         f"⚙️ Настройки бота\n\n"
         f"Текущие настройки:\n\n"
         f"📅 Интервалы опросов:\n"
-        f"• Будни: каждые {weekday_h}ч\n"
-        f"• Выходные: каждые {weekend_h}ч\n"
+        f"• Будни: каждые {weekday_str}\n"
+        f"• Выходные: каждые {weekend_str}\n"
     )
 
     if next_poll_text:
