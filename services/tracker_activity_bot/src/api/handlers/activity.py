@@ -243,7 +243,7 @@ async def process_end_time(message: types.Message, state: FSMContext):
             f"Можешь добавить теги через #хештег"
         )
 
-        await message.answer(text)
+        await message.answer(text, reply_markup=get_main_menu_keyboard())
 
     except ValueError as e:
         await message.answer(
