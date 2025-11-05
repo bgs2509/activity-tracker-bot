@@ -17,7 +17,7 @@ docker-compose down
 # Pull latest changes from git
 echo ""
 echo "📥 Pulling latest changes from git..."
-GIT_SSH_COMMAND='ssh -i ~/.ssh/my_VPS_mchost_250927 -o IdentitiesOnly=yes' git pull
+sudo GIT_SSH_COMMAND='ssh -i /home/bgs/.ssh/HenryBud_Ubuntu_Lenovo73 -o IdentitiesOnly=yes' git pull
 
 # Build and start production containers
 echo ""
