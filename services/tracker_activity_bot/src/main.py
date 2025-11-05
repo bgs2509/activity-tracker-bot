@@ -1,6 +1,7 @@
 """Aiogram bot entry point for tracker_activity_bot service."""
 import asyncio
 import logging
+from datetime import timedelta
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
@@ -13,6 +14,7 @@ from src.api.handlers.categories import router as categories_router
 from src.api.handlers.settings import router as settings_router
 from src.api.handlers.poll import router as poll_router
 from src.application.services.scheduler_service import scheduler_service
+from src.application.services import fsm_timeout_service as fsm_timeout_module
 
 # Configure structured JSON logging (MANDATORY for Level 1)
 setup_logging(service_name="tracker_activity_bot", log_level=settings.log_level)
@@ -26,8 +28,13 @@ async def main():
     # Initialize bot and dispatcher
     bot = Bot(token=settings.telegram_bot_token)
 
-    # Redis storage for FSM
-    storage = RedisStorage.from_url(settings.redis_url)
+    # Redis storage for FSM with automatic state expiration
+    # state_ttl protects against stuck FSM states (e.g., user abandoned dialog)
+    storage = RedisStorage.from_url(
+        settings.redis_url,
+        state_ttl=timedelta(minutes=15),  # Auto-expire FSM state after 15 minutes
+        data_ttl=timedelta(minutes=15)    # Auto-expire FSM data after 15 minutes
+    )
     dp = Dispatcher(storage=storage)
 
     # Register routers
@@ -40,6 +47,11 @@ async def main():
     # Start scheduler for automatic polls
     scheduler_service.start()
     logger.info("Scheduler started for automatic polls")
+
+    # Initialize FSM timeout service
+    from src.application.services.fsm_timeout_service import FSMTimeoutService
+    fsm_timeout_module.fsm_timeout_service = FSMTimeoutService(scheduler_service.scheduler)
+    logger.info("FSM timeout service initialized")
 
     # Start polling
     logger.info("Bot started, polling...")
