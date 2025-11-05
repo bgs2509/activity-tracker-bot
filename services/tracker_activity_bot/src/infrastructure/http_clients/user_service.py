@@ -1,4 +1,6 @@
 """User service for interacting with users API."""
+from datetime import datetime
+
 import httpx
 from src.infrastructure.http_clients.http_client import DataAPIClient
 
@@ -31,3 +33,18 @@ class UserService:
             "first_name": first_name,
             "timezone": "Europe/Moscow"
         })
+
+    async def update_last_poll_time(self, user_id: int, poll_time: datetime) -> dict:
+        """Update last poll time for a user.
+
+        Args:
+            user_id: User ID
+            poll_time: Time when poll was sent
+
+        Returns:
+            Updated user data
+        """
+        return await self.client.patch(
+            f"/api/v1/users/{user_id}",
+            json={"last_poll_time": poll_time.isoformat()}
+        )

@@ -72,6 +72,14 @@ async def send_automatic_poll(bot: Bot, user_id: int):
             reply_markup=get_poll_response_keyboard()
         )
 
+        # Update last poll time for accurate sleep duration calculation
+        try:
+            poll_time = datetime.now(timezone.utc)
+            await user_service.update_last_poll_time(user["id"], poll_time)
+            logger.info(f"Updated last_poll_time for user {user_id}")
+        except Exception as e:
+            logger.warning(f"Could not update last_poll_time for user {user_id}: {e}")
+
         logger.info(f"Sent automatic poll to user {user_id}")
 
     except Exception as e:
@@ -159,15 +167,22 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
                 emoji="😴"
             )
 
-        # Calculate sleep duration (from last poll time or default 8 hours)
+        # Calculate sleep duration from last poll time
+        end_time = datetime.now(timezone.utc)
+
         last_poll = user.get("last_poll_time")
         if last_poll:
+            # Use actual last poll time if available
             start_time = datetime.fromisoformat(last_poll.replace('Z', '+00:00'))
         else:
-            # Default: 8 hours ago
-            start_time = datetime.now(timezone.utc) - timedelta(hours=8)
-
-        end_time = datetime.now(timezone.utc)
+            # Fallback: use poll interval to estimate sleep duration
+            is_weekend = end_time.weekday() >= 5  # Saturday=5, Sunday=6
+            interval_minutes = (
+                settings["poll_interval_weekend"]
+                if is_weekend
+                else settings["poll_interval_weekday"]
+            )
+            start_time = end_time - timedelta(minutes=interval_minutes)
 
         # Save sleep activity
         await activity_service.create_activity(

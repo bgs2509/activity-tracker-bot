@@ -13,6 +13,12 @@ class UserCreate(BaseModel):
     timezone: str = Field(default="Europe/Moscow", max_length=50, description="User timezone")
 
 
+class UserUpdate(BaseModel):
+    """Schema for updating a user."""
+
+    last_poll_time: datetime | None = Field(None, description="Last poll time for activity tracking")
+
+
 class UserResponse(BaseModel):
     """Schema for user response."""
 
@@ -24,3 +30,4 @@ class UserResponse(BaseModel):
     first_name: str | None
     timezone: str
     created_at: datetime
+    last_poll_time: datetime | None

@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.user import User
-from src.schemas.user import UserCreate
+from src.schemas.user import UserCreate, UserUpdate
 
 
 class UserRepository:
@@ -33,3 +33,26 @@ class UserRepository:
             select(User).where(User.telegram_id == telegram_id)
         )
         return result.scalar_one_or_none()
+
+    async def update(self, user_id: int, user_data: UserUpdate) -> User | None:
+        """Update user fields.
+
+        Args:
+            user_id: User ID to update
+            user_data: Updated user data
+
+        Returns:
+            Updated user or None if not found
+        """
+        user = await self.get_by_id(user_id)
+        if not user:
+            return None
+
+        # Update only provided fields
+        update_data = user_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(user, field, value)
+
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user

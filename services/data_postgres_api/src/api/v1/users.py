@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.database.connection import get_db
 from src.infrastructure.repositories.user_repository import UserRepository
-from src.schemas.user import UserCreate, UserResponse
+from src.schemas.user import UserCreate, UserUpdate, UserResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -37,6 +37,28 @@ async def get_user_by_telegram_id(
     """Get user by Telegram ID."""
     repository = UserRepository(db)
     user = await repository.get_by_telegram_id(telegram_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return UserResponse.model_validate(user)
+
+
+@router.patch("/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_data: UserUpdate,
+    db: AsyncSession = Depends(get_db)
+) -> UserResponse:
+    """Update user fields.
+
+    Allows updating user fields like last_poll_time for tracking purposes.
+    """
+    repository = UserRepository(db)
+    user = await repository.update(user_id, user_data)
 
     if not user:
         raise HTTPException(
