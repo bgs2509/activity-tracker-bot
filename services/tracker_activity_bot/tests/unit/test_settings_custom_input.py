@@ -99,10 +99,10 @@ class TestWeekdayCustomInput:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_weekday_input_too_low(self, message, state):
-        """Test validation rejects interval below minimum (30 minutes)."""
+        """Test validation rejects interval below minimum (5 minutes)."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
-        msg = message("15")
+        msg = message("3")
         await process_weekday_custom_input(msg, state)
 
         # FSM should NOT be cleared (allow retry)
@@ -111,7 +111,7 @@ class TestWeekdayCustomInput:
 
         # Error message shown
         call_text = msg.answer.call_args[0][0]
-        assert "от 30 до 480" in call_text.lower()
+        assert "от 5 до 480" in call_text.lower()
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -128,7 +128,7 @@ class TestWeekdayCustomInput:
 
         # Error message
         call_text = msg.answer.call_args[0][0]
-        assert "от 30 до 480" in call_text.lower()
+        assert "от 5 до 480" in call_text.lower()
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -160,7 +160,7 @@ class TestWeekdayCustomInput:
         assert current_state == SettingsStates.waiting_for_weekday_interval_custom.state
 
         call_text = msg.answer.call_args[0][0]
-        assert "от 30 до 480" in call_text.lower()
+        assert "от 5 до 480" in call_text.lower()
 
 
 class TestWeekendCustomInput:
@@ -206,7 +206,7 @@ class TestWeekendCustomInput:
         """Test validation rejects weekend interval below minimum."""
         await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
 
-        msg = message("20")
+        msg = message("3")
         await process_weekend_custom_input(msg, state)
 
         # FSM should NOT be cleared
@@ -214,7 +214,7 @@ class TestWeekendCustomInput:
         assert current_state == SettingsStates.waiting_for_weekend_interval_custom.state
 
         call_text = msg.answer.call_args[0][0]
-        assert "от 30 до 600" in call_text.lower()
+        assert "от 5 до 600" in call_text.lower()
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -229,7 +229,7 @@ class TestWeekendCustomInput:
         assert current_state == SettingsStates.waiting_for_weekend_interval_custom.state
 
         call_text = msg.answer.call_args[0][0]
-        assert "от 30 до 600" in call_text.lower()
+        assert "от 5 до 600" in call_text.lower()
 
 
 class TestReminderDelayCustomInput:

@@ -15,7 +15,7 @@ MAX_ACTIVITY_LIMIT = 10
 """Maximum number of activities to show in list"""
 
 # Validation limits
-MIN_POLL_INTERVAL_MINUTES = 30
+MIN_POLL_INTERVAL_MINUTES = 5
 MAX_POLL_INTERVAL_WEEKDAY_MINUTES = 480  # 8 hours
 MAX_POLL_INTERVAL_WEEKEND_MINUTES = 600  # 10 hours
 
