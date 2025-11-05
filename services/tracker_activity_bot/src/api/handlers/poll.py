@@ -20,6 +20,7 @@ from src.api.keyboards.poll import (
 )
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.services.scheduler_service import scheduler_service
+from src.application.services.fsm_timeout_service import fsm_timeout_service
 from src.application.utils.decorators import with_typing_action
 from src.core.constants import POLL_POSTPONE_MINUTES
 
@@ -405,6 +406,14 @@ async def handle_poll_activity_start(callback: types.CallbackQuery, state: FSMCo
         await state.update_data(user_id=user["id"])
         await state.set_state(PollStates.waiting_for_poll_category)
 
+        # Schedule FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.schedule_timeout(
+                callback.from_user.id,
+                PollStates.waiting_for_poll_category,
+                callback.bot
+            )
+
         text = (
             "✏️ Чем ты занимался?\n\n"
             "Выбери категорию активности:"
@@ -443,6 +452,8 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
             await callback.message.answer("⚠️ Пользователь не найден.")
             await callback.answer()
             await state.clear()
+            if fsm_timeout_service:
+                fsm_timeout_service.cancel_timeout(callback.from_user.id)
             return
 
         settings = await settings_service.get_settings(user["id"])
@@ -450,6 +461,8 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
             await callback.message.answer("⚠️ Настройки не найдены.")
             await callback.answer()
             await state.clear()
+            if fsm_timeout_service:
+                fsm_timeout_service.cancel_timeout(callback.from_user.id)
             return
 
         # Calculate time range based on poll interval
@@ -502,12 +515,16 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
             reply_markup=get_main_menu_keyboard()
         )
         await state.clear()
+        if fsm_timeout_service:
+            fsm_timeout_service.cancel_timeout(callback.from_user.id)
         await callback.answer()
 
     except Exception as e:
         logger.error(f"Error in handle_poll_category_select: {e}")
         await callback.message.answer("⚠️ Произошла ошибка при сохранении.")
         await state.clear()
+        if fsm_timeout_service:
+            fsm_timeout_service.cancel_timeout(callback.from_user.id)
         await callback.answer()
 
 
@@ -516,6 +533,8 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
 async def handle_poll_cancel(callback: types.CallbackQuery, state: FSMContext):
     """Handle cancellation of poll activity recording."""
     await state.clear()
+    if fsm_timeout_service:
+        fsm_timeout_service.cancel_timeout(callback.from_user.id)
     await callback.message.answer(
         "❌ Запись активности отменена.",
         reply_markup=get_main_menu_keyboard()

@@ -16,6 +16,7 @@ from src.api.keyboards.poll import get_poll_category_keyboard
 from src.application.utils.time_parser import parse_time_input, parse_duration
 from src.application.utils.formatters import format_time, format_duration, extract_tags, format_activity_list
 from src.application.utils.decorators import with_typing_action
+from src.application.services.fsm_timeout_service import fsm_timeout_service
 from src.core.constants import MAX_ACTIVITY_LIMIT
 
 router = Router()
@@ -29,6 +30,14 @@ api_client = DataAPIClient()
 async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
     """Start activity recording process."""
     await state.set_state(ActivityStates.waiting_for_start_time)
+
+    # Schedule FSM timeout
+    if fsm_timeout_service:
+        fsm_timeout_service.schedule_timeout(
+            user_id=callback.from_user.id,
+            state=ActivityStates.waiting_for_start_time,
+            bot=callback.bot
+        )
 
     text = (
         "⏰ Укажи время НАЧАЛА активности\n\n"
@@ -64,6 +73,14 @@ async def process_start_time(message: types.Message, state: FSMContext):
         # Save to FSM
         await state.update_data(start_time=start_time.isoformat())
         await state.set_state(ActivityStates.waiting_for_end_time)
+
+        # Schedule FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.schedule_timeout(
+                user_id=message.from_user.id,
+                state=ActivityStates.waiting_for_end_time,
+                bot=message.bot
+            )
 
         start_time_str = format_time(start_time)
         text = (
@@ -104,6 +121,14 @@ async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
         await state.update_data(start_time=start_time.isoformat())
         await state.set_state(ActivityStates.waiting_for_end_time)
 
+        # Schedule FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.schedule_timeout(
+                user_id=callback.from_user.id,
+                state=ActivityStates.waiting_for_end_time,
+                bot=callback.bot
+            )
+
         start_time_str = format_time(start_time)
         text = (
             f"⏰ Укажи время ОКОНЧАНИЯ активности\n\n"
@@ -135,6 +160,9 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=get_main_menu_keyboard()
         )
         await state.clear()
+        # Cancel FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.cancel_timeout(callback.from_user.id)
         await callback.answer()
         return
 
@@ -180,6 +208,14 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
         await state.update_data(end_time=end_time.isoformat())
         await state.set_state(ActivityStates.waiting_for_description)
 
+        # Schedule FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.schedule_timeout(
+                user_id=callback.from_user.id,
+                state=ActivityStates.waiting_for_description,
+                bot=callback.bot
+            )
+
         start_time_str = format_time(start_time)
         end_time_str = format_time(end_time)
         duration_minutes = int((end_time - start_time).total_seconds() / 60)
@@ -217,6 +253,9 @@ async def process_end_time(message: types.Message, state: FSMContext):
             reply_markup=get_main_menu_keyboard()
         )
         await state.clear()
+        # Cancel FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.cancel_timeout(message.from_user.id)
         return
 
     start_time = datetime.fromisoformat(start_time_str)
@@ -236,6 +275,14 @@ async def process_end_time(message: types.Message, state: FSMContext):
         # Save to FSM and proceed to next step
         await state.update_data(end_time=end_time.isoformat())
         await state.set_state(ActivityStates.waiting_for_description)
+
+        # Schedule FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.schedule_timeout(
+                user_id=message.from_user.id,
+                state=ActivityStates.waiting_for_description,
+                bot=message.bot
+            )
 
         start_time_str = format_time(start_time)
         end_time_str = format_time(end_time)
@@ -274,6 +321,14 @@ async def process_description(message: types.Message, state: FSMContext):
     await state.update_data(description=description, tags=tags)
     await state.set_state(ActivityStates.waiting_for_category)
 
+    # Schedule FSM timeout
+    if fsm_timeout_service:
+        fsm_timeout_service.schedule_timeout(
+            user_id=message.from_user.id,
+            state=ActivityStates.waiting_for_category,
+            bot=message.bot
+        )
+
     # Get user's categories
     user_service = UserService(api_client)
     category_service = CategoryService(api_client)
@@ -297,7 +352,7 @@ async def process_description(message: types.Message, state: FSMContext):
                 reply_markup=get_main_menu_keyboard()
             )
             # Save without category
-            await save_activity(message, state, user["id"], None)
+            await save_activity(message, state, user["id"], None, message.from_user.id)
             return
 
         # Store categories and user_id for callback handlers
@@ -351,7 +406,9 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
         return
 
     # Save activity with selected category
-    await save_activity(callback.message, state, user_id, category_id)
+    await save_activity(
+        callback.message, state, user_id, category_id, callback.from_user.id
+    )
     await callback.answer()
 
 
@@ -395,7 +452,7 @@ async def process_category(message: types.Message, state: FSMContext):
                 return
 
             # Save activity without category
-            await save_activity(message, state, user["id"], None)
+            await save_activity(message, state, user["id"], None, message.from_user.id)
 
         except Exception as e:
             logger.error(f"Error in process_category: {e}")
@@ -412,7 +469,13 @@ async def process_category(message: types.Message, state: FSMContext):
         )
 
 
-async def save_activity(message: types.Message, state: FSMContext, user_id: int, category_id: int | None):
+async def save_activity(
+    message: types.Message,
+    state: FSMContext,
+    user_id: int,
+    category_id: int | None,
+    telegram_user_id: int
+):
     """Save activity to database."""
     activity_service = ActivityService(api_client)
     user_service = UserService(api_client)
@@ -455,6 +518,9 @@ async def save_activity(message: types.Message, state: FSMContext, user_id: int,
             reply_markup=get_main_menu_keyboard()
         )
         await state.clear()
+        # Cancel FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.cancel_timeout(telegram_user_id)
 
     except Exception as e:
         logger.error(f"Error saving activity: {e}")
@@ -463,6 +529,9 @@ async def save_activity(message: types.Message, state: FSMContext, user_id: int,
             reply_markup=get_main_menu_keyboard()
         )
         await state.clear()
+        # Cancel FSM timeout
+        if fsm_timeout_service:
+            fsm_timeout_service.cancel_timeout(telegram_user_id)
 
 
 @router.callback_query(F.data == "cancel")
@@ -470,6 +539,9 @@ async def save_activity(message: types.Message, state: FSMContext, user_id: int,
 async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
     """Cancel current action."""
     await state.clear()
+    # Cancel FSM timeout
+    if fsm_timeout_service:
+        fsm_timeout_service.cancel_timeout(callback.from_user.id)
     await callback.message.answer(
         "❌ Действие отменено.",
         reply_markup=get_main_menu_keyboard()
@@ -554,10 +626,78 @@ async def cancel_activity_fsm(message: types.Message, state: FSMContext):
         return
 
     await state.clear()
+    # Cancel FSM timeout
+    if fsm_timeout_service:
+        fsm_timeout_service.cancel_timeout(message.from_user.id)
     await message.answer(
         "❌ Запись активности отменена.",
         reply_markup=get_main_menu_keyboard()
     )
+
+
+@router.callback_query(F.data == "fsm_reminder_continue")
+@with_typing_action
+async def handle_fsm_reminder_continue(callback: types.CallbackQuery, state: FSMContext):
+    """Handle 'Continue' button in FSM timeout reminder.
+
+    User clicked 'Continue' button in reminder message, so:
+    1. Cancel cleanup timer
+    2. Restart 10-minute timeout timer
+    3. Show appropriate message based on current state
+    """
+    user_id = callback.from_user.id
+
+    # Cancel cleanup timer
+    if fsm_timeout_service:
+        fsm_timeout_service.cancel_cleanup_timer(user_id)
+
+    # Get current state
+    current_state = await state.get_state()
+
+    if not current_state:
+        await callback.message.answer(
+            "👌 Хорошо! Можешь начать заново из главного меню.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await callback.answer()
+        return
+
+    # Restart timeout timer
+    if fsm_timeout_service:
+        fsm_timeout_service.schedule_timeout(
+            user_id=user_id,
+            state=current_state,
+            bot=callback.bot
+        )
+
+    # Show appropriate message based on state
+    state_str = str(current_state)
+
+    if "waiting_for_start_time" in state_str:
+        text = "⏰ Укажи время НАЧАЛА активности"
+    elif "waiting_for_end_time" in state_str:
+        text = "⏰ Укажи время ОКОНЧАНИЯ активности"
+    elif "waiting_for_description" in state_str:
+        text = "✏️ Опиши активность"
+    elif "waiting_for_category" in state_str:
+        text = "📂 Выбери категорию"
+    elif "waiting_for_name" in state_str:
+        text = "📝 Введи название категории"
+    elif "waiting_for_emoji" in state_str:
+        text = "😀 Выбери эмодзи для категории"
+    elif "waiting_for_poll_category" in state_str:
+        text = "✏️ Выбери категорию для активности"
+    elif "interval" in state_str:
+        text = "⏰ Введи интервал опроса в минутах"
+    elif "quiet_hours" in state_str:
+        text = "🌙 Введи время тихих часов"
+    elif "reminder" in state_str:
+        text = "⏰ Введи задержку напоминания в минутах"
+    else:
+        text = "Продолжай! Жду твоего ответа."
+
+    await callback.message.answer(text)
+    await callback.answer("✅ Продолжаем!")
 
 
 @router.callback_query(F.data == "help")
