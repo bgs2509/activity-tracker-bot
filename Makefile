@@ -60,6 +60,18 @@ shell-bot: ## Open shell in bot container
 shell-db: ## Open psql shell
 	docker exec -it tracker_db psql -U tracker_user -d tracker_db
 
+migrate: ## Run Alembic migrations
+	docker compose exec data_postgres_api alembic upgrade head
+
+migrate-create: ## Create a new Alembic migration (use MSG="description")
+	docker compose exec data_postgres_api alembic revision --autogenerate -m "$(MSG)"
+
+migrate-downgrade: ## Downgrade one migration
+	docker compose exec data_postgres_api alembic downgrade -1
+
+migrate-history: ## Show migration history
+	docker compose exec data_postgres_api alembic history
+
 init: ## Initialize project (copy .env.example to .env)
 	cp .env.example .env
 	@echo "Created .env file. Please edit it with your Telegram bot token."
