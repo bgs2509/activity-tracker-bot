@@ -3,8 +3,11 @@ import logging
 from datetime import datetime, timedelta, timezone
 from aiogram import Router, types, F, Bot
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.redis import RedisStorage
+from apscheduler.triggers.date import DateTrigger
 
 from src.api.states.poll import PollStates
+from src.core.config import settings as app_settings
 from src.infrastructure.http_clients.http_client import DataAPIClient
 from src.infrastructure.http_clients.activity_service import ActivityService
 from src.infrastructure.http_clients.category_service import CategoryService
@@ -22,6 +25,23 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 api_client = DataAPIClient()
+
+# Redis storage for FSM state checking
+# Note: This is a separate instance from the main dispatcher's storage,
+# but both connect to the same Redis, so state is shared
+_fsm_storage = None
+
+
+def get_fsm_storage() -> RedisStorage:
+    """Get or create FSM storage instance for state checking.
+
+    Returns:
+        RedisStorage instance
+    """
+    global _fsm_storage
+    if _fsm_storage is None:
+        _fsm_storage = RedisStorage.from_url(app_settings.redis_url)
+    return _fsm_storage
 
 
 async def send_automatic_poll(bot: Bot, user_id: int):
@@ -50,14 +70,55 @@ async def send_automatic_poll(bot: Bot, user_id: int):
             return
 
         # Check if user is in active FSM state (conflict resolution)
-        # If user is in dialog, skip this poll and reschedule
+        # If user is in dialog, postpone poll to avoid UI confusion
         try:
-            from aiogram.fsm.storage.redis import RedisStorage
-            # For now, we'll send the poll anyway
-            # In production, check FSM state and skip if user is busy
-            pass
+            storage = get_fsm_storage()
+            from aiogram.fsm.storage.base import StorageKey
+
+            # Create storage key for this user
+            key = StorageKey(
+                bot_id=bot.id,
+                chat_id=user_id,
+                user_id=user_id
+            )
+
+            # Check current FSM state
+            current_state = await storage.get_state(key)
+
+            if current_state:
+                # User is in active dialog - postpone poll by 10 minutes
+                logger.info(
+                    f"User {user_id} is in FSM state '{current_state}', "
+                    f"postponing poll by 10 minutes"
+                )
+
+                # Reschedule poll in 10 minutes
+                next_poll_time = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+                # Remove existing job if any
+                if user_id in scheduler_service.jobs:
+                    try:
+                        scheduler_service.scheduler.remove_job(scheduler_service.jobs[user_id])
+                    except Exception:
+                        pass
+
+                # Schedule postponed poll
+                job = scheduler_service.scheduler.add_job(
+                    send_automatic_poll,
+                    trigger=DateTrigger(run_date=next_poll_time),
+                    args=[bot, user_id],
+                    id=f"poll_postponed_{user_id}_{next_poll_time.timestamp()}",
+                    replace_existing=True
+                )
+
+                scheduler_service.jobs[user_id] = job.id
+                logger.info(f"Postponed poll for user {user_id} to {next_poll_time}")
+
+                return  # Skip sending poll now
+
         except Exception as e:
-            logger.debug(f"Could not check FSM state: {e}")
+            # If FSM check fails, continue with poll anyway
+            logger.warning(f"Could not check FSM state for user {user_id}: {e}")
 
         # Send poll message
         text = (
