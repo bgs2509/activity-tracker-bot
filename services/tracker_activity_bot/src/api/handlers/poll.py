@@ -109,11 +109,16 @@ async def send_automatic_poll(bot: Bot, user_id: int):
                 # Schedule postponed poll
                 # Import async wrapper for proper coroutine execution
                 from src.application.services.scheduler_service import _async_job_wrapper
+                import asyncio
+
+                # Capture event loop for scheduler wrapper
+                if scheduler_service.loop is None:
+                    scheduler_service.loop = asyncio.get_running_loop()
 
                 job = scheduler_service.scheduler.add_job(
                     _async_job_wrapper,
                     trigger=DateTrigger(run_date=next_poll_time),
-                    args=[lambda: send_automatic_poll(bot, user_id)],
+                    args=[scheduler_service.loop, lambda: send_automatic_poll(bot, user_id)],
                     id=f"poll_postponed_{user_id}_{next_poll_time.timestamp()}",
                     replace_existing=True
                 )
@@ -360,11 +365,16 @@ async def handle_poll_remind(callback: types.CallbackQuery, state: FSMContext):
         # Schedule reminder using scheduler
         from apscheduler.triggers.date import DateTrigger
         from src.application.services.scheduler_service import _async_job_wrapper
+        import asyncio
+
+        # Capture event loop for scheduler wrapper
+        if scheduler_service.loop is None:
+            scheduler_service.loop = asyncio.get_running_loop()
 
         scheduler_service.scheduler.add_job(
             _async_job_wrapper,
             trigger=DateTrigger(run_date=reminder_time),
-            args=[lambda: send_reminder(callback.bot, telegram_id)],
+            args=[scheduler_service.loop, lambda: send_reminder(callback.bot, telegram_id)],
             id=f"reminder_{telegram_id}_{reminder_time.timestamp()}",
             replace_existing=True
         )
