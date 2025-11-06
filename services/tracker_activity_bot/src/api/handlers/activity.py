@@ -16,7 +16,7 @@ from src.api.keyboards.poll import get_poll_category_keyboard
 from src.application.utils.time_parser import parse_time_input, parse_duration
 from src.application.utils.formatters import format_time, format_duration, extract_tags, format_activity_list
 from src.application.utils.decorators import with_typing_action
-from src.application.services.fsm_timeout_service import fsm_timeout_service
+from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.core.constants import MAX_ACTIVITY_LIMIT
 from src.core.logging_middleware import log_user_action
 
@@ -41,8 +41,8 @@ async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(ActivityStates.waiting_for_start_time)
 
     # Schedule FSM timeout
-    if fsm_timeout_service:
-        fsm_timeout_service.schedule_timeout(
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
             user_id=callback.from_user.id,
             state=ActivityStates.waiting_for_start_time,
             bot=callback.bot
@@ -100,8 +100,8 @@ async def process_start_time(message: types.Message, state: FSMContext):
         await state.set_state(ActivityStates.waiting_for_end_time)
 
         # Schedule FSM timeout
-        if fsm_timeout_service:
-            fsm_timeout_service.schedule_timeout(
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
                 user_id=message.from_user.id,
                 state=ActivityStates.waiting_for_end_time,
                 bot=message.bot
@@ -155,8 +155,8 @@ async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
         await state.set_state(ActivityStates.waiting_for_end_time)
 
         # Schedule FSM timeout
-        if fsm_timeout_service:
-            fsm_timeout_service.schedule_timeout(
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
                 user_id=callback.from_user.id,
                 state=ActivityStates.waiting_for_end_time,
                 bot=callback.bot
@@ -194,8 +194,8 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
         )
         await state.clear()
         # Cancel FSM timeout
-        if fsm_timeout_service:
-            fsm_timeout_service.cancel_timeout(callback.from_user.id)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
         await callback.answer()
         return
 
@@ -242,8 +242,8 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
         await state.set_state(ActivityStates.waiting_for_description)
 
         # Schedule FSM timeout
-        if fsm_timeout_service:
-            fsm_timeout_service.schedule_timeout(
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
                 user_id=callback.from_user.id,
                 state=ActivityStates.waiting_for_description,
                 bot=callback.bot
@@ -287,8 +287,8 @@ async def process_end_time(message: types.Message, state: FSMContext):
         )
         await state.clear()
         # Cancel FSM timeout
-        if fsm_timeout_service:
-            fsm_timeout_service.cancel_timeout(message.from_user.id)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
         return
 
     start_time = datetime.fromisoformat(start_time_str)
@@ -310,8 +310,8 @@ async def process_end_time(message: types.Message, state: FSMContext):
         await state.set_state(ActivityStates.waiting_for_description)
 
         # Schedule FSM timeout
-        if fsm_timeout_service:
-            fsm_timeout_service.schedule_timeout(
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
                 user_id=message.from_user.id,
                 state=ActivityStates.waiting_for_description,
                 bot=message.bot
@@ -355,8 +355,8 @@ async def process_description(message: types.Message, state: FSMContext):
     await state.set_state(ActivityStates.waiting_for_category)
 
     # Schedule FSM timeout
-    if fsm_timeout_service:
-        fsm_timeout_service.schedule_timeout(
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
             user_id=message.from_user.id,
             state=ActivityStates.waiting_for_category,
             bot=message.bot
@@ -552,8 +552,8 @@ async def save_activity(
         )
         await state.clear()
         # Cancel FSM timeout
-        if fsm_timeout_service:
-            fsm_timeout_service.cancel_timeout(telegram_user_id)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_user_id)
 
     except Exception as e:
         logger.error(f"Error saving activity: {e}")
@@ -563,8 +563,8 @@ async def save_activity(
         )
         await state.clear()
         # Cancel FSM timeout
-        if fsm_timeout_service:
-            fsm_timeout_service.cancel_timeout(telegram_user_id)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_user_id)
 
 
 @router.callback_query(F.data == "cancel")
@@ -573,8 +573,8 @@ async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
     """Cancel current action."""
     await state.clear()
     # Cancel FSM timeout
-    if fsm_timeout_service:
-        fsm_timeout_service.cancel_timeout(callback.from_user.id)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
     await callback.message.answer(
         "❌ Действие отменено.",
         reply_markup=get_main_menu_keyboard()
@@ -660,8 +660,8 @@ async def cancel_activity_fsm(message: types.Message, state: FSMContext):
 
     await state.clear()
     # Cancel FSM timeout
-    if fsm_timeout_service:
-        fsm_timeout_service.cancel_timeout(message.from_user.id)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
     await message.answer(
         "❌ Запись активности отменена.",
         reply_markup=get_main_menu_keyboard()
@@ -681,8 +681,8 @@ async def handle_fsm_reminder_continue(callback: types.CallbackQuery, state: FSM
     user_id = callback.from_user.id
 
     # Cancel cleanup timer
-    if fsm_timeout_service:
-        fsm_timeout_service.cancel_cleanup_timer(user_id)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_cleanup_timer(user_id)
 
     # Get current state
     current_state = await state.get_state()
@@ -696,8 +696,8 @@ async def handle_fsm_reminder_continue(callback: types.CallbackQuery, state: FSM
         return
 
     # Restart timeout timer
-    if fsm_timeout_service:
-        fsm_timeout_service.schedule_timeout(
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
             user_id=user_id,
             state=current_state,
             bot=callback.bot

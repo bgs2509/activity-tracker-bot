@@ -12,7 +12,7 @@ from src.api.states.settings import SettingsStates
 from src.infrastructure.http_clients.http_client import DataAPIClient
 from src.infrastructure.http_clients.user_service import UserService
 from src.infrastructure.http_clients.user_settings_service import UserSettingsService
-from src.application.services.fsm_timeout_service import fsm_timeout_service
+from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.api.keyboards.settings import (
     get_main_settings_keyboard,
     get_interval_type_keyboard,
@@ -271,8 +271,8 @@ async def show_weekday_custom_input(callback: types.CallbackQuery, state: FSMCon
 
     await callback.message.answer(text)
     await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
-    if fsm_timeout_service:
-        fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_weekday_interval_custom, callback.bot)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_weekday_interval_custom, callback.bot)
     await callback.answer()
 
 
@@ -412,8 +412,8 @@ async def show_weekend_custom_input(callback: types.CallbackQuery, state: FSMCon
 
     await callback.message.answer(text)
     await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
-    if fsm_timeout_service:
-        fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_weekend_interval_custom, callback.bot)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_weekend_interval_custom, callback.bot)
     await callback.answer()
 
 
@@ -926,8 +926,8 @@ async def cancel_settings_fsm(message: types.Message, state: FSMContext):
         return
 
     await state.clear()
-    if fsm_timeout_service:
-        fsm_timeout_service.cancel_timeout(message.from_user.id)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
     await message.answer(
         "❌ Настройка отменена.",
         reply_markup=get_main_menu_keyboard()

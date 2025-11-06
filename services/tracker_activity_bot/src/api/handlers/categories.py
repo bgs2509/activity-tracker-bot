@@ -18,7 +18,7 @@ from src.infrastructure.http_clients.http_client import DataAPIClient
 from src.infrastructure.http_clients.category_service import CategoryService
 from src.infrastructure.http_clients.user_service import UserService
 from src.api.states.category import CategoryStates
-from src.application.services.fsm_timeout_service import fsm_timeout_service
+from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.utils.decorators import with_typing_action
 from src.core.logging_middleware import log_user_action
@@ -103,8 +103,8 @@ async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.message.edit_text(text, reply_markup=keyboard)
     await state.set_state(CategoryStates.waiting_for_name)
-    if fsm_timeout_service:
-        fsm_timeout_service.schedule_timeout(callback.from_user.id, CategoryStates.waiting_for_name, callback.bot)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(callback.from_user.id, CategoryStates.waiting_for_name, callback.bot)
     await callback.answer()
 
 
@@ -234,8 +234,8 @@ async def add_category_name(message: types.Message, state: FSMContext):
 
     await message.answer(text, reply_markup=keyboard)
     await state.set_state(CategoryStates.waiting_for_emoji)
-    if fsm_timeout_service:
-        fsm_timeout_service.schedule_timeout(message.from_user.id, CategoryStates.waiting_for_emoji, message.bot)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(message.from_user.id, CategoryStates.waiting_for_emoji, message.bot)
 
 
 @router.callback_query(CategoryStates.waiting_for_emoji, F.data.startswith("emoji:"))
@@ -257,8 +257,8 @@ async def add_category_emoji_button(callback: types.CallbackQuery, state: FSMCon
 
     await create_category_final(callback.from_user.id, state, emoji, callback.message)
     await state.clear()
-    if fsm_timeout_service:
-        fsm_timeout_service.cancel_timeout(callback.from_user.id)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
     await callback.answer()
 
 
@@ -278,8 +278,8 @@ async def add_category_emoji_text(message: types.Message, state: FSMContext):
 
     await create_category_final(message.from_user.id, state, emoji, message)
     await state.clear()
-    if fsm_timeout_service:
-        fsm_timeout_service.cancel_timeout(message.from_user.id)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
 
 
 async def create_category_final(telegram_id: int, state: FSMContext, emoji: str | None, message: types.Message):
@@ -339,8 +339,8 @@ async def create_category_final(telegram_id: int, state: FSMContext, emoji: str 
             ])
             await message.answer(text, reply_markup=keyboard)
             await state.set_state(CategoryStates.waiting_for_name)
-            if fsm_timeout_service:
-                fsm_timeout_service.schedule_timeout(message.from_user.id, CategoryStates.waiting_for_name, message.bot)
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.schedule_timeout(message.from_user.id, CategoryStates.waiting_for_name, message.bot)
         else:
             logger.error(f"Error creating category: {e}", extra={"status_code": e.response.status_code})
             await message.answer("❌ Произошла ошибка при создании категории. Попробуй позже.")
@@ -540,8 +540,8 @@ async def cancel_category_fsm(message: types.Message, state: FSMContext):
         return
 
     await state.clear()
-    if fsm_timeout_service:
-        fsm_timeout_service.cancel_timeout(message.from_user.id)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
     await message.answer(
         "❌ Создание категории отменено.",
         reply_markup=get_main_menu_keyboard()
