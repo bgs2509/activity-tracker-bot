@@ -262,7 +262,7 @@ async def show_weekday_custom_input(callback: types.CallbackQuery, state: FSMCon
     """Show custom weekday interval input prompt."""
     text = (
         "📅 Укажи свой интервал для будних дней\n\n"
-        "Введи количество минут (от 5 до 480).\n\n"
+        "Введи количество минут (от 15 до 360).\n\n"
         "Примеры:\n"
         "• 90 — каждые 1.5 часа\n"
         "• 150 — каждые 2.5 часа\n\n"
@@ -283,9 +283,9 @@ async def process_weekday_custom_input(message: types.Message, state: FSMContext
         interval = int(message.text.strip())
 
         # Validation
-        if interval < 5 or interval > 480:
+        if interval < 15 or interval > 360:
             await message.answer(
-                "⚠️ Интервал должен быть от 5 до 480 минут.\n"
+                "⚠️ Интервал должен быть от 15 до 360 минут.\n"
                 "Попробуй ещё раз:"
             )
             return
@@ -403,7 +403,7 @@ async def show_weekend_custom_input(callback: types.CallbackQuery, state: FSMCon
     """Show custom weekend interval input prompt."""
     text = (
         "🎉 Укажи свой интервал для выходных\n\n"
-        "Введи количество минут (от 5 до 600).\n\n"
+        "Введи количество минут (от 15 до 480).\n\n"
         "Примеры:\n"
         "• 120 — каждые 2 часа\n"
         "• 210 — каждые 3.5 часа\n\n"
@@ -424,9 +424,9 @@ async def process_weekend_custom_input(message: types.Message, state: FSMContext
         interval = int(message.text.strip())
 
         # Validation
-        if interval < 5 or interval > 600:
+        if interval < 15 or interval > 480:
             await message.answer(
-                "⚠️ Интервал должен быть от 5 до 600 минут.\n"
+                "⚠️ Интервал должен быть от 15 до 480 минут.\n"
                 "Попробуй ещё раз:"
             )
             return
