@@ -1,7 +1,8 @@
 """Scheduler service for automatic polls (simplified PoC version)."""
+import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict
+from typing import Dict, Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
@@ -10,6 +11,36 @@ import pytz
 from src.application.utils.timezone_helper import is_in_quiet_hours, is_weekend, get_end_of_quiet_hours
 
 logger = logging.getLogger(__name__)
+
+
+def _async_job_wrapper(async_func: Callable, *args, **kwargs):
+    """Wrapper to run async functions in APScheduler.
+
+    APScheduler doesn't natively handle coroutines - they need to be
+    scheduled as asyncio tasks explicitly.
+
+    Args:
+        async_func: Async function or lambda returning a coroutine
+        *args: Arguments to pass to async_func
+        **kwargs: Keyword arguments to pass to async_func
+    """
+    try:
+        # Call the function (might be lambda returning coroutine)
+        result = async_func(*args, **kwargs)
+
+        # If it's a coroutine, create a task for it
+        if asyncio.iscoroutine(result):
+            asyncio.create_task(result)
+        # If async_func itself is a coroutine function, await it
+        elif asyncio.iscoroutinefunction(async_func):
+            asyncio.create_task(async_func(*args, **kwargs))
+        else:
+            # Regular function, just execute
+            result
+
+        logger.debug(f"Scheduled async job executed: {async_func.__name__ if hasattr(async_func, '__name__') else 'lambda'}")
+    except Exception as e:
+        logger.error(f"Error executing async job: {e}", exc_info=True)
 
 
 class SchedulerService:
@@ -85,11 +116,11 @@ class SchedulerService:
             except Exception:
                 pass
 
-        # Schedule new job
+        # Schedule new job with async wrapper
         job = self.scheduler.add_job(
-            send_poll_callback,
+            _async_job_wrapper,
             trigger=DateTrigger(run_date=next_time),
-            args=[user_id],
+            args=[send_poll_callback, user_id],
             id=f"poll_{user_id}_{next_time.timestamp()}",
             replace_existing=True
         )

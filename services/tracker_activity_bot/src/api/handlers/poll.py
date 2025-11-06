@@ -107,10 +107,13 @@ async def send_automatic_poll(bot: Bot, user_id: int):
                         pass
 
                 # Schedule postponed poll
+                # Import async wrapper for proper coroutine execution
+                from src.application.services.scheduler_service import _async_job_wrapper
+
                 job = scheduler_service.scheduler.add_job(
-                    send_automatic_poll,
+                    _async_job_wrapper,
                     trigger=DateTrigger(run_date=next_poll_time),
-                    args=[bot, user_id],
+                    args=[lambda: send_automatic_poll(bot, user_id)],
                     id=f"poll_postponed_{user_id}_{next_poll_time.timestamp()}",
                     replace_existing=True
                 )
@@ -356,10 +359,12 @@ async def handle_poll_remind(callback: types.CallbackQuery, state: FSMContext):
 
         # Schedule reminder using scheduler
         from apscheduler.triggers.date import DateTrigger
+        from src.application.services.scheduler_service import _async_job_wrapper
+
         scheduler_service.scheduler.add_job(
-            send_reminder,
+            _async_job_wrapper,
             trigger=DateTrigger(run_date=reminder_time),
-            args=[callback.bot, telegram_id],
+            args=[lambda: send_reminder(callback.bot, telegram_id)],
             id=f"reminder_{telegram_id}_{reminder_time.timestamp()}",
             replace_existing=True
         )
