@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from aiogram import Bot
+from aiogram.fsm.state import State
 from aiogram.fsm.storage.base import StorageKey
 from apscheduler.triggers.date import DateTrigger
 
@@ -51,7 +52,7 @@ class FSMTimeoutService:
     def schedule_timeout(
         self,
         user_id: int,
-        state: str,
+        state: State,
         bot: Bot
     ):
         """Schedule timeout timers for FSM state.
@@ -60,14 +61,14 @@ class FSMTimeoutService:
 
         Args:
             user_id: Telegram user ID
-            state: FSM state name
+            state: FSM state object
             bot: Bot instance for sending messages
         """
         # Cancel any existing timers for this user
         self.cancel_timeout(user_id)
 
         # Get human-readable action description
-        action = STATE_CONTEXTS.get(str(state), "действие")
+        action = STATE_CONTEXTS.get(state.state, "действие")
 
         # Schedule reminder in 10 minutes
         reminder_time = datetime.now(timezone.utc) + timedelta(minutes=10)
@@ -153,7 +154,7 @@ class FSMTimeoutService:
             logger.error(f"Error scheduling FSM cleanup for user {user_id}: {e}")
 
 
-async def send_reminder(bot: Bot, user_id: int, state: str, action: str):
+async def send_reminder(bot: Bot, user_id: int, state: State, action: str):
     """Send reminder to user about unfinished dialog.
 
     Checks if user is still in same state, sends reminder with
@@ -162,7 +163,7 @@ async def send_reminder(bot: Bot, user_id: int, state: str, action: str):
     Args:
         bot: Bot instance
         user_id: Telegram user ID
-        state: Expected FSM state
+        state: Expected FSM state object
         action: Human-readable action description
     """
     try:
@@ -179,10 +180,10 @@ async def send_reminder(bot: Bot, user_id: int, state: str, action: str):
 
         current_state = await storage.get_state(key)
 
-        if str(current_state) != str(state):
+        if current_state != state.state:
             # User already finished or changed state
             logger.info(
-                f"User {user_id} no longer in state '{state}' "
+                f"User {user_id} no longer in state '{state.state}' "
                 f"(current: {current_state}), skipping reminder"
             )
             return
@@ -214,7 +215,7 @@ async def send_reminder(bot: Bot, user_id: int, state: str, action: str):
         logger.error(f"Error sending FSM reminder to user {user_id}: {e}")
 
 
-async def cleanup_stale_state(bot: Bot, user_id: int, state: str):
+async def cleanup_stale_state(bot: Bot, user_id: int, state: State):
     """Cleanup stale FSM state and send poll immediately.
 
     Silently clears FSM state if user didn't respond to reminder,
@@ -223,7 +224,7 @@ async def cleanup_stale_state(bot: Bot, user_id: int, state: str):
     Args:
         bot: Bot instance
         user_id: Telegram user ID
-        state: Expected FSM state
+        state: Expected FSM state object
     """
     try:
         # Get FSM storage
@@ -239,10 +240,10 @@ async def cleanup_stale_state(bot: Bot, user_id: int, state: str):
 
         current_state = await storage.get_state(key)
 
-        if str(current_state) != str(state):
+        if current_state != state.state:
             # User already finished or clicked Continue
             logger.info(
-                f"User {user_id} no longer in state '{state}' "
+                f"User {user_id} no longer in state '{state.state}' "
                 f"(current: {current_state}), skipping cleanup"
             )
             return
@@ -251,7 +252,7 @@ async def cleanup_stale_state(bot: Bot, user_id: int, state: str):
         await storage.set_state(key, None)
         await storage.set_data(key, {})
 
-        logger.info(f"Cleared stale FSM state for user {user_id}: {state}")
+        logger.info(f"Cleared stale FSM state for user {user_id}: {state.state}")
 
         # Send automatic poll immediately
         from src.api.handlers.poll import send_automatic_poll
