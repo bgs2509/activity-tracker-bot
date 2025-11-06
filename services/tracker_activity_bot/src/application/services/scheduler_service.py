@@ -51,7 +51,8 @@ class SchedulerService:
         user_id: int,
         settings: dict,
         user_timezone: str,
-        send_poll_callback
+        send_poll_callback,
+        bot
     ):
         """Schedule next poll for user.
 
@@ -59,7 +60,8 @@ class SchedulerService:
             user_id: User ID
             settings: User settings dict with intervals and quiet hours
             user_timezone: User's timezone
-            send_poll_callback: Async function (lambda) to send poll
+            send_poll_callback: Async function to send poll
+            bot: Bot instance to pass to callback
         """
         # Calculate next poll time
         now = datetime.now(pytz.UTC)
@@ -104,7 +106,7 @@ class SchedulerService:
         job = self.scheduler.add_job(
             send_poll_callback,
             trigger=DateTrigger(run_date=next_time),
-            args=[user_id],
+            args=[bot, user_id],
             id=f"poll_{user_id}_{next_time.timestamp()}",
             replace_existing=True
         )

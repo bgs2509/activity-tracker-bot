@@ -202,7 +202,8 @@ async def handle_poll_skip(callback: types.CallbackQuery, state: FSMContext):
             user_id=telegram_id,
             settings=settings,
             user_timezone=user_timezone,
-            send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+            send_poll_callback=send_automatic_poll,
+            bot=callback.bot
         )
 
         await callback.message.answer(
@@ -295,7 +296,8 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
             user_id=telegram_id,
             settings=settings,
             user_timezone=user_timezone,
-            send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+            send_poll_callback=send_automatic_poll,
+            bot=callback.bot
         )
 
         duration_hours = (end_time - start_time).total_seconds() / 3600
@@ -516,7 +518,8 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
             user_id=telegram_id,
             settings=settings,
             user_timezone=user_timezone,
-            send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+            send_poll_callback=send_automatic_poll,
+            bot=callback.bot
         )
 
         # Format duration

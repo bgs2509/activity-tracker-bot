@@ -140,7 +140,8 @@ async def show_settings_menu(callback: types.CallbackQuery):
                 user_id=telegram_id,
                 settings=settings,
                 user_timezone=user.get("timezone", "Europe/Moscow"),
-                send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+                send_poll_callback=send_automatic_poll,
+                bot=callback.bot
             )
             logger.info(f"Scheduled poll for user {telegram_id} from settings menu")
 
@@ -240,7 +241,8 @@ async def set_weekday_interval(callback: types.CallbackQuery):
         user_id=telegram_id,
         settings=updated_settings,
         user_timezone=user.get("timezone", "Europe/Moscow"),
-        send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+        send_poll_callback=send_automatic_poll,
+        bot=callback.bot
     )
     logger.info(f"Rescheduled poll for user {telegram_id} after weekday interval change to {interval} minutes")
 
@@ -304,7 +306,8 @@ async def process_weekday_custom_input(message: types.Message, state: FSMContext
             user_id=telegram_id,
             settings=updated_settings,
             user_timezone=user.get("timezone", "Europe/Moscow"),
-            send_poll_callback=lambda uid: send_automatic_poll(message.bot, uid)
+            send_poll_callback=send_automatic_poll,
+            bot=message.bot
         )
         logger.info(f"Rescheduled poll for user {telegram_id} with custom weekday interval {interval}")
 
@@ -379,7 +382,8 @@ async def set_weekend_interval(callback: types.CallbackQuery):
         user_id=telegram_id,
         settings=updated_settings,
         user_timezone=user.get("timezone", "Europe/Moscow"),
-        send_poll_callback=lambda uid: send_automatic_poll(callback.bot, uid)
+        send_poll_callback=send_automatic_poll,
+        bot=callback.bot
     )
     logger.info(f"Rescheduled poll for user {telegram_id} after weekend interval change to {interval} minutes")
 
@@ -443,7 +447,8 @@ async def process_weekend_custom_input(message: types.Message, state: FSMContext
             user_id=telegram_id,
             settings=updated_settings,
             user_timezone=user.get("timezone", "Europe/Moscow"),
-            send_poll_callback=lambda uid: send_automatic_poll(message.bot, uid)
+            send_poll_callback=send_automatic_poll,
+            bot=message.bot
         )
         logger.info(f"Rescheduled poll for user {telegram_id} with custom weekend interval {interval}")
 

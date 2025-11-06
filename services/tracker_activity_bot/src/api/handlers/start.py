@@ -58,7 +58,8 @@ async def cmd_start(message: types.Message):
             user_id=telegram_id,
             settings=settings,
             user_timezone=user_timezone,
-            send_poll_callback=lambda uid: send_automatic_poll(message.bot, uid)
+            send_poll_callback=send_automatic_poll,
+            bot=message.bot
         )
         logger.info(f"Scheduled first poll for user {telegram_id}")
 
