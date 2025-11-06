@@ -28,6 +28,7 @@ from src.api.keyboards.settings import (
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.services.scheduler_service import scheduler_service
 from src.application.utils.decorators import with_typing_action
+from src.core.logging_middleware import log_user_action
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -37,8 +38,13 @@ api_client = DataAPIClient()
 
 @router.callback_query(F.data == "settings")
 @with_typing_action
+@log_user_action("settings_button_clicked")
 async def show_settings_menu(callback: types.CallbackQuery):
     """Show main settings menu."""
+    logger.debug(
+        "User opened settings menu",
+        extra={"user_id": callback.from_user.id}
+    )
     user_service = UserService(api_client)
     settings_service = UserSettingsService(api_client)
     telegram_id = callback.from_user.id

@@ -23,6 +23,7 @@ from src.application.services.scheduler_service import scheduler_service
 from src.application.services.fsm_timeout_service import fsm_timeout_service
 from src.application.utils.decorators import with_typing_action
 from src.core.constants import POLL_POSTPONE_MINUTES
+from src.core.logging_middleware import log_user_action
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -170,8 +171,13 @@ async def send_automatic_poll(bot: Bot, user_id: int):
 
 @router.callback_query(F.data == "poll_skip")
 @with_typing_action
+@log_user_action("poll_skip_clicked")
 async def handle_poll_skip(callback: types.CallbackQuery, state: FSMContext):
     """Handle 'Skip' poll response - user did nothing."""
+    logger.debug(
+        "User skipped poll",
+        extra={"user_id": callback.from_user.id}
+    )
     user_service = UserService(api_client)
     settings_service = UserSettingsService(api_client)
     telegram_id = callback.from_user.id
@@ -213,8 +219,13 @@ async def handle_poll_skip(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "poll_sleep")
 @with_typing_action
+@log_user_action("poll_sleep_clicked")
 async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
     """Handle 'Sleep' poll response - user was sleeping."""
+    logger.debug(
+        "User selected sleep in poll",
+        extra={"user_id": callback.from_user.id}
+    )
     user_service = UserService(api_client)
     settings_service = UserSettingsService(api_client)
     category_service = CategoryService(api_client)
@@ -304,8 +315,13 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "poll_remind")
 @with_typing_action
+@log_user_action("poll_remind_clicked")
 async def handle_poll_remind(callback: types.CallbackQuery, state: FSMContext):
     """Handle 'Remind Later' poll response."""
+    logger.debug(
+        "User requested reminder for poll",
+        extra={"user_id": callback.from_user.id}
+    )
     user_service = UserService(api_client)
     settings_service = UserSettingsService(api_client)
     telegram_id = callback.from_user.id
@@ -373,12 +389,17 @@ async def handle_poll_reminder_ok(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "poll_activity")
 @with_typing_action
+@log_user_action("poll_activity_clicked")
 async def handle_poll_activity_start(callback: types.CallbackQuery, state: FSMContext):
     """Handle 'I was doing something' poll response.
 
     Start activity recording from poll. User will select category,
     and activity will be created with automatic time calculation.
     """
+    logger.debug(
+        "User started activity from poll",
+        extra={"user_id": callback.from_user.id}
+    )
     user_service = UserService(api_client)
     category_service = CategoryService(api_client)
     telegram_id = callback.from_user.id

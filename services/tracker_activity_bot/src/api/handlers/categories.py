@@ -21,6 +21,7 @@ from src.api.states.category import CategoryStates
 from src.application.services.fsm_timeout_service import fsm_timeout_service
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.utils.decorators import with_typing_action
+from src.core.logging_middleware import log_user_action
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -35,12 +36,17 @@ api_client = DataAPIClient()
 
 @router.callback_query(F.data == "categories")
 @with_typing_action
+@log_user_action("categories_button_clicked")
 async def show_categories_list(callback: types.CallbackQuery):
     """
     Show list of user's categories.
 
     Triggered by: Main menu "📂 Категории" button
     """
+    logger.debug(
+        "User opened categories list",
+        extra={"user_id": callback.from_user.id}
+    )
     user_service = UserService(api_client)
     category_service = CategoryService(api_client)
 

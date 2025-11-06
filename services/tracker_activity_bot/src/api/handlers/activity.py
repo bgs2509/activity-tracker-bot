@@ -18,6 +18,7 @@ from src.application.utils.formatters import format_time, format_duration, extra
 from src.application.utils.decorators import with_typing_action
 from src.application.services.fsm_timeout_service import fsm_timeout_service
 from src.core.constants import MAX_ACTIVITY_LIMIT
+from src.core.logging_middleware import log_user_action
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -27,8 +28,16 @@ api_client = DataAPIClient()
 
 @router.callback_query(F.data == "add_activity")
 @with_typing_action
+@log_user_action("add_activity_button_clicked")
 async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
     """Start activity recording process."""
+    logger.debug(
+        "Starting activity creation",
+        extra={
+            "user_id": callback.from_user.id,
+            "username": callback.from_user.username
+        }
+    )
     await state.set_state(ActivityStates.waiting_for_start_time)
 
     # Schedule FSM timeout
@@ -56,10 +65,26 @@ async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.message(ActivityStates.waiting_for_start_time)
+@log_user_action("start_time_input")
 async def process_start_time(message: types.Message, state: FSMContext):
     """Process start time input."""
+    logger.debug(
+        "Processing start time input",
+        extra={
+            "user_id": message.from_user.id,
+            "input_text": message.text
+        }
+    )
     try:
         start_time = parse_time_input(message.text)
+        logger.debug(
+            "Start time parsed successfully",
+            extra={
+                "user_id": message.from_user.id,
+                "parsed_time": start_time.isoformat(),
+                "input_text": message.text
+            }
+        )
 
         # Validate: start time should not be in future
         now_utc = datetime.now(timezone.utc)
@@ -103,8 +128,16 @@ async def process_start_time(message: types.Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("time_start_"))
 @with_typing_action
+@log_user_action("quick_start_time_selected")
 async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
     """Handle quick time selection for start time."""
+    logger.debug(
+        "Quick start time selected",
+        extra={
+            "user_id": callback.from_user.id,
+            "time_key": callback.data.replace("time_start_", "")
+        }
+    )
     time_map = {
         "5m": "5м",
         "15m": "15м",
