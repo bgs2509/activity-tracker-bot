@@ -2,9 +2,10 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Callable
+from typing import Dict
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.triggers.date import DateTrigger
 import pytz
 
@@ -13,62 +14,31 @@ from src.application.utils.timezone_helper import is_in_quiet_hours, is_weekend,
 logger = logging.getLogger(__name__)
 
 
-def _async_job_wrapper(loop: asyncio.AbstractEventLoop, async_func: Callable, *args, **kwargs):
-    """Wrapper to run async functions in APScheduler.
-
-    APScheduler jobs run in a thread pool executor without an event loop.
-    This wrapper schedules the coroutine in the main event loop using
-    run_coroutine_threadsafe().
-
-    Args:
-        loop: The main event loop (asyncio.get_running_loop() from main)
-        async_func: Async function or lambda returning a coroutine
-        *args: Arguments to pass to async_func
-        **kwargs: Keyword arguments to pass to async_func
-    """
-    try:
-        # Call the function (might be lambda returning coroutine)
-        result = async_func(*args, **kwargs)
-
-        # If it's a coroutine, schedule it in the main event loop
-        if asyncio.iscoroutine(result):
-            future = asyncio.run_coroutine_threadsafe(result, loop)
-            logger.debug(f"Scheduled coroutine in event loop: {async_func.__name__ if hasattr(async_func, '__name__') else 'lambda'}")
-        # If async_func itself is a coroutine function, call and schedule it
-        elif asyncio.iscoroutinefunction(async_func):
-            coro = async_func(*args, **kwargs)
-            future = asyncio.run_coroutine_threadsafe(coro, loop)
-            logger.debug(f"Scheduled async function in event loop: {async_func.__name__}")
-        else:
-            # Regular function, just execute
-            result
-            logger.debug(f"Executed sync function: {async_func.__name__ if hasattr(async_func, '__name__') else 'callable'}")
-
-    except Exception as e:
-        logger.error(f"Error executing async job: {e}", exc_info=True)
-
-
 class SchedulerService:
-    """Service for managing poll scheduling."""
+    """Service for managing poll scheduling.
+
+    Uses AsyncIOExecutor to run async jobs directly in the event loop,
+    without needing thread pool executors or coroutine wrappers.
+    """
 
     def __init__(self):
-        self.scheduler = AsyncIOScheduler(timezone=pytz.UTC)
+        # Configure executors to use AsyncIOExecutor for async jobs
+        executors = {
+            'default': AsyncIOExecutor()
+        }
+
+        # Create scheduler with AsyncIO executor
+        self.scheduler = AsyncIOScheduler(
+            executors=executors,
+            timezone=pytz.UTC
+        )
         self.jobs: Dict[int, str] = {}  # user_id -> job_id
-        self.loop: asyncio.AbstractEventLoop = None  # Will be set in start()
 
     def start(self):
-        """Start the scheduler and capture the event loop."""
+        """Start the scheduler."""
         if not self.scheduler.running:
-            # Capture the current event loop for async job execution
-            try:
-                self.loop = asyncio.get_running_loop()
-                logger.debug(f"Captured event loop: {self.loop}")
-            except RuntimeError:
-                # No running loop yet, will be set later
-                logger.warning("No running event loop when starting scheduler")
-
             self.scheduler.start()
-            logger.info("Scheduler started")
+            logger.info("Scheduler started with AsyncIOExecutor")
 
     def stop(self):
         """Stop the scheduler."""
@@ -89,16 +59,8 @@ class SchedulerService:
             user_id: User ID
             settings: User settings dict with intervals and quiet hours
             user_timezone: User's timezone
-            send_poll_callback: Async function to send poll
+            send_poll_callback: Async function (lambda) to send poll
         """
-        # Capture event loop if not already captured
-        if self.loop is None:
-            try:
-                self.loop = asyncio.get_running_loop()
-                logger.debug(f"Captured event loop in schedule_poll: {self.loop}")
-            except RuntimeError:
-                logger.error("No running event loop available for scheduling!")
-                return
         # Calculate next poll time
         now = datetime.now(pytz.UTC)
         tz = pytz.timezone(user_timezone)
@@ -138,12 +100,11 @@ class SchedulerService:
             except Exception:
                 pass
 
-        # Schedule new job with async wrapper
-        # Pass event loop as first argument, then callback, then user_id
+        # Schedule new job - AsyncIOExecutor handles async functions automatically
         job = self.scheduler.add_job(
-            _async_job_wrapper,
+            send_poll_callback,
             trigger=DateTrigger(run_date=next_time),
-            args=[self.loop, send_poll_callback, user_id],
+            args=[user_id],
             id=f"poll_{user_id}_{next_time.timestamp()}",
             replace_existing=True
         )
