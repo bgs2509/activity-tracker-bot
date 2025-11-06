@@ -257,7 +257,7 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
         text = (
             f"✏️ Опиши активность\n\n"
             f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
-            f"Напиши, чем ты занимался.\n"
+            f"Напиши, чем ты занимался (минимум 3 символа).\n"
             f"Можешь добавить теги через #хештег"
         )
 
@@ -325,7 +325,7 @@ async def process_end_time(message: types.Message, state: FSMContext):
         text = (
             f"✏️ Опиши активность\n\n"
             f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
-            f"Напиши, чем ты занимался.\n"
+            f"Напиши, чем ты занимался (минимум 3 символа).\n"
             f"Можешь добавить теги через #хештег"
         )
 
@@ -343,8 +343,8 @@ async def process_description(message: types.Message, state: FSMContext):
     """Process activity description (text message)."""
     description = message.text.strip()
 
-    if not description:
-        await message.answer("⚠️ Описание не может быть пустым. Попробуй ещё раз.")
+    if not description or len(description) < 3:
+        await message.answer("⚠️ Описание должно содержать минимум 3 символа. Попробуй ещё раз.")
         return
 
     # Extract tags from description

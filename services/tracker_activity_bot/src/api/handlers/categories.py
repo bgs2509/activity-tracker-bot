@@ -134,7 +134,7 @@ async def add_category_name(message: types.Message, state: FSMContext):
         f'Выбери эмодзи для категории "{name}":\n\n'
         "🎨 Творчество | 🏃 Спорт | 🚗 Транспорт\n"
         "💼 Работа | 🏠 Дом | 🛒 Покупки | 📱 Связь\n\n"
-        "Или отправь свой эмодзи текстом"
+        "Или отправь свой эмодзи текстом (максимум 10 символов)"
     )
 
     # Thematically grouped emoji keyboard with improved UX
@@ -249,6 +249,12 @@ async def add_category_emoji_button(callback: types.CallbackQuery, state: FSMCon
     emoji_value = callback.data.split(":", 1)[1]
     emoji = None if emoji_value == "none" else emoji_value
 
+    # Validate emoji length (safety check for button data)
+    if emoji and len(emoji) > 10:
+        await callback.message.answer("⚠️ Эмодзи слишком длинный (максимум 10 символов).")
+        await callback.answer()
+        return
+
     await create_category_final(callback.from_user.id, state, emoji, callback.message)
     await state.clear()
     if fsm_timeout_service:
@@ -264,6 +270,11 @@ async def add_category_emoji_text(message: types.Message, state: FSMContext):
     FSM Step 3: Create category
     """
     emoji = message.text.strip() if message.text else None
+
+    # Validate emoji length
+    if emoji and len(emoji) > 10:
+        await message.answer("⚠️ Эмодзи слишком длинный (максимум 10 символов). Попробуй ещё раз:")
+        return
 
     await create_category_final(message.from_user.id, state, emoji, message)
     await state.clear()
