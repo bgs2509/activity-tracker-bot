@@ -11,9 +11,9 @@ from aiogram import types, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from src.api.handlers.settings import cancel_settings_fsm
-from src.api.handlers.activity import cancel_activity_fsm
-from src.api.handlers.categories import cancel_category_fsm
+from src.api.handlers.settings.main_menu import cancel_settings_fsm
+from src.api.handlers.activity.activity_management import cancel_activity_fsm
+from src.api.handlers.categories.category_creation import cancel_category_fsm
 from src.api.states.settings import SettingsStates
 from src.api.states.activity import ActivityStates
 from src.api.states.category import CategoryStates

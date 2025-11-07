@@ -12,7 +12,7 @@ from aiogram import types, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from src.api.handlers.poll import (
+from src.api.handlers.poll.poll_response import (
     handle_poll_activity_start,
     handle_poll_category_select,
     handle_poll_cancel,

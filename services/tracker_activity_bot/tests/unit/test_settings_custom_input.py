@@ -10,7 +10,7 @@ from aiogram import types, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from src.api.handlers.settings import (
+from src.api.handlers.settings.interval_settings import (
     process_weekday_custom_input,
     process_weekend_custom_input,
     process_reminder_delay_custom,
