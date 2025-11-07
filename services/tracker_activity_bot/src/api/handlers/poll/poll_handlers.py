@@ -10,7 +10,6 @@ from apscheduler.triggers.date import DateTrigger
 from src.api.dependencies import ServiceContainer, get_service_container
 from src.api.keyboards.poll import get_poll_reminder_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
-from src.application.services.scheduler_service import scheduler_service
 from src.application.utils.decorators import with_typing_action
 from src.application.utils.time_helpers import calculate_poll_start_time
 from src.core.logging_middleware import log_user_action
@@ -202,7 +201,7 @@ async def handle_poll_remind(
         )
 
         # AsyncIOExecutor handles async functions directly
-        scheduler_service.scheduler.add_job(
+        services.scheduler.scheduler.add_job(
             lambda: send_reminder(callback.bot, telegram_id),
             trigger=DateTrigger(run_date=reminder_time),
             id=f"reminder_{telegram_id}_{reminder_time.timestamp()}",
@@ -268,7 +267,7 @@ async def _schedule_next_poll(
     """
     user_timezone = user.get("timezone", "Europe/Moscow")
 
-    await scheduler_service.schedule_poll(
+    await services.scheduler.schedule_poll(
         user_id=telegram_id,
         settings=settings,
         user_timezone=user_timezone,

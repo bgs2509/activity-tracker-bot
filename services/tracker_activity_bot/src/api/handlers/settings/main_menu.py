@@ -10,7 +10,6 @@ from aiogram.fsm.context import FSMContext
 from src.api.dependencies import ServiceContainer
 from src.api.keyboards.settings import get_main_settings_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
-from src.application.services.scheduler_service import scheduler_service
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.decorators import with_typing_action
 from src.application.utils.formatters import format_duration
@@ -91,7 +90,7 @@ async def show_settings_menu(
     )
 
     # Get next poll time from scheduler
-    next_poll_text = await _get_next_poll_text(telegram_id, settings, user, callback)
+    next_poll_text = await _get_next_poll_text(telegram_id, settings, user, callback, services)
 
     # Build settings message
     text = _build_settings_text(
@@ -111,7 +110,8 @@ async def _get_next_poll_text(
     telegram_id: int,
     settings: dict,
     user: dict,
-    callback: types.CallbackQuery
+    callback: types.CallbackQuery,
+    services: ServiceContainer
 ) -> str:
     """
     Get next poll time text or schedule poll if not scheduled.
@@ -121,6 +121,7 @@ async def _get_next_poll_text(
         settings: User settings dict
         user: User dict
         callback: Callback query for bot access
+        services: Service container with scheduler access
 
     Returns:
         Formatted next poll time text or empty string
@@ -131,13 +132,13 @@ async def _get_next_poll_text(
         "Checking next poll",
         extra={
             "user_id": telegram_id,
-            "jobs_count": len(scheduler_service.jobs)
+            "jobs_count": len(services.scheduler.jobs)
         }
     )
 
-    if telegram_id in scheduler_service.jobs:
+    if telegram_id in services.scheduler.jobs:
         # Poll already scheduled, get time
-        next_poll_text = _format_next_poll_time(telegram_id)
+        next_poll_text = _format_next_poll_time(telegram_id, services)
     else:
         # No poll scheduled, schedule one now
         logger.info(
@@ -148,25 +149,27 @@ async def _get_next_poll_text(
             telegram_id,
             settings,
             user,
-            callback
+            callback,
+            services
         )
 
     return next_poll_text
 
 
-def _format_next_poll_time(telegram_id: int) -> str:
+def _format_next_poll_time(telegram_id: int, services: ServiceContainer) -> str:
     """
     Format next poll time for user.
 
     Args:
         telegram_id: Telegram user ID
+        services: Service container with scheduler access
 
     Returns:
         Formatted time string or empty string if error
     """
     try:
-        job_id = scheduler_service.jobs[telegram_id]
-        job = scheduler_service.scheduler.get_job(job_id)
+        job_id = services.scheduler.jobs[telegram_id]
+        job = services.scheduler.scheduler.get_job(job_id)
 
         if job and job.next_run_time:
             now = datetime.now(timezone.utc)
@@ -197,7 +200,8 @@ async def _schedule_poll_and_get_time(
     telegram_id: int,
     settings: dict,
     user: dict,
-    callback: types.CallbackQuery
+    callback: types.CallbackQuery,
+    services: ServiceContainer
 ) -> str:
     """
     Schedule poll and return formatted next time.
@@ -207,6 +211,7 @@ async def _schedule_poll_and_get_time(
         settings: User settings dict
         user: User dict
         callback: Callback query for bot access
+        services: Service container with scheduler access
 
     Returns:
         Formatted next poll time or empty string
@@ -214,7 +219,7 @@ async def _schedule_poll_and_get_time(
     try:
         from src.api.handlers.poll import send_automatic_poll
 
-        await scheduler_service.schedule_poll(
+        await services.scheduler.schedule_poll(
             user_id=telegram_id,
             settings=settings,
             user_timezone=user.get("timezone", "Europe/Moscow"),
@@ -228,7 +233,7 @@ async def _schedule_poll_and_get_time(
         )
 
         # Get newly scheduled time
-        return _format_next_poll_time(telegram_id)
+        return _format_next_poll_time(telegram_id, services)
 
     except Exception as e:
         logger.error(

@@ -10,7 +10,6 @@ from src.api.states.poll import PollStates
 from src.api.dependencies import ServiceContainer, get_service_container
 from src.api.keyboards.poll import get_poll_category_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
-from src.application.services.scheduler_service import scheduler_service
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.decorators import with_typing_action
 from src.application.utils.formatters import (
@@ -261,7 +260,7 @@ async def handle_poll_description(
         )
 
         # Schedule next poll
-        await scheduler_service.schedule_poll(
+        await services.scheduler.schedule_poll(
             user_id=telegram_id,
             settings=settings,
             user_timezone=user_timezone,

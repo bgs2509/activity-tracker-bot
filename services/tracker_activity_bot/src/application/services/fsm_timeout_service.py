@@ -205,9 +205,9 @@ async def send_reminder(bot: Bot, user_id: int, state: State, action: str):
 
         logger.info(f"Sent FSM reminder to user {user_id}")
 
-        # Schedule cleanup in 3 minutes
-        from src.application.services.scheduler_service import scheduler_service
-        fsm_timeout_service._schedule_cleanup(bot, user_id, state)
+        # Schedule cleanup in 3 minutes using global service instance
+        if fsm_timeout_service:
+            fsm_timeout_service._schedule_cleanup(bot, user_id, state)
 
         # DON'T close storage - it's shared!
 

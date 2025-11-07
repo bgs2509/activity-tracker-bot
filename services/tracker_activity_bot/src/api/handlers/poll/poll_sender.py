@@ -9,7 +9,6 @@ from apscheduler.triggers.date import DateTrigger
 
 from src.api.dependencies import get_service_container
 from src.api.keyboards.poll import get_poll_response_keyboard
-from src.application.services.scheduler_service import scheduler_service
 from src.application.utils.time_helpers import get_poll_interval
 from src.core.constants import POLL_POSTPONE_MINUTES
 
@@ -55,7 +54,7 @@ async def send_automatic_poll(bot: Bot, user_id: int) -> None:
 
         # Check if user is in active FSM state (conflict resolution)
         if await _should_postpone_poll(bot, user_id):
-            await _postpone_poll(bot, user_id)
+            await _postpone_poll(bot, user_id, services)
             return
 
         # Send poll message
@@ -162,13 +161,14 @@ async def _should_postpone_poll(bot: Bot, user_id: int) -> bool:
     return False
 
 
-async def _postpone_poll(bot: Bot, user_id: int) -> None:
+async def _postpone_poll(bot: Bot, user_id: int, services) -> None:
     """
     Postpone poll delivery by configured minutes.
 
     Args:
         bot: Bot instance
         user_id: Telegram user ID
+        services: Service container with scheduler access
     """
     try:
         next_poll_time = datetime.now(timezone.utc) + timedelta(
@@ -176,24 +176,24 @@ async def _postpone_poll(bot: Bot, user_id: int) -> None:
         )
 
         # Remove existing job if any
-        if user_id in scheduler_service.jobs:
+        if user_id in services.scheduler.jobs:
             try:
-                scheduler_service.scheduler.remove_job(
-                    scheduler_service.jobs[user_id]
+                services.scheduler.scheduler.remove_job(
+                    services.scheduler.jobs[user_id]
                 )
             except Exception:
                 pass
 
         # Schedule postponed poll
         # AsyncIOExecutor handles async functions directly
-        job = scheduler_service.scheduler.add_job(
+        job = services.scheduler.scheduler.add_job(
             lambda: send_automatic_poll(bot, user_id),
             trigger=DateTrigger(run_date=next_poll_time),
             id=f"poll_postponed_{user_id}_{next_poll_time.timestamp()}",
             replace_existing=True
         )
 
-        scheduler_service.jobs[user_id] = job.id
+        services.scheduler.jobs[user_id] = job.id
 
         logger.info(
             "Postponed poll for user",

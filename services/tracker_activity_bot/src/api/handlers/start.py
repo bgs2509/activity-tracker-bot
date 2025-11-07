@@ -5,7 +5,6 @@ from aiogram.filters import Command
 
 from src.api.dependencies import ServiceContainer
 from src.api.keyboards.main_menu import get_main_menu_keyboard
-from src.application.services.scheduler_service import scheduler_service
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -44,7 +43,7 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
         # Schedule first automatic poll
         user_timezone = user.get("timezone", "Europe/Moscow")
         from src.api.handlers.poll import send_automatic_poll
-        await scheduler_service.schedule_poll(
+        await services.scheduler.schedule_poll(
             user_id=telegram_id,
             settings=settings,
             user_timezone=user_timezone,
@@ -77,11 +76,12 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
             # Schedule poll for existing user who didn't have settings
             user_timezone = user.get("timezone", "Europe/Moscow")
             from src.api.handlers.poll import send_automatic_poll
-            await scheduler_service.schedule_poll(
+            await services.scheduler.schedule_poll(
                 user_id=telegram_id,
                 settings=settings,
                 user_timezone=user_timezone,
-                send_poll_callback=lambda uid: send_automatic_poll(message.bot, uid)
+                send_poll_callback=send_automatic_poll,
+                bot=message.bot
             )
             logger.info(f"Scheduled poll for existing user {telegram_id}")
 

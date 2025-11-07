@@ -142,6 +142,16 @@ class SchedulerService:
             except Exception as e:
                 logger.error(f"Error cancelling poll for user {user_id}: {e}")
 
+    @property
+    def is_running(self) -> bool:
+        """
+        Check if scheduler is running.
 
-# Global instance
+        Returns:
+            True if scheduler is active and running
+        """
+        return self.scheduler.running
+
+
+# Global instance (deprecated - use ServiceContainer.scheduler instead)
 scheduler_service = SchedulerService()

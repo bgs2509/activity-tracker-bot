@@ -16,8 +16,7 @@ from src.api.handlers.activity import router as activity_router
 from src.api.handlers.categories import router as categories_router
 from src.api.handlers.settings import router as settings_router
 from src.api.handlers.poll import router as poll_router, close_fsm_storage
-from src.api.dependencies import close_api_client
-from src.application.services.scheduler_service import scheduler_service
+from src.api.dependencies import close_api_client, get_service_container
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 
 # Configure structured JSON logging (MANDATORY for Level 1)
@@ -81,13 +80,14 @@ async def main():
     dp.include_router(settings_router)
     dp.include_router(poll_router)
 
-    # Start scheduler for automatic polls
-    scheduler_service.start()
+    # Get service container and start scheduler for automatic polls
+    services = get_service_container()
+    services.scheduler.start()
     logger.info("Scheduler started for automatic polls")
 
-    # Initialize FSM timeout service
+    # Initialize FSM timeout service with injected scheduler
     from src.application.services.fsm_timeout_service import FSMTimeoutService
-    fsm_timeout_module.fsm_timeout_service = FSMTimeoutService(scheduler_service.scheduler)
+    fsm_timeout_module.fsm_timeout_service = FSMTimeoutService(services.scheduler.scheduler)
     logger.info("FSM timeout service initialized")
 
     # Start polling with graceful shutdown support
@@ -117,7 +117,7 @@ async def main():
 
     finally:
         # Shutdown scheduler (wait for pending jobs)
-        scheduler_service.stop()
+        services.scheduler.stop()
         logger.info("Scheduler stopped")
 
         # Close FSM storage to prevent connection leaks

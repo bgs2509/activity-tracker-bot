@@ -13,6 +13,8 @@ from src.infrastructure.http_clients.activity_service import ActivityService
 from src.infrastructure.http_clients.category_service import CategoryService
 from src.infrastructure.http_clients.user_service import UserService
 from src.infrastructure.http_clients.user_settings_service import UserSettingsService
+from src.application.services.scheduler_service import SchedulerService
+from src.application.protocols.scheduler import PollSchedulerProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -63,20 +65,29 @@ class ServiceContainer:
     This container eliminates repeated service instantiation across handlers
     by providing centralized, lazy-loaded service instances.
 
+    Now includes scheduler for DIP compliance (no global state).
+
     Example:
         @router.callback_query(F.data == "action")
         async def handler(callback: types.CallbackQuery, services: ServiceContainer):
             user = await services.user.get_by_telegram_id(callback.from_user.id)
+            await services.scheduler.schedule_poll(...)
     """
 
-    def __init__(self, api_client: Optional[DataAPIClient] = None):
+    def __init__(
+        self,
+        api_client: Optional[DataAPIClient] = None,
+        scheduler: Optional[PollSchedulerProtocol] = None
+    ):
         """
         Initialize service container.
 
         Args:
             api_client: HTTP client instance, uses shared client if not provided
+            scheduler: Scheduler instance, creates new if not provided (DIP)
         """
         self._api_client = api_client or get_api_client()
+        self._scheduler = scheduler or SchedulerService()
         self._user_service: Optional[UserService] = None
         self._category_service: Optional[CategoryService] = None
         self._activity_service: Optional[ActivityService] = None
@@ -109,6 +120,19 @@ class ServiceContainer:
         if self._settings_service is None:
             self._settings_service = UserSettingsService(self._api_client)
         return self._settings_service
+
+    @property
+    def scheduler(self) -> PollSchedulerProtocol:
+        """
+        Get scheduler service instance.
+
+        Returns scheduler for poll scheduling operations.
+        Injected via constructor for testability (DIP compliance).
+
+        Returns:
+            Scheduler implementing PollSchedulerProtocol
+        """
+        return self._scheduler
 
 
 # Shared service container instance

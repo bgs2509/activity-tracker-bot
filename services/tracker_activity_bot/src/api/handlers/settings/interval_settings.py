@@ -14,7 +14,6 @@ from src.api.keyboards.settings import (
     get_weekend_interval_keyboard,
     get_confirmation_keyboard,
 )
-from src.application.services.scheduler_service import scheduler_service
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.decorators import with_typing_action
 from src.application.utils.formatters import format_duration
@@ -412,7 +411,7 @@ async def _update_interval_and_reschedule(
     updated_settings = await services.settings.get_settings(user["id"])
     from src.api.handlers.poll import send_automatic_poll
 
-    await scheduler_service.schedule_poll(
+    await services.scheduler.schedule_poll(
         user_id=telegram_id,
         settings=updated_settings,
         user_timezone=user.get("timezone", "Europe/Moscow"),
