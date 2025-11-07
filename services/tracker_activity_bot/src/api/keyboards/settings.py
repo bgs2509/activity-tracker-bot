@@ -4,6 +4,47 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from src.application.utils.formatters import format_duration
 
 
+def build_interval_keyboard(
+    intervals: list[int],
+    current: int,
+    callback_prefix: str,
+    custom_callback: str,
+    back_callback: str = "settings_intervals"
+) -> InlineKeyboardMarkup:
+    """
+    Build interval selection keyboard.
+
+    Consolidates duplicate keyboard building logic for weekday/weekend intervals.
+
+    Args:
+        intervals: List of interval values in minutes
+        current: Currently selected interval
+        callback_prefix: Prefix for callback data (e.g., "set_weekday")
+        custom_callback: Callback for custom time input button
+        back_callback: Callback for back button
+
+    Returns:
+        InlineKeyboardMarkup with interval buttons
+    """
+    buttons = []
+
+    # Add interval selection buttons
+    for interval in intervals:
+        label = format_duration(interval)
+        if interval == current:
+            label = f"✓ {label}"
+        buttons.append([InlineKeyboardButton(
+            text=label,
+            callback_data=f"{callback_prefix}_{interval}"
+        )])
+
+    # Add custom time and back buttons
+    buttons.append([InlineKeyboardButton(text="✏️ Указать своё время", callback_data=custom_callback)])
+    buttons.append([InlineKeyboardButton(text="🔙 К интервалам", callback_data=back_callback)])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def get_main_settings_keyboard() -> InlineKeyboardMarkup:
     """Get main settings menu keyboard."""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -28,39 +69,23 @@ def get_interval_type_keyboard() -> InlineKeyboardMarkup:
 def get_weekday_interval_keyboard(current: int = 120) -> InlineKeyboardMarkup:
     """Keyboard for selecting weekday interval."""
     intervals = [30, 60, 90, 120, 180, 240, 360]
-    buttons = []
-    for interval in intervals:
-        label = format_duration(interval)
-        if interval == current:
-            label = f"✓ {label}"
-        buttons.append([InlineKeyboardButton(
-            text=label,
-            callback_data=f"set_weekday_{interval}"
-        )])
-
-    buttons.append([InlineKeyboardButton(text="✏️ Указать своё время", callback_data="weekday_custom")])
-    buttons.append([InlineKeyboardButton(text="🔙 К интервалам", callback_data="settings_intervals")])
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return build_interval_keyboard(
+        intervals=intervals,
+        current=current,
+        callback_prefix="set_weekday",
+        custom_callback="weekday_custom"
+    )
 
 
 def get_weekend_interval_keyboard(current: int = 180) -> InlineKeyboardMarkup:
     """Keyboard for selecting weekend interval."""
     intervals = [30, 60, 120, 180, 240, 360, 480]
-    buttons = []
-    for interval in intervals:
-        label = format_duration(interval)
-        if interval == current:
-            label = f"✓ {label}"
-        buttons.append([InlineKeyboardButton(
-            text=label,
-            callback_data=f"set_weekend_{interval}"
-        )])
-
-    buttons.append([InlineKeyboardButton(text="✏️ Указать своё время", callback_data="weekend_custom")])
-    buttons.append([InlineKeyboardButton(text="🔙 К интервалам", callback_data="settings_intervals")])
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return build_interval_keyboard(
+        intervals=intervals,
+        current=current,
+        callback_prefix="set_weekend",
+        custom_callback="weekend_custom"
+    )
 
 
 def get_quiet_hours_main_keyboard(enabled: bool = True) -> InlineKeyboardMarkup:
