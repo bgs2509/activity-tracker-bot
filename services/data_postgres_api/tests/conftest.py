@@ -41,3 +41,26 @@ sys.path.insert(0, str(src_path))
 def service_name():
     """Return service name for logging."""
     return "data_postgres_api"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def initialize_sqlalchemy_models():
+    """
+    Initialize SQLAlchemy models and mapper registry.
+
+    This fixture ensures all model mappers are configured before tests run,
+    allowing tests to create model instances without database connections.
+    Runs once per test session automatically (autouse=True).
+    """
+    # Import all models to register them with SQLAlchemy mapper registry
+    from src.domain.models import user, user_settings, category, activity
+
+    # Configure mappers (idempotent - safe to call multiple times)
+    try:
+        from sqlalchemy.orm import configure_mappers
+        configure_mappers()
+    except Exception:
+        # Ignore errors - mappers might already be configured
+        pass
+
+    return True
