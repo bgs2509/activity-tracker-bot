@@ -327,8 +327,8 @@ async def process_weekday_custom_input(message: types.Message, state: FSMContext
 
         await message.answer(text, reply_markup=get_confirmation_keyboard())
         await state.clear()
-        if fsm_timeout_service:
-            fsm_timeout_service.cancel_timeout(message.from_user.id)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
 
     except ValueError:
         await message.answer(
@@ -468,8 +468,8 @@ async def process_weekend_custom_input(message: types.Message, state: FSMContext
 
         await message.answer(text, reply_markup=get_confirmation_keyboard())
         await state.clear()
-        if fsm_timeout_service:
-            fsm_timeout_service.cancel_timeout(message.from_user.id)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
 
     except ValueError:
         await message.answer(
@@ -625,8 +625,8 @@ async def set_quiet_start_time(callback: types.CallbackQuery, state: FSMContext)
         )
         await callback.message.answer(text)
         await state.set_state(SettingsStates.waiting_for_quiet_hours_start_custom)
-        if fsm_timeout_service:
-            fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_quiet_hours_start_custom, callback.bot)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_quiet_hours_start_custom, callback.bot)
         await callback.answer()
         return
 
@@ -667,8 +667,8 @@ async def set_quiet_end_time(callback: types.CallbackQuery, state: FSMContext):
         )
         await callback.message.answer(text)
         await state.set_state(SettingsStates.waiting_for_quiet_hours_end_custom)
-        if fsm_timeout_service:
-            fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_quiet_hours_end_custom, callback.bot)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_quiet_hours_end_custom, callback.bot)
         await callback.answer()
         return
 
@@ -783,8 +783,8 @@ async def set_reminder_delay(callback: types.CallbackQuery, state: FSMContext):
 
         await callback.message.answer(text)
         await state.set_state(SettingsStates.waiting_for_reminder_delay_custom)
-        if fsm_timeout_service:
-            fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_reminder_delay_custom, callback.bot)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(callback.from_user.id, SettingsStates.waiting_for_reminder_delay_custom, callback.bot)
         await callback.answer()
         return
 
@@ -832,8 +832,8 @@ async def process_reminder_delay_custom(message: types.Message, state: FSMContex
 
         await message.answer(text, reply_markup=get_confirmation_keyboard())
         await state.clear()
-        if fsm_timeout_service:
-            fsm_timeout_service.cancel_timeout(message.from_user.id)
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
 
     except ValueError:
         await message.answer(
