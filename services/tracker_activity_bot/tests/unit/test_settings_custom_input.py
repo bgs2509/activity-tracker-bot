@@ -13,6 +13,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from src.api.handlers.settings.interval_settings import (
     process_weekday_custom_input,
     process_weekend_custom_input,
+)
+from src.api.handlers.settings.reminder_settings import (
     process_reminder_delay_custom,
 )
 from src.api.states.settings import SettingsStates
