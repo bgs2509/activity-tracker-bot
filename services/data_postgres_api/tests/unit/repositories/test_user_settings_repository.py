@@ -73,8 +73,8 @@ def sample_user_settings():
     return UserSettings(
         id=1,
         user_id=1,
-        weekday_interval_minutes=120,
-        weekend_interval_minutes=180,
+        poll_interval_weekday=120,
+        poll_interval_weekend=180,
         quiet_hours_start=time(22, 0),
         quiet_hours_end=time(8, 0),
         reminder_enabled=True
@@ -119,7 +119,7 @@ class TestUserSettingsRepositoryGetByUserId:
         assert result is not None, "Expected settings to be found"
         assert result == sample_user_settings
         assert result.user_id == 1
-        assert result.weekday_interval_minutes == 120
+        assert result.poll_interval_weekday == 120
 
     @pytest.mark.unit
     async def test_get_by_user_id_when_settings_not_found_returns_none(
@@ -191,8 +191,8 @@ class TestUserSettingsRepositoryGetByUserId:
         complete_settings = UserSettings(
             id=1,
             user_id=1,
-            weekday_interval_minutes=90,
-            weekend_interval_minutes=150,
+            poll_interval_weekday=90,
+            poll_interval_weekend=150,
             quiet_hours_start=time(23, 0),
             quiet_hours_end=time(7, 0),
             reminder_enabled=False
@@ -207,8 +207,8 @@ class TestUserSettingsRepositoryGetByUserId:
 
         # Assert: All fields present
         assert result is not None
-        assert result.weekday_interval_minutes == 90
-        assert result.weekend_interval_minutes == 150
+        assert result.poll_interval_weekday == 90
+        assert result.poll_interval_weekend == 150
         assert result.quiet_hours_start == time(23, 0)
         assert result.quiet_hours_end == time(7, 0)
         assert result.reminder_enabled is False
@@ -263,13 +263,13 @@ class TestUserSettingsRepositoryUpdate:
         existing_settings = UserSettings(
             id=1,
             user_id=1,
-            weekday_interval_minutes=120,
-            weekend_interval_minutes=180,
+            poll_interval_weekday=120,
+            poll_interval_weekend=180,
             reminder_enabled=True
         )
 
         update_data = UserSettingsUpdate(
-            weekday_interval_minutes=90  # Only update this field
+            poll_interval_weekday=90  # Only update this field
         )
 
         # Mock get_by_user_id to return existing settings
@@ -284,7 +284,7 @@ class TestUserSettingsRepositoryUpdate:
             # Assert
             assert result is not None, "Should return updated settings"
             assert result == existing_settings
-            assert result.weekday_interval_minutes == 90, \
+            assert result.poll_interval_weekday == 90, \
                 "Field should be updated"
 
             # Verify session operations
@@ -305,7 +305,7 @@ class TestUserSettingsRepositoryUpdate:
         THEN: None is returned without attempting update
         """
         # Arrange
-        update_data = UserSettingsUpdate(weekday_interval_minutes=90)
+        update_data = UserSettingsUpdate(poll_interval_weekday=90)
 
         # Mock get_by_user_id to return None
         with patch.object(
@@ -342,8 +342,8 @@ class TestUserSettingsRepositoryUpdate:
         existing_settings = UserSettings(
             id=1,
             user_id=1,
-            weekday_interval_minutes=120,
-            weekend_interval_minutes=180,
+            poll_interval_weekday=120,
+            poll_interval_weekend=180,
             quiet_hours_start=time(22, 0),
             quiet_hours_end=time(8, 0),
             reminder_enabled=True
@@ -363,10 +363,10 @@ class TestUserSettingsRepositoryUpdate:
             # Assert: Only updated field changed
             assert result.reminder_enabled is False, \
                 "reminder_enabled should be updated"
-            assert result.weekday_interval_minutes == 120, \
-                "weekday_interval_minutes should remain unchanged"
-            assert result.weekend_interval_minutes == 180, \
-                "weekend_interval_minutes should remain unchanged"
+            assert result.poll_interval_weekday == 120, \
+                "poll_interval_weekday should remain unchanged"
+            assert result.poll_interval_weekend == 180, \
+                "poll_interval_weekend should remain unchanged"
             assert result.quiet_hours_start == time(22, 0), \
                 "quiet_hours_start should remain unchanged"
 
@@ -384,7 +384,7 @@ class TestUserSettingsRepositoryUpdate:
         THEN: get_by_user_id() is called first to fetch existing settings
         """
         # Arrange
-        update_data = UserSettingsUpdate(weekday_interval_minutes=90)
+        update_data = UserSettingsUpdate(poll_interval_weekday=90)
 
         # Act: Call update - should internally call get_by_user_id
         with patch.object(
@@ -416,8 +416,8 @@ class TestUserSettingsRepositoryUpdate:
         existing_settings = UserSettings(
             id=1,
             user_id=1,
-            weekday_interval_minutes=120,
-            weekend_interval_minutes=180
+            poll_interval_weekday=120,
+            poll_interval_weekend=180
         )
 
         # Empty update (no fields provided)
@@ -433,8 +433,8 @@ class TestUserSettingsRepositoryUpdate:
 
             # Assert: Settings returned unchanged
             assert result is not None
-            assert result.weekday_interval_minutes == 120
-            assert result.weekend_interval_minutes == 180
+            assert result.poll_interval_weekday == 120
+            assert result.poll_interval_weekend == 180
 
     @pytest.mark.unit
     async def test_update_updates_multiple_fields_at_once(
@@ -453,15 +453,15 @@ class TestUserSettingsRepositoryUpdate:
         existing_settings = UserSettings(
             id=1,
             user_id=1,
-            weekday_interval_minutes=120,
-            weekend_interval_minutes=180,
+            poll_interval_weekday=120,
+            poll_interval_weekend=180,
             reminder_enabled=True
         )
 
         # Update multiple fields
         update_data = UserSettingsUpdate(
-            weekday_interval_minutes=90,
-            weekend_interval_minutes=150,
+            poll_interval_weekday=90,
+            poll_interval_weekend=150,
             reminder_enabled=False
         )
 
@@ -474,8 +474,8 @@ class TestUserSettingsRepositoryUpdate:
             result = await user_settings_repository.update(1, update_data)
 
             # Assert: All fields updated
-            assert result.weekday_interval_minutes == 90
-            assert result.weekend_interval_minutes == 150
+            assert result.poll_interval_weekday == 90
+            assert result.poll_interval_weekend == 150
             assert result.reminder_enabled is False
 
 
@@ -528,7 +528,7 @@ class TestUserSettingsRepositoryInheritance:
         # Arrange
         settings_data = UserSettingsCreate(
             user_id=1,
-            weekday_interval_minutes=120
+            poll_interval_weekday=120
         )
 
         with patch.object(UserSettings, '__init__', return_value=None):
@@ -616,13 +616,13 @@ class TestUserSettingsRepositoryEdgeCases:
         existing_settings = UserSettings(
             id=1,
             user_id=1,
-            weekday_interval_minutes=120,
+            poll_interval_weekday=120,
             quiet_hours_start=time(22, 0),  # Optional field set
             quiet_hours_end=time(8, 0)
         )
 
         # Update only weekday_interval (not quiet_hours)
-        update_data = UserSettingsUpdate(weekday_interval_minutes=90)
+        update_data = UserSettingsUpdate(poll_interval_weekday=90)
 
         with patch.object(
             user_settings_repository,

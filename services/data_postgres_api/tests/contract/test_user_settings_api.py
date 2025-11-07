@@ -49,13 +49,11 @@ def sample_settings():
     return UserSettings(
         id=1,
         user_id=1,
-        weekday_interval_minutes=60,
-        weekend_interval_minutes=120,
-        is_reminder_enabled=True,
+        poll_interval_weekday=60,
+        poll_interval_weekend=120,
+        reminder_enabled=True,
         quiet_hours_start=time(22, 0),
-        quiet_hours_end=time(8, 0),
-        created_at=datetime(2025, 11, 7, 12, 0, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2025, 11, 7, 12, 0, 0, tzinfo=timezone.utc)
+        quiet_hours_end=time(8, 0)
     )
 
 
@@ -83,9 +81,9 @@ class TestCreateSettingsEndpoint:
         # Arrange
         request_data = {
             "user_id": 1,
-            "weekday_interval_minutes": 60,
-            "weekend_interval_minutes": 120,
-            "is_reminder_enabled": True
+            "poll_interval_weekday": 60,
+            "poll_interval_weekend": 120,
+            "reminder_enabled": True
         }
         mock_settings_service.create_settings.return_value = sample_settings
 
@@ -97,7 +95,7 @@ class TestCreateSettingsEndpoint:
         assert response.status_code == 201
         data = response.json()
         assert data["user_id"] == 1
-        assert data["weekday_interval_minutes"] == 60
+        assert data["poll_interval_weekday"] == 60
 
     @pytest.mark.contract
     def test_create_settings_with_missing_user_id_returns_422(self, client):
@@ -109,7 +107,7 @@ class TestCreateSettingsEndpoint:
         THEN: 422 validation error
         """
         # Arrange
-        request_data = {"weekday_interval_minutes": 60}
+        request_data = {"poll_interval_weekday": 60}
 
         # Act
         response = client.post("/api/v1/user-settings", json=request_data)
@@ -207,10 +205,10 @@ class TestUpdateSettingsEndpoint:
         THEN: 200 with updated settings
         """
         # Arrange
-        request_data = {"weekday_interval_minutes": 90}
+        request_data = {"poll_interval_weekday": 90}
         updated_settings = UserSettings(
             **{k: v for k, v in sample_settings.__dict__.items() if not k.startswith('_')},
-            weekday_interval_minutes=90
+            poll_interval_weekday=90
         )
         mock_settings_service.update_settings.return_value = updated_settings
 
@@ -221,7 +219,7 @@ class TestUpdateSettingsEndpoint:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["weekday_interval_minutes"] == 90
+        assert data["poll_interval_weekday"] == 90
 
     @pytest.mark.contract
     def test_update_settings_when_not_found_returns_404(
@@ -243,7 +241,7 @@ class TestUpdateSettingsEndpoint:
         with patch('src.api.dependencies.get_user_settings_service', return_value=mock_settings_service):
             response = client.put(
                 "/api/v1/user-settings/999",
-                json={"weekday_interval_minutes": 90}
+                json={"poll_interval_weekday": 90}
             )
 
         # Assert

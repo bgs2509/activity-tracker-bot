@@ -30,9 +30,8 @@ def valid_user_data():
     return UserCreate(
         telegram_id=123456789,
         first_name="John",
-        last_name="Doe",
         username="johndoe",
-        language_code="en"
+        timezone="Europe/London"
     )
 
 
@@ -43,9 +42,8 @@ def mock_user():
         id=1,
         telegram_id=123456789,
         first_name="John",
-        last_name="Doe",
         username="johndoe",
-        language_code="en",
+        timezone="Europe/London",
         created_at=datetime(2025, 11, 7, 10, 0, 0),
         last_poll_time=None
     )
@@ -84,22 +82,21 @@ async def test_create_user_duplicate_telegram_id(user_service, mock_repository, 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_user_without_optional_fields(user_service, mock_repository):
-    """Test creating user without optional fields (last_name, username)."""
+    """Test creating user without optional fields (username, first_name)."""
     user_data = UserCreate(
         telegram_id=987654321,
-        first_name="Jane",
-        last_name=None,
+        first_name=None,
         username=None,
-        language_code="ru"
+        timezone="Europe/Berlin"
     )
     created_user = User(
         id=2,
         telegram_id=987654321,
-        first_name="Jane",
-        last_name=None,
+        first_name=None,
         username=None,
-        language_code="ru",
-        created_at=datetime.now()
+        timezone="Europe/Berlin",
+        created_at=datetime.now(),
+        last_poll_time=None
     )
     mock_repository.get_by_telegram_id = AsyncMock(return_value=None)
     mock_repository.create = AsyncMock(return_value=created_user)
@@ -107,7 +104,7 @@ async def test_create_user_without_optional_fields(user_service, mock_repository
     result = await user_service.create_user(user_data)
 
     assert result == created_user
-    assert result.last_name is None
+    assert result.first_name is None
     assert result.username is None
 
 
@@ -178,9 +175,8 @@ async def test_update_last_poll_time_success(user_service, mock_repository, mock
         id=1,
         telegram_id=123456789,
         first_name="John",
-        last_name="Doe",
         username="johndoe",
-        language_code="en",
+        timezone="Europe/London",
         created_at=datetime(2025, 11, 7, 10, 0, 0),
         last_poll_time=poll_time
     )
@@ -219,9 +215,8 @@ async def test_update_last_poll_time_multiple_updates(user_service, mock_reposit
         id=1,
         telegram_id=123456789,
         first_name="John",
-        last_name="Doe",
         username="johndoe",
-        language_code="en",
+        timezone="Europe/London",
         created_at=datetime(2025, 11, 7, 10, 0, 0),
         last_poll_time=poll_time1
     )
@@ -229,9 +224,8 @@ async def test_update_last_poll_time_multiple_updates(user_service, mock_reposit
         id=1,
         telegram_id=123456789,
         first_name="John",
-        last_name="Doe",
         username="johndoe",
-        language_code="en",
+        timezone="Europe/London",
         created_at=datetime(2025, 11, 7, 10, 0, 0),
         last_poll_time=poll_time2
     )
