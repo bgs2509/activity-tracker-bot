@@ -488,6 +488,18 @@ services/
 │   └── src/
 │       ├── api/
 │       │   ├── handlers/          # Request handlers
+│       │   │   ├── activity/      # Activity recording (creation, management)
+│       │   │   ├── categories/    # Category management ✨ REFACTORED
+│       │   │   │   ├── category_list.py        (~70 lines)
+│       │   │   │   ├── category_creation.py    (~300 lines)
+│       │   │   │   ├── category_deletion.py    (~190 lines)
+│       │   │   │   └── helpers.py              (~220 lines)
+│       │   │   ├── poll/          # Poll handlers ✨ REFACTORED
+│       │   │   │   ├── poll_sender.py          (~290 lines)
+│       │   │   │   ├── poll_response.py        (~730 lines)
+│       │   │   │   └── helpers.py              (~100 lines)
+│       │   │   ├── settings/      # User settings (intervals, quiet hours, reminders)
+│       │   │   └── start.py       # /start command handler
 │       │   ├── keyboards/         # Inline keyboard builders
 │       │   ├── states/            # FSM state definitions
 │       │   ├── middleware/        # Custom middleware
@@ -505,15 +517,15 @@ services/
 └── data_postgres_api/             # Data Access Service
     └── src/
         ├── api/
-        │   ├── v1/                # API routes
+        │   ├── v1/                # API routes (~60-80 lines each)
         │   └── middleware/        # Error handlers
         ├── application/
-        │   └── services/          # Business logic
+        │   └── services/          # Business logic (~100-135 lines each)
         ├── infrastructure/
-        │   └── repositories/      # Data access layer
+        │   └── repositories/      # Data access layer (~20-120 lines each)
         ├── domain/
-        │   └── models/            # SQLAlchemy models
-        └── schemas/               # Pydantic schemas
+        │   └── models/            # SQLAlchemy models (~50-60 lines each)
+        └── schemas/               # Pydantic schemas (~25-50 lines each)
 ```
 
 ### Naming Conventions

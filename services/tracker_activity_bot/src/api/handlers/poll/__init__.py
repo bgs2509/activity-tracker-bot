@@ -1,5 +1,4 @@
-"""
-Poll handlers package for automatic activity tracking.
+"""Poll handlers package for automatic activity tracking.
 
 This module aggregates all poll-related routers and exports key functions
 following the Single Responsibility Principle (SRP).
@@ -7,8 +6,7 @@ following the Single Responsibility Principle (SRP).
 Module Structure:
 - helpers.py: FSM storage management and DRY helpers
 - poll_sender.py: Automatic poll and reminder delivery
-- poll_handlers.py: Poll response handlers (skip, sleep, remind)
-- poll_activity.py: Activity recording from poll (category, description)
+- poll_response.py: All poll response handlers (skip, sleep, remind, activity recording)
 
 Usage:
     from src.api.handlers.poll import router, send_automatic_poll, close_fsm_storage
@@ -25,8 +23,7 @@ Usage:
 
 from aiogram import Router
 
-from . import poll_handlers
-from . import poll_activity
+from . import poll_response
 
 # Import key functions for external use
 from .poll_sender import send_automatic_poll, send_reminder
@@ -35,9 +32,8 @@ from .helpers import close_fsm_storage
 # Create main poll router
 router = Router(name="poll")
 
-# Include all sub-routers
-router.include_router(poll_handlers.router)
-router.include_router(poll_activity.router)
+# Include poll response router (handles all poll responses)
+router.include_router(poll_response.router)
 
 # Export public API
 __all__ = [
