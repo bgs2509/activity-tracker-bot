@@ -4,6 +4,7 @@ Unit tests for UserSettingsService.
 Tests business logic without database dependencies using mocked repository.
 """
 import pytest
+from datetime import time
 from unittest.mock import AsyncMock, Mock
 
 from src.application.services.user_settings_service import UserSettingsService
@@ -30,9 +31,10 @@ def valid_settings_data():
         user_id=1,
         poll_interval_weekday=60,
         poll_interval_weekend=120,
-        quiet_hours_start="22:00",
-        quiet_hours_end="08:00",
-        timezone="UTC"
+        quiet_hours_start=time(22, 0),
+        quiet_hours_end=time(8, 0),
+        reminder_enabled=True,
+        reminder_delay_minutes=30
     )
 
 
@@ -44,9 +46,10 @@ def mock_settings():
         user_id=1,
         poll_interval_weekday=60,
         poll_interval_weekend=120,
-        quiet_hours_start="22:00",
-        quiet_hours_end="08:00",
-        timezone="UTC"
+        quiet_hours_start=time(22, 0),
+        quiet_hours_end=time(8, 0),
+        reminder_enabled=True,
+        reminder_delay_minutes=30
     )
 
 
