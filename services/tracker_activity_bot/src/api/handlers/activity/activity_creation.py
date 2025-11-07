@@ -22,6 +22,11 @@ from .helpers import START_TIME_MAP, END_TIME_MAP, validate_start_time, validate
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+
+@router.callback_query(F.data == "add_activity")
+@with_typing_action
+@log_user_action("add_activity_started")
 async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
     """Start activity recording process."""
     logger.debug(
