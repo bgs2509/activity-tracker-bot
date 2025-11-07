@@ -1,14 +1,21 @@
-"""Categories API router."""
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+"""
+Categories API router with service layer.
 
-from src.infrastructure.database.connection import get_db
-from src.infrastructure.repositories.category_repository import CategoryRepository
+Handles HTTP requests for category operations.
+"""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+
+from src.api.dependencies import get_category_service
+from src.application.services.category_service import CategoryService
 from src.schemas.category import (
     CategoryCreate,
     CategoryResponse,
     CategoryBulkCreate,
     CategoryBulkResponse,
+    CategoryItem,
 )
 
 router = APIRouter(prefix="/categories", tags=["categories"])
@@ -17,90 +24,59 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 @router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 async def create_category(
     category_data: CategoryCreate,
-    db: AsyncSession = Depends(get_db)
+    service: Annotated[CategoryService, Depends(get_category_service)]
 ) -> CategoryResponse:
-    """Create a new category."""
-    repository = CategoryRepository(db)
-
-    # Check if category with this name already exists for user
-    existing_category = await repository.get_by_user_and_name(
-        category_data.user_id,
-        category_data.name
-    )
-    if existing_category:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Category with name '{category_data.name}' already exists for this user"
-        )
-
-    category = await repository.create(category_data)
-    return CategoryResponse.model_validate(category)
+    """Create new category with duplicate check."""
+    try:
+        category = await service.create_category(category_data)
+        return CategoryResponse.model_validate(category)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.post("/bulk-create", response_model=CategoryBulkResponse, status_code=status.HTTP_201_CREATED)
 async def bulk_create_categories(
     bulk_data: CategoryBulkCreate,
-    db: AsyncSession = Depends(get_db)
+    service: Annotated[CategoryService, Depends(get_category_service)]
 ) -> CategoryBulkResponse:
-    """Create multiple categories at once."""
-    repository = CategoryRepository(db)
-    created_categories = []
-
-    for category_item in bulk_data.categories:
-        # Check if category already exists
-        existing = await repository.get_by_user_and_name(
-            bulk_data.user_id,
-            category_item.name
+    """Create multiple categories, skipping duplicates."""
+    categories_to_create = [
+        CategoryCreate(
+            user_id=bulk_data.user_id,
+            name=item.name,
+            emoji=item.emoji,
+            is_default=item.is_default
         )
-        if not existing:
-            category_data = CategoryCreate(
-                user_id=bulk_data.user_id,
-                name=category_item.name,
-                emoji=category_item.emoji,
-                is_default=category_item.is_default
-            )
-            category = await repository.create(category_data)
-            created_categories.append(CategoryResponse.model_validate(category))
-
+        for item in bulk_data.categories
+    ]
+    
+    created = await service.bulk_create_categories(bulk_data.user_id, categories_to_create)
     return CategoryBulkResponse(
-        created_count=len(created_categories),
-        categories=created_categories
+        created_count=len(created),
+        categories=[CategoryResponse.model_validate(cat) for cat in created]
     )
 
 
 @router.get("/", response_model=list[CategoryResponse])
 async def get_categories(
-    user_id: int = Query(..., description="User ID"),
-    db: AsyncSession = Depends(get_db)
+    user_id: Annotated[int, Query(description="User ID")],
+    service: Annotated[CategoryService, Depends(get_category_service)]
 ) -> list[CategoryResponse]:
-    """Get all categories for a user."""
-    repository = CategoryRepository(db)
-    categories = await repository.get_all_by_user(user_id)
+    """Get all categories for user."""
+    categories = await service.get_user_categories(user_id)
     return [CategoryResponse.model_validate(cat) for cat in categories]
 
 
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_category(
     category_id: int,
-    db: AsyncSession = Depends(get_db)
+    service: Annotated[CategoryService, Depends(get_category_service)]
 ) -> None:
-    """Delete a category."""
-    repository = CategoryRepository(db)
-
-    # Check if category exists
-    category = await repository.get_by_id(category_id)
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Category not found"
-        )
-
-    # Check if this is the last category for the user
-    count = await repository.count_by_user(category.user_id)
-    if count <= 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete the last category for user"
-        )
-
-    await repository.delete(category_id)
+    """Delete category with business rule validation."""
+    try:
+        await service.delete_category(category_id)
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)

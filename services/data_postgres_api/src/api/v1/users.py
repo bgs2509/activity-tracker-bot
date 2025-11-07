@@ -1,10 +1,15 @@
-"""Users API router."""
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+"""
+Users API router with service layer.
+"""
 
-from src.infrastructure.database.connection import get_db
-from src.infrastructure.repositories.user_repository import UserRepository
-from src.schemas.user import UserCreate, UserUpdate, UserResponse
+from typing import Annotated
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+
+from src.api.dependencies import get_user_service
+from src.application.services.user_service import UserService
+from src.schemas.user import UserCreate, UserResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -12,58 +17,43 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
-    db: AsyncSession = Depends(get_db)
+    service: Annotated[UserService, Depends(get_user_service)]
 ) -> UserResponse:
-    """Create a new user."""
-    repository = UserRepository(db)
-
-    # Check if user with this telegram_id already exists
-    existing_user = await repository.get_by_telegram_id(user_data.telegram_id)
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"User with telegram_id {user_data.telegram_id} already exists"
-        )
-
-    user = await repository.create(user_data)
-    return UserResponse.model_validate(user)
+    """Create new user or return existing."""
+    existing = await service.get_by_telegram_id(user_data.telegram_id)
+    if existing:
+        return UserResponse.model_validate(existing)
+    
+    try:
+        user = await service.create_user(user_data)
+        return UserResponse.model_validate(user)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
-@router.get("/by-telegram/{telegram_id}", response_model=UserResponse)
+@router.get("/by-telegram-id/{telegram_id}", response_model=UserResponse)
 async def get_user_by_telegram_id(
     telegram_id: int,
-    db: AsyncSession = Depends(get_db)
+    service: Annotated[UserService, Depends(get_user_service)]
 ) -> UserResponse:
     """Get user by Telegram ID."""
-    repository = UserRepository(db)
-    user = await repository.get_by_telegram_id(telegram_id)
-
+    user = await service.get_by_telegram_id(telegram_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return UserResponse.model_validate(user)
 
 
-@router.patch("/{user_id}", response_model=UserResponse)
-async def update_user(
+@router.put("/{user_id}/last-poll-time", response_model=UserResponse)
+async def update_last_poll_time(
     user_id: int,
-    user_data: UserUpdate,
-    db: AsyncSession = Depends(get_db)
+    poll_time: Annotated[datetime, Body(embed=True)],
+    service: Annotated[UserService, Depends(get_user_service)]
 ) -> UserResponse:
-    """Update user fields.
-
-    Allows updating user fields like last_poll_time for tracking purposes.
-    """
-    repository = UserRepository(db)
-    user = await repository.update(user_id, user_data)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
-    return UserResponse.model_validate(user)
+    """Update last poll time for user."""
+    try:
+        user = await service.update_last_poll_time(user_id, poll_time)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        return UserResponse.model_validate(user)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
