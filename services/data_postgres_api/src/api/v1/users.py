@@ -30,7 +30,7 @@ async def create_user(
     return UserResponse.model_validate(user)
 
 
-@router.get("/by-telegram-id/{telegram_id}", response_model=UserResponse)
+@router.get("/by-telegram/{telegram_id}", response_model=UserResponse)
 async def get_user_by_telegram_id(
     telegram_id: int,
     service: Annotated[UserService, Depends(get_user_service)]
@@ -42,7 +42,7 @@ async def get_user_by_telegram_id(
     return UserResponse.model_validate(user)
 
 
-@router.put("/{user_id}/last-poll-time", response_model=UserResponse)
+@router.patch("/{user_id}/last-poll-time", response_model=UserResponse)
 async def update_last_poll_time(
     user_id: int,
     poll_time: Annotated[datetime, Body(embed=True)],
