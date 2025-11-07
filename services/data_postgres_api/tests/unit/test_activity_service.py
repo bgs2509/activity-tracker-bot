@@ -15,7 +15,7 @@ from src.schemas.activity import ActivityCreate
 @pytest.fixture
 def mock_repository():
     """Create mock ActivityRepository."""
-    return Mock()
+    return AsyncMock()
 
 
 @pytest.fixture
@@ -160,43 +160,39 @@ async def test_get_activity_by_id_not_found(activity_service, mock_repository):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_user_activities_default_pagination(activity_service, mock_repository, mock_activity):
-    """Test getting user activities with default pagination."""
-    mock_repository.get_by_user = AsyncMock(return_value=([mock_activity], 1))
+    """Test getting user activities with default limit."""
+    mock_repository.get_recent_by_user = AsyncMock(return_value=[mock_activity])
 
-    activities, total = await activity_service.get_user_activities(user_id=1)
+    activities = await activity_service.get_user_activities(user_id=1)
 
     assert activities == [mock_activity]
-    assert total == 1
-    mock_repository.get_by_user.assert_called_once_with(1, 10, 0)
+    mock_repository.get_recent_by_user.assert_called_once_with(1, 10)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_user_activities_custom_pagination(activity_service, mock_repository, mock_activity):
-    """Test getting user activities with custom limit and offset."""
-    mock_repository.get_by_user = AsyncMock(return_value=([mock_activity], 50))
+    """Test getting user activities with custom limit."""
+    mock_repository.get_recent_by_user = AsyncMock(return_value=[mock_activity])
 
-    activities, total = await activity_service.get_user_activities(
+    activities = await activity_service.get_user_activities(
         user_id=1,
-        limit=20,
-        offset=10
+        limit=20
     )
 
     assert activities == [mock_activity]
-    assert total == 50
-    mock_repository.get_by_user.assert_called_once_with(1, 20, 10)
+    mock_repository.get_recent_by_user.assert_called_once_with(1, 20)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_user_activities_empty_result(activity_service, mock_repository):
     """Test getting user activities when user has no activities."""
-    mock_repository.get_by_user = AsyncMock(return_value=([], 0))
+    mock_repository.get_recent_by_user = AsyncMock(return_value=[])
 
-    activities, total = await activity_service.get_user_activities(user_id=1)
+    activities = await activity_service.get_user_activities(user_id=1)
 
     assert activities == []
-    assert total == 0
 
 
 @pytest.mark.unit
@@ -219,38 +215,21 @@ async def test_get_user_activities_limit_too_high(activity_service):
 @pytest.mark.asyncio
 async def test_get_user_activities_limit_boundary_min(activity_service, mock_repository):
     """Test that limit = 1 is accepted (minimum boundary)."""
-    mock_repository.get_by_user = AsyncMock(return_value=([], 0))
+    mock_repository.get_recent_by_user = AsyncMock(return_value=[])
 
     await activity_service.get_user_activities(user_id=1, limit=1)
 
-    mock_repository.get_by_user.assert_called_once_with(1, 1, 0)
+    mock_repository.get_recent_by_user.assert_called_once_with(1, 1)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_user_activities_limit_boundary_max(activity_service, mock_repository):
     """Test that limit = 100 is accepted (maximum boundary)."""
-    mock_repository.get_by_user = AsyncMock(return_value=([], 0))
+    mock_repository.get_recent_by_user = AsyncMock(return_value=[])
 
     await activity_service.get_user_activities(user_id=1, limit=100)
 
-    mock_repository.get_by_user.assert_called_once_with(1, 100, 0)
+    mock_repository.get_recent_by_user.assert_called_once_with(1, 100)
 
 
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_get_user_activities_negative_offset(activity_service):
-    """Test that negative offset raises ValueError."""
-    with pytest.raises(ValueError, match="Offset must be >= 0, got -1"):
-        await activity_service.get_user_activities(user_id=1, offset=-1)
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_get_user_activities_offset_zero(activity_service, mock_repository):
-    """Test that offset = 0 is accepted (boundary)."""
-    mock_repository.get_by_user = AsyncMock(return_value=([], 0))
-
-    await activity_service.get_user_activities(user_id=1, offset=0)
-
-    mock_repository.get_by_user.assert_called_once_with(1, 10, 0)

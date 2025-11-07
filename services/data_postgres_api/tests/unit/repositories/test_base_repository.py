@@ -334,21 +334,24 @@ class TestBaseRepositoryUpdate:
         """
         Test successful entity update.
 
-        GIVEN: User exists with id=1, username="old_name"
-        WHEN: update(1, UserUpdate(username="new_name")) is called
-        THEN: Username is updated to "new_name"
+        GIVEN: User exists with id=1, last_poll_time=None
+        WHEN: update(1, UserUpdate(last_poll_time=datetime)) is called
+        THEN: last_poll_time is updated to datetime
               AND updated entity is returned
               AND session.flush() and session.refresh() are called
         """
+        from datetime import datetime, timezone
+
         # Arrange: Create existing user and update data
-        existing_user = User(id=1, telegram_id=123, username="old_name")
-        update_data = UserUpdate(username="new_name")
+        existing_user = User(id=1, telegram_id=123, username="testuser")
+        new_poll_time = datetime(2025, 11, 7, 12, 0, 0, tzinfo=timezone.utc)
+        update_data = UserUpdate(last_poll_time=new_poll_time)
 
         # Mock get_by_id to return existing user
         with patch.object(
             user_repository,
             'get_by_id',
-            return_value=existing_user
+            new=AsyncMock(return_value=existing_user)
         ):
             # Act: Update user
             result = await user_repository.update(1, update_data)
@@ -356,7 +359,7 @@ class TestBaseRepositoryUpdate:
             # Assert: User updated and returned
             assert result is not None, "Updated user should be returned"
             assert result == existing_user, "Should return same user instance"
-            assert result.username == "new_name", "Username should be updated"
+            assert result.last_poll_time == new_poll_time, "last_poll_time should be updated"
 
             # Verify session operations
             mock_session.flush.assert_called_once(), \
@@ -378,11 +381,13 @@ class TestBaseRepositoryUpdate:
         THEN: None is returned
               AND session.flush() is NOT called (no changes to persist)
         """
+        from datetime import datetime, timezone
+
         # Arrange
-        update_data = UserUpdate(username="new_name")
+        update_data = UserUpdate(last_poll_time=datetime(2025, 11, 7, 12, 0, 0, tzinfo=timezone.utc))
 
         # Mock get_by_id to return None (user not found)
-        with patch.object(user_repository, 'get_by_id', return_value=None):
+        with patch.object(user_repository, 'get_by_id', new=AsyncMock(return_value=None)):
             # Act
             result = await user_repository.update(999, update_data)
 
@@ -400,36 +405,39 @@ class TestBaseRepositoryUpdate:
         """
         Test partial update - only provided fields are changed.
 
-        GIVEN: User with username="old_name" and timezone="UTC"
-        WHEN: update() called with UserUpdate(username="new_name")
-              (timezone not provided in update schema)
-        THEN: Username is updated to "new_name"
+        GIVEN: User with last_poll_time=None and timezone="UTC"
+        WHEN: update() called with UserUpdate(last_poll_time=datetime)
+              (other fields not provided in update schema)
+        THEN: last_poll_time is updated to datetime
               AND timezone remains "UTC" (unchanged)
 
         This tests exclude_unset=True behavior in model_dump().
         """
+        from datetime import datetime, timezone as tz
+
         # Arrange: User with multiple fields
         existing_user = User(
             id=1,
             telegram_id=123,
-            username="old_name",
+            username="testuser",
             timezone="UTC"
         )
 
-        # Update only username, leave timezone unchanged
-        update_data = UserUpdate(username="new_name")
+        # Update only last_poll_time, leave other fields unchanged
+        new_poll_time = datetime(2025, 11, 7, 12, 0, 0, tzinfo=tz.utc)
+        update_data = UserUpdate(last_poll_time=new_poll_time)
         # Note: UserUpdate should have all fields optional for partial updates
 
         with patch.object(
             user_repository,
             'get_by_id',
-            return_value=existing_user
+            new=AsyncMock(return_value=existing_user)
         ):
             # Act: Partial update
             result = await user_repository.update(1, update_data)
 
             # Assert: Only updated field changed
-            assert result.username == "new_name", \
+            assert result.last_poll_time == new_poll_time, \
                 "Provided field should be updated"
             assert result.timezone == "UTC", \
                 "Non-provided field should remain unchanged"

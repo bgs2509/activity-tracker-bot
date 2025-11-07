@@ -667,29 +667,27 @@ class TestActivityRepositoryEdgeCases:
         mock_session: AsyncMock
     ):
         """
-        Test activity with zero duration (start_time == end_time).
+        Test that zero duration (start_time == end_time) is rejected by validation.
 
         GIVEN: Activity with start_time == end_time
-        WHEN: create() is called
-        THEN: duration_minutes is 0
+        WHEN: ActivityCreate is instantiated
+        THEN: ValidationError is raised (zero duration not allowed)
         """
+        from pydantic import ValidationError
+
         # Arrange: Same start and end time
         same_time = datetime(2025, 11, 7, 10, 0)
-        activity_data = ActivityCreate(
-            user_id=1,
-            category_id=1,
-            description="Instant activity",
-            start_time=same_time,
-            end_time=same_time,
-            tags=[]
-        )
 
-        # Act
-        result = await activity_repository.create(activity_data)
-
-        # Assert: Zero duration
-        assert result.duration_minutes == 0, \
-            "Duration should be 0 when start_time == end_time"
+        # Act & Assert: Zero duration should raise ValidationError
+        with pytest.raises(ValidationError, match="end_time must be after start_time"):
+            activity_data = ActivityCreate(
+                user_id=1,
+                category_id=1,
+                description="Instant activity",
+                start_time=same_time,
+                end_time=same_time,
+                tags=[]
+            )
 
     @pytest.mark.unit
     async def test_create_with_single_tag(

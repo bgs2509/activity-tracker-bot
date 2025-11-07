@@ -15,7 +15,7 @@ from src.schemas.user_settings import UserSettingsCreate, UserSettingsUpdate
 @pytest.fixture
 def mock_repository():
     """Create mock UserSettingsRepository."""
-    return Mock()
+    return AsyncMock()
 
 
 @pytest.fixture
@@ -157,24 +157,40 @@ async def test_create_settings_poll_interval_boundary_max(user_settings_service,
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_settings_invalid_quiet_hours_start_format(user_settings_service, mock_repository, valid_settings_data):
-    """Test that invalid quiet hours start format raises ValueError."""
-    mock_repository.get_by_user_id = AsyncMock(return_value=None)
-    valid_settings_data.quiet_hours_start = "25:00"  # Invalid hour
+async def test_create_settings_invalid_quiet_hours_start_format(user_settings_service, mock_repository):
+    """Test that invalid quiet hours start format raises ValidationError."""
+    from pydantic import ValidationError
 
-    with pytest.raises(ValueError, match="Quiet hours must be in HH:MM format"):
-        await user_settings_service.create_settings(valid_settings_data)
+    mock_repository.get_by_user_id = AsyncMock(return_value=None)
+
+    # Pydantic validates when creating schema with invalid time
+    with pytest.raises(ValidationError):
+        UserSettingsCreate(
+            user_id=1,
+            poll_interval_weekday=60,
+            poll_interval_weekend=120,
+            quiet_hours_start="25:00",  # Invalid hour
+            quiet_hours_end=time(8, 0)
+        )
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_settings_invalid_quiet_hours_end_format(user_settings_service, mock_repository, valid_settings_data):
-    """Test that invalid quiet hours end format raises ValueError."""
-    mock_repository.get_by_user_id = AsyncMock(return_value=None)
-    valid_settings_data.quiet_hours_end = "12:70"  # Invalid minute
+async def test_create_settings_invalid_quiet_hours_end_format(user_settings_service, mock_repository):
+    """Test that invalid quiet hours end format raises ValidationError."""
+    from pydantic import ValidationError
 
-    with pytest.raises(ValueError, match="Quiet hours must be in HH:MM format"):
-        await user_settings_service.create_settings(valid_settings_data)
+    mock_repository.get_by_user_id = AsyncMock(return_value=None)
+
+    # Pydantic validates when creating schema with invalid time
+    with pytest.raises(ValidationError):
+        UserSettingsCreate(
+            user_id=1,
+            poll_interval_weekday=60,
+            poll_interval_weekend=120,
+            quiet_hours_start=time(22, 0),
+            quiet_hours_end="12:70"  # Invalid minute
+        )
 
 
 @pytest.mark.unit
@@ -252,9 +268,10 @@ async def test_update_settings_success(user_settings_service, mock_repository, m
         user_id=1,
         poll_interval_weekday=90,
         poll_interval_weekend=120,
-        quiet_hours_start="22:00",
-        quiet_hours_end="08:00",
-        timezone="UTC"
+        quiet_hours_start=time(22, 0),
+        quiet_hours_end=time(8, 0),
+        reminder_enabled=True,
+        reminder_delay_minutes=30
     )
     mock_repository.get_by_user_id = AsyncMock(return_value=mock_settings)
     mock_repository.update = AsyncMock(return_value=updated_settings)
@@ -293,33 +310,36 @@ async def test_update_settings_poll_interval_validation(user_settings_service, m
 @pytest.mark.asyncio
 async def test_update_settings_quiet_hours_validation(user_settings_service, mock_repository, mock_settings):
     """Test that updating quiet hours triggers validation."""
-    update_data = UserSettingsUpdate(quiet_hours_start="25:00")  # Invalid
+    from pydantic import ValidationError
+
     mock_repository.get_by_user_id = AsyncMock(return_value=mock_settings)
 
-    with pytest.raises(ValueError, match="Quiet hours must be in HH:MM format"):
-        await user_settings_service.update_settings(user_id=1, settings_data=update_data)
+    # Pydantic validates before service code runs
+    with pytest.raises(ValidationError):
+        update_data = UserSettingsUpdate(quiet_hours_start="25:00")  # Invalid
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_settings_partial_update(user_settings_service, mock_repository, mock_settings):
     """Test updating only one field doesn't require all fields."""
-    update_data = UserSettingsUpdate(timezone="Europe/Moscow")
+    update_data = UserSettingsUpdate(reminder_enabled=False)
     updated_settings = UserSettings(
         id=1,
         user_id=1,
         poll_interval_weekday=60,
         poll_interval_weekend=120,
-        quiet_hours_start="22:00",
-        quiet_hours_end="08:00",
-        timezone="Europe/Moscow"
+        quiet_hours_start=time(22, 0),
+        quiet_hours_end=time(8, 0),
+        reminder_enabled=False,
+        reminder_delay_minutes=30
     )
     mock_repository.get_by_user_id = AsyncMock(return_value=mock_settings)
     mock_repository.update = AsyncMock(return_value=updated_settings)
 
     result = await user_settings_service.update_settings(user_id=1, settings_data=update_data)
 
-    assert result.timezone == "Europe/Moscow"
+    assert result.reminder_enabled is False
 
 
 @pytest.mark.unit
@@ -333,9 +353,10 @@ async def test_update_settings_uses_existing_values_for_validation(user_settings
         user_id=1,
         poll_interval_weekday=45,
         poll_interval_weekend=120,
-        quiet_hours_start="22:00",
-        quiet_hours_end="08:00",
-        timezone="UTC"
+        quiet_hours_start=time(22, 0),
+        quiet_hours_end=time(8, 0),
+        reminder_enabled=True,
+        reminder_delay_minutes=30
     )
     mock_repository.get_by_user_id = AsyncMock(return_value=mock_settings)
     mock_repository.update = AsyncMock(return_value=updated_settings)
