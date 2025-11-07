@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-tracker_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tracker_password}
       POSTGRES_DB: ${POSTGRES_DB:-tracker_db}
-    env_file:
-      - ./.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -44,8 +42,6 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tracker_user}:${POSTGRES_PASSWORD:-tracker_password}@postgres:5432/${POSTGRES_DB:-tracker_db}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    env_file:
-      - ./.env
     ports:
       - "8080:8000"
     depends_on:
@@ -66,8 +62,6 @@ services:
       DATA_API_URL: http://data_postgres_api:8000
       REDIS_URL: redis://redis:6379/0
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    env_file:
-      - ./.env
     depends_on:
       - redis
       - data_postgres_api
