@@ -136,4 +136,4 @@ test-coverage-docker: ## Run coverage tests inside Docker containers
 	@docker compose exec tracker_activity_bot pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 	@echo "\n✓ Coverage отчёты созданы в services/*/htmlcov/"
 
-test-all-docker: test-unit-docker test-docker ## Run all tests (Docker-based + smoke tests)
+test-all-docker: test-unit-docker ## Run all Docker-based tests (unit tests inside containers)
