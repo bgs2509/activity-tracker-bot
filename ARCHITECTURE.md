@@ -1,6 +1,8 @@
 # Architecture Documentation
 
-This document describes the architectural patterns and design decisions used in the Activity Tracker Bot project.
+This document describes the **current state** of architectural patterns and design decisions used in the Activity Tracker Bot project.
+
+> **Note**: This is a living document that evolves with the codebase. For historical context and decision rationale, see [Architecture Decision Records (ADRs)](docs/adr/).
 
 ## Table of Contents
 
@@ -630,6 +632,11 @@ async def create_activity(data: ActivityCreate) -> Activity:
 
 ## References
 
+### Project Documentation
+- [Architecture Decision Records (ADRs)](docs/adr/) - Historical decisions with context
+- [ADR-20251107-001: Core Architecture](docs/adr/ADR-20251107-001/) - Foundation decisions
+
+### External Resources
 - [FastAPI Best Practices](https://fastapi.tiangolo.com/tutorial/)
 - [SQLAlchemy 2.0 Documentation](https://docs.sqlalchemy.org/en/20/)
 - [Aiogram 3.x Documentation](https://docs.aiogram.dev/en/latest/)
