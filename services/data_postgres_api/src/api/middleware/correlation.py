@@ -37,10 +37,10 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
             HTTP response with correlation ID header
         """
         # Extract correlation ID from request or generate new one
-        correlation_id = request.headers.get(
-            CORRELATION_ID_HEADER,
-            str(uuid.uuid4())
-        )
+        # Generate UUID if header is missing OR empty string
+        correlation_id = request.headers.get(CORRELATION_ID_HEADER)
+        if not correlation_id:
+            correlation_id = str(uuid.uuid4())
 
         # Add to request state for access in handlers
         request.state.correlation_id = correlation_id
