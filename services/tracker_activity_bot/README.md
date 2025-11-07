@@ -55,6 +55,109 @@ docker run tracker_activity_bot
 - `REDIS_URL` - Redis connection string
 - `LOG_LEVEL` - Logging level (default: INFO)
 
+## Architecture Patterns
+
+### Dependency Injection
+
+Service dependencies are automatically injected into handlers via middleware:
+
+```python
+from src.api.dependencies import ServiceContainer
+
+@router.callback_query(F.data == "my_activities")
+async def show_activities(callback: CallbackQuery, services: ServiceContainer):
+    # Services automatically injected - no manual instantiation
+    user = await services.user.get_by_telegram_id(callback.from_user.id)
+    activities = await services.activity.get_user_activities(user["id"])
+```
+
+**Benefits**:
+- No repeated service instantiation
+- Centralized configuration
+- Easier testing with mock services
+
+**Implementation**: `src/api/middleware/service_injection.py`
+
+### Decorators
+
+#### @require_user Decorator
+
+Automatically retrieves and validates user before handler execution:
+
+```python
+from src.api.decorators import require_user
+
+@router.callback_query(F.data == "example")
+@require_user
+async def handler(callback: CallbackQuery, services: ServiceContainer, user: dict):
+    # User automatically retrieved and validated
+    # Directly use 'user' dict
+    print(user["id"])
+```
+
+**Eliminates**:
+- 8 lines of repeated user retrieval code
+- Duplicate error handling
+- Manual validation checks
+
+**Implementation**: `src/api/decorators.py`
+
+### Helper Functions
+
+#### FSM Timeout Helpers
+
+Centralized FSM timeout management:
+
+```python
+from src.application.utils.fsm_helpers import (
+    schedule_fsm_timeout,
+    cancel_fsm_timeout,
+    clear_state_and_timeout
+)
+
+# Schedule timeout
+await schedule_fsm_timeout(user_id, state, bot)
+
+# Clear state and cancel timeout in one call
+await clear_state_and_timeout(state, user_id)
+```
+
+**Implementation**: `src/application/utils/fsm_helpers.py`
+
+#### Time Calculation Helpers
+
+Poll time calculation utilities:
+
+```python
+from src.application.utils.time_helpers import (
+    get_poll_interval,
+    calculate_poll_start_time
+)
+
+# Get interval based on weekday/weekend
+interval = get_poll_interval(settings)
+
+# Calculate start time from end time
+start_time = calculate_poll_start_time(end_time, settings)
+```
+
+**Implementation**: `src/application/utils/time_helpers.py`
+
+#### Duration Formatting
+
+Consistent duration display across the application:
+
+```python
+from src.application.utils.formatters import format_duration
+
+# Converts minutes to human-readable format
+format_duration(90)   # "1ч 30м"
+format_duration(120)  # "2ч"
+format_duration(45)   # "45м"
+```
+
+**Implementation**: `src/application/utils/formatters.py`
+
 ## FSM States
 
 ### ActivityStates
@@ -66,3 +169,7 @@ docker run tracker_activity_bot
 ### CategoryStates
 - waiting_for_name
 - waiting_for_emoji
+
+### PollStates
+- waiting_for_poll_description
+- waiting_for_poll_tags

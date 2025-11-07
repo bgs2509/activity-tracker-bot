@@ -27,7 +27,13 @@ This service is part of the **Improved Hybrid Approach** architecture. It provid
 ### Activities API
 
 - `POST /api/v1/activities` - Create activity
-- `GET /api/v1/activities?user_id={id}&limit={n}&offset={n}` - Get user activities
+- `GET /api/v1/activities?user_id={id}&limit={n}` - Get recent user activities
+
+### User Settings API
+
+- `POST /api/v1/user-settings` - Create user settings
+- `GET /api/v1/user-settings?user_id={id}` - Get user settings
+- `PUT /api/v1/user-settings/{user_id}` - Update user settings
 
 ## Development
 
@@ -49,9 +55,101 @@ docker run -p 8000:8000 data_postgres_api
 - `LOG_LEVEL` - Logging level (default: INFO)
 - `API_V1_PREFIX` - API prefix (default: /api/v1)
 
+## Architecture Patterns
+
+### Generic BaseRepository Pattern
+
+All repositories inherit from a generic base repository providing common CRUD operations:
+
+```python
+from src.infrastructure.repositories.base import BaseRepository
+
+class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, User)
+
+    # Only custom methods here
+    async def get_by_telegram_id(self, telegram_id: int) -> User | None:
+        result = await self.session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        return result.scalar_one_or_none()
+```
+
+**Base Methods Provided**:
+- `get_by_id(id: int)` - Retrieve entity by primary key
+- `create(data: CreateSchemaType)` - Create new entity
+- `update(id: int, data: UpdateSchemaType)` - Update entity
+- `delete(id: int)` - Delete entity
+
+**Benefits**:
+- Eliminates ~100 lines of duplicated CRUD code
+- Type-safe through Generic types
+- Consistent interface across all repositories
+- Easy to extend with custom methods
+
+**Implementation**: `src/infrastructure/repositories/base.py`
+
+### Centralized Error Handling
+
+API routes use decorators for consistent error handling:
+
+```python
+from src.api.middleware import handle_service_errors
+
+@router.post("/")
+@handle_service_errors
+async def create_item(data: ItemCreate, service: ItemService = Depends()):
+    # ValueError automatically converted to 400 BAD REQUEST
+    # Unexpected exceptions logged and return 500
+    return await service.create(data)
+```
+
+**Error Decorators**:
+- `@handle_service_errors` - Maps ValueError → 400 BAD REQUEST
+- `@handle_service_errors_with_conflict` - Maps ValueError → 409 CONFLICT
+
+**Benefits**:
+- Eliminated ~50 lines of repeated try-except blocks
+- Structured error logging
+- Consistent error responses
+- Automatic exception handling
+
+**Implementation**: `src/api/middleware/error_handler.py`
+
+### Service Layer Pattern
+
+Business logic separated into service classes:
+
+```python
+class UserService:
+    def __init__(self, repository: UserRepository):
+        self.repository = repository
+
+    async def create_user(self, data: UserCreate) -> User:
+        # Business validation
+        if data.telegram_id < 0:
+            raise ValueError("Invalid telegram_id")
+
+        # Delegate to repository
+        return await self.repository.create(data)
+```
+
+**Layers**:
+- **API Layer** (`src/api/v1/`) - HTTP endpoints, request validation
+- **Service Layer** (`src/application/services/`) - Business logic, validation
+- **Repository Layer** (`src/infrastructure/repositories/`) - Data access
+
+**Benefits**:
+- Clear separation of concerns
+- Business rules in one place
+- Easier testing
+- Reusable business logic
+
 ## Database Schema
 
 See `models/` directory for SQLAlchemy models:
 - `User` - Telegram bot users
 - `Category` - Activity categories
-- `Activity` - User activities
+- `Activity` - User activities with duration tracking
+- `UserSettings` - User preferences and poll intervals
