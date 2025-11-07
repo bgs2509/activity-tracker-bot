@@ -41,11 +41,29 @@ def get_fsm_storage() -> RedisStorage:
 
     Returns:
         RedisStorage instance
+
+    Note:
+        This creates a shared FSM storage instance for checking user states.
+        Must call close_fsm_storage() on shutdown to prevent connection leaks.
     """
     global _fsm_storage
     if _fsm_storage is None:
         _fsm_storage = RedisStorage.from_url(app_settings.redis_url)
+        logger.info("Created shared FSM storage instance")
     return _fsm_storage
+
+
+async def close_fsm_storage() -> None:
+    """Close FSM storage and cleanup Redis connections.
+
+    This function must be called during application shutdown to prevent
+    connection pool leaks. It's safe to call multiple times.
+    """
+    global _fsm_storage
+    if _fsm_storage is not None:
+        await _fsm_storage.close()
+        _fsm_storage = None
+        logger.info("Closed FSM storage")
 
 
 async def send_automatic_poll(bot: Bot, user_id: int):
