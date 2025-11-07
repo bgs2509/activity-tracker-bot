@@ -41,15 +41,15 @@ async def get_settings(
     return UserSettingsResponse.model_validate(settings)
 
 
-@router.put("/{user_id}", response_model=UserSettingsResponse)
+@router.patch("/{settings_id}", response_model=UserSettingsResponse)
 @handle_service_errors
 async def update_settings(
-    user_id: int,
+    settings_id: int,
     settings_data: UserSettingsUpdate,
     service: Annotated[UserSettingsService, Depends(get_user_settings_service)]
 ) -> UserSettingsResponse:
     """Update user settings with validation."""
-    settings = await service.update_settings(user_id, settings_data)
+    settings = await service.update_settings(settings_id, settings_data)
     if not settings:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Settings not found")
     return UserSettingsResponse.model_validate(settings)

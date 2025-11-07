@@ -20,27 +20,3 @@ class UserSettingsRepository(BaseRepository[UserSettings, UserSettingsCreate, Us
             select(UserSettings).where(UserSettings.user_id == user_id)
         )
         return result.scalar_one_or_none()
-
-    async def update(self, user_id: int, data: UserSettingsUpdate) -> Optional[UserSettings]:
-        """
-        Update user settings by user ID.
-
-        Args:
-            user_id: User ID
-            data: Update data (Pydantic schema)
-
-        Returns:
-            Updated settings if found, None otherwise
-        """
-        settings = await self.get_by_user_id(user_id)
-        if not settings:
-            return None
-
-        # Update only provided fields (exclude_unset=True)
-        update_data = data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(settings, field, value)
-
-        await self.session.flush()
-        await self.session.refresh(settings)
-        return settings
