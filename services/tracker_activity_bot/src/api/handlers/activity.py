@@ -7,12 +7,14 @@ from aiogram.fsm.context import FSMContext
 
 from src.api.states.activity import ActivityStates
 from src.api.dependencies import ServiceContainer
+from src.api.decorators import require_user
 from src.api.keyboards.time_select import get_start_time_keyboard, get_end_time_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.api.keyboards.poll import get_poll_category_keyboard
 from src.application.utils.time_parser import parse_time_input, parse_duration
 from src.application.utils.formatters import format_time, format_duration, extract_tags, format_activity_list
 from src.application.utils.decorators import with_typing_action
+from src.application.utils.fsm_helpers import schedule_fsm_timeout, cancel_fsm_timeout, clear_state_and_timeout
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.core.constants import MAX_ACTIVITY_LIMIT
 from src.core.logging_middleware import log_user_action
@@ -36,12 +38,11 @@ async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(ActivityStates.waiting_for_start_time)
 
     # Schedule FSM timeout
-    if fsm_timeout_module.fsm_timeout_service:
-        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-            user_id=callback.from_user.id,
-            state=ActivityStates.waiting_for_start_time,
-            bot=callback.bot
-        )
+    await schedule_fsm_timeout(
+        callback.from_user.id,
+        ActivityStates.waiting_for_start_time,
+        callback.bot
+    )
 
     text = (
         "⏰ Укажи время НАЧАЛА активности\n\n"
@@ -561,10 +562,7 @@ async def save_activity(
 @with_typing_action
 async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
     """Cancel current action."""
-    await state.clear()
-    # Cancel FSM timeout
-    if fsm_timeout_module.fsm_timeout_service:
-        fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
+    await clear_state_and_timeout(state, callback.from_user.id)
     await callback.message.answer(
         "❌ Действие отменено.",
         reply_markup=get_main_menu_keyboard()
@@ -574,21 +572,10 @@ async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "my_activities")
 @with_typing_action
-async def show_my_activities(callback: types.CallbackQuery, services: ServiceContainer):
+@require_user
+async def show_my_activities(callback: types.CallbackQuery, services: ServiceContainer, user: dict):
     """Show user's recent activities."""
-    telegram_id = callback.from_user.id
-
     try:
-        # Get user
-        user = await services.user.get_by_telegram_id(telegram_id)
-        if not user:
-            await callback.message.answer(
-                "⚠️ Пользователь не найден. Отправь /start для регистрации.",
-                reply_markup=get_main_menu_keyboard()
-            )
-            await callback.answer()
-            return
-
         # Get user's activities
         response = await services.activity.get_user_activities(user["id"], limit=MAX_ACTIVITY_LIMIT)
         activities = response.get("items", [])

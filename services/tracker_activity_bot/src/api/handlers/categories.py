@@ -15,6 +15,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import httpx
 
 from src.api.dependencies import ServiceContainer
+from src.api.decorators import require_user
 from src.api.states.category import CategoryStates
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.api.keyboards.main_menu import get_main_menu_keyboard
@@ -32,7 +33,8 @@ logger = logging.getLogger(__name__)
 @router.callback_query(F.data == "categories")
 @with_typing_action
 @log_user_action("categories_button_clicked")
-async def show_categories_list(callback: types.CallbackQuery, services: ServiceContainer):
+@require_user
+async def show_categories_list(callback: types.CallbackQuery, services: ServiceContainer, user: dict):
     """
     Show list of user's categories.
 
@@ -42,13 +44,6 @@ async def show_categories_list(callback: types.CallbackQuery, services: ServiceC
         "User opened categories list",
         extra={"user_id": callback.from_user.id}
     )
-    telegram_id = callback.from_user.id
-
-    # Get user
-    user = await services.user.get_by_telegram_id(telegram_id)
-    if not user:
-        await callback.answer("❌ Пользователь не найден. Используй /start", show_alert=True)
-        return
 
     # Get categories
     categories = await services.category.get_user_categories(user["id"])
