@@ -1,22 +1,18 @@
 """User Settings repository."""
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.user_settings import UserSettings
+from src.schemas.user_settings import UserSettingsCreate, UserSettingsUpdate
+from src.infrastructure.repositories.base import BaseRepository
 
 
-class UserSettingsRepository:
+class UserSettingsRepository(BaseRepository[UserSettings, UserSettingsCreate, UserSettingsUpdate]):
     """Repository for UserSettings CRUD operations."""
 
     def __init__(self, session: AsyncSession):
-        self.session = session
-
-    async def create(self, user_settings: UserSettings) -> UserSettings:
-        """Create new user settings."""
-        self.session.add(user_settings)
-        await self.session.commit()
-        await self.session.refresh(user_settings)
-        return user_settings
+        super().__init__(session, UserSettings)
 
     async def get_by_user_id(self, user_id: int) -> UserSettings | None:
         """Get user settings by user ID."""
@@ -25,20 +21,26 @@ class UserSettingsRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_id(self, settings_id: int) -> UserSettings | None:
-        """Get user settings by ID."""
-        result = await self.session.execute(
-            select(UserSettings).where(UserSettings.id == settings_id)
-        )
-        return result.scalar_one_or_none()
+    async def update(self, user_id: int, data: UserSettingsUpdate) -> Optional[UserSettings]:
+        """
+        Update user settings by user ID.
 
-    async def update(self, user_settings: UserSettings) -> UserSettings:
-        """Update user settings."""
-        await self.session.commit()
-        await self.session.refresh(user_settings)
-        return user_settings
+        Args:
+            user_id: User ID
+            data: Update data (Pydantic schema)
 
-    async def delete(self, user_settings: UserSettings) -> None:
-        """Delete user settings."""
-        await self.session.delete(user_settings)
-        await self.session.commit()
+        Returns:
+            Updated settings if found, None otherwise
+        """
+        settings = await self.get_by_user_id(user_id)
+        if not settings:
+            return None
+
+        # Update only provided fields (exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(settings, field, value)
+
+        await self.session.flush()
+        await self.session.refresh(settings)
+        return settings

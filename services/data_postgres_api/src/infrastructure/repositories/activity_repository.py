@@ -1,48 +1,61 @@
 """Activity repository."""
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 
 from src.domain.models.activity import Activity
 from src.schemas.activity import ActivityCreate
+from src.infrastructure.repositories.base import BaseRepository
 
 
-class ActivityRepository:
+# Placeholder update schema for BaseRepository (activities don't have updates)
+class ActivityUpdate(BaseModel):
+    """Placeholder update schema for Activity."""
+    pass
+
+
+class ActivityRepository(BaseRepository[Activity, ActivityCreate, ActivityUpdate]):
     """Repository for Activity model."""
 
     def __init__(self, session: AsyncSession):
-        self.session = session
+        super().__init__(session, Activity)
 
-    async def create(self, activity_data: ActivityCreate) -> Activity:
-        """Create a new activity."""
+    async def create(self, data: ActivityCreate) -> Activity:
+        """
+        Create a new activity with calculated duration and formatted tags.
+
+        Overrides base create() to add custom logic for:
+        - Duration calculation from start_time to end_time
+        - Tag list to comma-separated string conversion
+
+        Args:
+            data: Activity creation data
+
+        Returns:
+            Created activity with generated ID
+        """
         # Calculate duration in minutes
-        duration = (activity_data.end_time - activity_data.start_time).total_seconds() / 60
+        duration = (data.end_time - data.start_time).total_seconds() / 60
         duration_minutes = round(duration)
 
         # Convert tags list to comma-separated string
         tags_str = None
-        if activity_data.tags:
-            tags_str = ",".join(activity_data.tags)
+        if data.tags:
+            tags_str = ",".join(data.tags)
 
         activity = Activity(
-            user_id=activity_data.user_id,
-            category_id=activity_data.category_id,
-            description=activity_data.description,
+            user_id=data.user_id,
+            category_id=data.category_id,
+            description=data.description,
             tags=tags_str,
-            start_time=activity_data.start_time,
-            end_time=activity_data.end_time,
+            start_time=data.start_time,
+            end_time=data.end_time,
             duration_minutes=duration_minutes,
         )
         self.session.add(activity)
         await self.session.flush()
         await self.session.refresh(activity)
         return activity
-
-    async def get_by_id(self, activity_id: int) -> Activity | None:
-        """Get activity by ID."""
-        result = await self.session.execute(
-            select(Activity).where(Activity.id == activity_id)
-        )
-        return result.scalar_one_or_none()
 
     async def get_by_user(
         self,
