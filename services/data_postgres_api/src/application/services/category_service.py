@@ -53,6 +53,36 @@ class CategoryService:
 
         return await self.repository.create(category_data)
 
+    async def bulk_create_categories(
+        self, user_id: int, categories_data: list[CategoryCreate]
+    ) -> list[Category]:
+        """
+        Bulk create categories for user, skipping duplicates.
+
+        Args:
+            user_id: User identifier
+            categories_data: List of category creation data
+
+        Returns:
+            List of successfully created categories (excludes duplicates)
+        """
+        created_categories = []
+
+        for category_data in categories_data:
+            # Check if category already exists
+            existing = await self.repository.get_by_user_and_name(
+                user_id, category_data.name
+            )
+            if existing:
+                # Skip duplicate
+                continue
+
+            # Create new category
+            created = await self.repository.create(category_data)
+            created_categories.append(created)
+
+        return created_categories
+
     async def get_user_categories(self, user_id: int) -> list[Category]:
         """
         Get all categories for user.
