@@ -36,9 +36,14 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
         ]
         await services.category.bulk_create_categories(user["id"], default_categories)
 
-        # Create user settings with defaults
-        settings = await services.settings.create_settings(user["id"])
-        logger.info(f"Created settings for user {user['id']}: {settings}")
+        # Create user settings with defaults (or fetch if already exist)
+        try:
+            settings = await services.settings.create_settings(user["id"])
+            logger.info(f"Created settings for user {user['id']}: {settings}")
+        except Exception as e:
+            # Settings already exist (e.g., user was previously created)
+            logger.info(f"Settings already exist for user {user['id']}, fetching existing settings")
+            settings = await services.settings.get_settings(user["id"])
 
         # Schedule first automatic poll
         user_timezone = user.get("timezone", "Europe/Moscow")
