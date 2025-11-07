@@ -9,6 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from src.api.dependencies import get_activity_service
+from src.api.middleware import handle_service_errors
 from src.application.services.activity_service import ActivityService
 from src.schemas.activity import (
     ActivityCreate,
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/activities", tags=["activities"])
     summary="Create activity",
     description="Create new activity record with time validation"
 )
+@handle_service_errors
 async def create_activity(
     activity_data: ActivityCreate,
     service: Annotated[ActivityService, Depends(get_activity_service)]
@@ -43,14 +45,8 @@ async def create_activity(
     Raises:
         HTTPException: 400 if business validation fails
     """
-    try:
-        activity = await service.create_activity(activity_data)
-        return ActivityResponse.model_validate(activity)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    activity = await service.create_activity(activity_data)
+    return ActivityResponse.model_validate(activity)
 
 
 @router.get(
@@ -59,6 +55,7 @@ async def create_activity(
     summary="List activities",
     description="Get paginated activities for user"
 )
+@handle_service_errors
 async def get_activities(
     user_id: Annotated[int, Query(description="User ID")],
     limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
@@ -80,15 +77,9 @@ async def get_activities(
     Raises:
         HTTPException: 400 if pagination parameters invalid
     """
-    try:
-        activities, total = await service.get_user_activities(user_id, limit, offset)
+    activities, total = await service.get_user_activities(user_id, limit, offset)
 
-        return ActivityListResponse(
-            total=total,
-            items=[ActivityResponse.model_validate(act) for act in activities]
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    return ActivityListResponse(
+        total=total,
+        items=[ActivityResponse.model_validate(act) for act in activities]
+    )

@@ -9,6 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from src.api.dependencies import get_category_service
+from src.api.middleware import handle_service_errors_with_conflict
 from src.application.services.category_service import CategoryService
 from src.schemas.category import (
     CategoryCreate,
@@ -22,16 +23,14 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 
 @router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
+@handle_service_errors_with_conflict
 async def create_category(
     category_data: CategoryCreate,
     service: Annotated[CategoryService, Depends(get_category_service)]
 ) -> CategoryResponse:
     """Create new category with duplicate check."""
-    try:
-        category = await service.create_category(category_data)
-        return CategoryResponse.model_validate(category)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    category = await service.create_category(category_data)
+    return CategoryResponse.model_validate(category)
 
 
 @router.post("/bulk-create", response_model=CategoryBulkResponse, status_code=status.HTTP_201_CREATED)
@@ -76,7 +75,8 @@ async def delete_category(
     try:
         await service.delete_category(category_id)
     except ValueError as e:
+        # Special handling: distinguish between not found (404) and validation errors (400)
         error_msg = str(e)
-        if "not found" in error_msg:
+        if "not found" in error_msg.lower():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)

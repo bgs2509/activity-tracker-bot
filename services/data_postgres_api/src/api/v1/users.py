@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 
 from src.api.dependencies import get_user_service
+from src.api.middleware import handle_service_errors_with_conflict
 from src.application.services.user_service import UserService
 from src.schemas.user import UserCreate, UserResponse
 
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@handle_service_errors_with_conflict
 async def create_user(
     user_data: UserCreate,
     service: Annotated[UserService, Depends(get_user_service)]
@@ -23,12 +25,9 @@ async def create_user(
     existing = await service.get_by_telegram_id(user_data.telegram_id)
     if existing:
         return UserResponse.model_validate(existing)
-    
-    try:
-        user = await service.create_user(user_data)
-        return UserResponse.model_validate(user)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+    user = await service.create_user(user_data)
+    return UserResponse.model_validate(user)
 
 
 @router.get("/by-telegram-id/{telegram_id}", response_model=UserResponse)
@@ -56,4 +55,5 @@ async def update_last_poll_time(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         return UserResponse.model_validate(user)
     except ValueError as e:
+        # Service may raise ValueError for not found cases
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
