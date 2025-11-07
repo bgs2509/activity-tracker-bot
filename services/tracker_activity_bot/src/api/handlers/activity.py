@@ -6,10 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from src.api.states.activity import ActivityStates
-from src.infrastructure.http_clients.http_client import DataAPIClient
-from src.infrastructure.http_clients.activity_service import ActivityService
-from src.infrastructure.http_clients.category_service import CategoryService
-from src.infrastructure.http_clients.user_service import UserService
+from src.api.dependencies import ServiceContainer
 from src.api.keyboards.time_select import get_start_time_keyboard, get_end_time_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.api.keyboards.poll import get_poll_category_keyboard
@@ -22,8 +19,6 @@ from src.core.logging_middleware import log_user_action
 
 router = Router()
 logger = logging.getLogger(__name__)
-
-api_client = DataAPIClient()
 
 
 @router.callback_query(F.data == "add_activity")
@@ -339,7 +334,7 @@ async def process_end_time(message: types.Message, state: FSMContext):
 
 
 @router.message(ActivityStates.waiting_for_description)
-async def process_description(message: types.Message, state: FSMContext):
+async def process_description(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process activity description (text message)."""
     description = message.text.strip()
 
@@ -363,12 +358,10 @@ async def process_description(message: types.Message, state: FSMContext):
         )
 
     # Get user's categories
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
     telegram_id = message.from_user.id
 
     try:
-        user = await user_service.get_by_telegram_id(telegram_id)
+        user = await services.user.get_by_telegram_id(telegram_id)
         if not user:
             await message.answer(
                 "⚠️ Пользователь не найден.",
@@ -377,7 +370,7 @@ async def process_description(message: types.Message, state: FSMContext):
             await state.clear()
             return
 
-        categories = await category_service.get_user_categories(user["id"])
+        categories = await services.category.get_user_categories(user["id"])
 
         if not categories:
             await message.answer(
@@ -385,7 +378,7 @@ async def process_description(message: types.Message, state: FSMContext):
                 reply_markup=get_main_menu_keyboard()
             )
             # Save without category
-            await save_activity(message, state, user["id"], None, message.from_user.id)
+            await save_activity(message, state, user["id"], None, message.from_user.id, services)
             return
 
         # Store categories and user_id for callback handlers
@@ -415,7 +408,7 @@ async def process_description(message: types.Message, state: FSMContext):
 
 @router.callback_query(ActivityStates.waiting_for_category, F.data.startswith("poll_category_"))
 @with_typing_action
-async def process_category_callback(callback: types.CallbackQuery, state: FSMContext):
+async def process_category_callback(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
     """Process category selection via inline button.
 
     User selected category from inline keyboard. Extract category_id
@@ -440,7 +433,7 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
 
     # Save activity with selected category
     await save_activity(
-        callback.message, state, user_id, category_id, callback.from_user.id
+        callback.message, state, user_id, category_id, callback.from_user.id, services
     )
     await callback.answer()
 
@@ -461,7 +454,7 @@ async def cancel_category_selection(callback: types.CallbackQuery, state: FSMCon
 
 
 @router.message(ActivityStates.waiting_for_category)
-async def process_category(message: types.Message, state: FSMContext):
+async def process_category(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process category selection (text message).
 
     Fallback text handler - only allows "0" to skip category.
@@ -471,11 +464,10 @@ async def process_category(message: types.Message, state: FSMContext):
 
     # Only allow "0" to skip category - main selection via inline buttons
     if text == "0":
-        user_service = UserService(api_client)
         telegram_id = message.from_user.id
 
         try:
-            user = await user_service.get_by_telegram_id(telegram_id)
+            user = await services.user.get_by_telegram_id(telegram_id)
             if not user:
                 await message.answer(
                     "⚠️ Пользователь не найден.",
@@ -485,7 +477,7 @@ async def process_category(message: types.Message, state: FSMContext):
                 return
 
             # Save activity without category
-            await save_activity(message, state, user["id"], None, message.from_user.id)
+            await save_activity(message, state, user["id"], None, message.from_user.id, services)
 
         except Exception as e:
             logger.error(f"Error in process_category: {e}")
@@ -507,12 +499,10 @@ async def save_activity(
     state: FSMContext,
     user_id: int,
     category_id: int | None,
-    telegram_user_id: int
+    telegram_user_id: int,
+    services: ServiceContainer
 ):
     """Save activity to database."""
-    activity_service = ActivityService(api_client)
-    user_service = UserService(api_client)
-
     data = await state.get_data()
     start_time_str = data.get("start_time")
     end_time_str = data.get("end_time")
@@ -532,7 +522,7 @@ async def save_activity(
         end_time = datetime.fromisoformat(end_time_str)
 
         # Create activity
-        await activity_service.create_activity(
+        await services.activity.create_activity(
             user_id=user_id,
             category_id=category_id,
             description=description,
@@ -584,16 +574,13 @@ async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "my_activities")
 @with_typing_action
-async def show_my_activities(callback: types.CallbackQuery):
+async def show_my_activities(callback: types.CallbackQuery, services: ServiceContainer):
     """Show user's recent activities."""
-    user_service = UserService(api_client)
-    activity_service = ActivityService(api_client)
-
     telegram_id = callback.from_user.id
 
     try:
         # Get user
-        user = await user_service.get_by_telegram_id(telegram_id)
+        user = await services.user.get_by_telegram_id(telegram_id)
         if not user:
             await callback.message.answer(
                 "⚠️ Пользователь не найден. Отправь /start для регистрации.",
@@ -603,7 +590,7 @@ async def show_my_activities(callback: types.CallbackQuery):
             return
 
         # Get user's activities
-        response = await activity_service.get_user_activities(user["id"], limit=MAX_ACTIVITY_LIMIT)
+        response = await services.activity.get_user_activities(user["id"], limit=MAX_ACTIVITY_LIMIT)
         activities = response.get("items", [])
 
         # Format and send

@@ -3,38 +3,28 @@ import logging
 from aiogram import Router, types
 from aiogram.filters import Command
 
-from src.infrastructure.http_clients.http_client import DataAPIClient
-from src.infrastructure.http_clients.user_service import UserService
-from src.infrastructure.http_clients.category_service import CategoryService
-from src.infrastructure.http_clients.user_settings_service import UserSettingsService
+from src.api.dependencies import ServiceContainer
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.services.scheduler_service import scheduler_service
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Global API client (will be initialized in main.py)
-api_client = DataAPIClient()
-
 
 @router.message(Command("start"))
-async def cmd_start(message: types.Message):
+async def cmd_start(message: types.Message, services: ServiceContainer):
     """Handle /start command."""
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
-    settings_service = UserSettingsService(api_client)
-
     telegram_id = message.from_user.id
     username = message.from_user.username
     first_name = message.from_user.first_name
 
     # Check if user exists
-    user = await user_service.get_by_telegram_id(telegram_id)
+    user = await services.user.get_by_telegram_id(telegram_id)
 
     if not user:
         # Create new user
         logger.info(f"Creating new user: telegram_id={telegram_id}")
-        user = await user_service.create_user(telegram_id, username, first_name)
+        user = await services.user.create_user(telegram_id, username, first_name)
 
         # Create default categories
         default_categories = [
@@ -45,10 +35,10 @@ async def cmd_start(message: types.Message):
             {"name": "Сон", "emoji": "😴", "is_default": True},
             {"name": "Еда", "emoji": "🍽️", "is_default": True},
         ]
-        await category_service.bulk_create_categories(user["id"], default_categories)
+        await services.category.bulk_create_categories(user["id"], default_categories)
 
         # Create user settings with defaults
-        settings = await settings_service.create_settings(user["id"])
+        settings = await services.settings.create_settings(user["id"])
         logger.info(f"Created settings for user {user['id']}: {settings}")
 
         # Schedule first automatic poll
@@ -79,10 +69,10 @@ async def cmd_start(message: types.Message):
         )
     else:
         # Check if user has settings (for backward compatibility with existing users)
-        settings = await settings_service.get_settings(user["id"])
+        settings = await services.settings.get_settings(user["id"])
         if not settings:
             logger.info(f"Creating missing settings for existing user {user['id']}")
-            settings = await settings_service.create_settings(user["id"])
+            settings = await services.settings.create_settings(user["id"])
 
             # Schedule poll for existing user who didn't have settings
             user_timezone = user.get("timezone", "Europe/Moscow")

@@ -14,9 +14,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import httpx
 
-from src.infrastructure.http_clients.http_client import DataAPIClient
-from src.infrastructure.http_clients.category_service import CategoryService
-from src.infrastructure.http_clients.user_service import UserService
+from src.api.dependencies import ServiceContainer
 from src.api.states.category import CategoryStates
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.api.keyboards.main_menu import get_main_menu_keyboard
@@ -26,9 +24,6 @@ from src.core.logging_middleware import log_user_action
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Global API client (shared with other handlers)
-api_client = DataAPIClient()
-
 
 # ============================================================================
 # 1. CATEGORY LIST VIEW
@@ -37,7 +32,7 @@ api_client = DataAPIClient()
 @router.callback_query(F.data == "categories")
 @with_typing_action
 @log_user_action("categories_button_clicked")
-async def show_categories_list(callback: types.CallbackQuery):
+async def show_categories_list(callback: types.CallbackQuery, services: ServiceContainer):
     """
     Show list of user's categories.
 
@@ -47,19 +42,16 @@ async def show_categories_list(callback: types.CallbackQuery):
         "User opened categories list",
         extra={"user_id": callback.from_user.id}
     )
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
-
     telegram_id = callback.from_user.id
 
     # Get user
-    user = await user_service.get_by_telegram_id(telegram_id)
+    user = await services.user.get_by_telegram_id(telegram_id)
     if not user:
         await callback.answer("❌ Пользователь не найден. Используй /start", show_alert=True)
         return
 
     # Get categories
-    categories = await category_service.get_user_categories(user["id"])
+    categories = await services.category.get_user_categories(user["id"])
 
     # Build category list text
     text = "📂 Твои категории активностей:\n\n"
@@ -240,7 +232,7 @@ async def add_category_name(message: types.Message, state: FSMContext):
 
 @router.callback_query(CategoryStates.waiting_for_emoji, F.data.startswith("emoji:"))
 @with_typing_action
-async def add_category_emoji_button(callback: types.CallbackQuery, state: FSMContext):
+async def add_category_emoji_button(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
     """
     Process emoji selection from keyboard.
 
@@ -255,7 +247,7 @@ async def add_category_emoji_button(callback: types.CallbackQuery, state: FSMCon
         await callback.answer()
         return
 
-    await create_category_final(callback.from_user.id, state, emoji, callback.message)
+    await create_category_final(callback.from_user.id, state, emoji, callback.message, services)
     await state.clear()
     if fsm_timeout_module.fsm_timeout_service:
         fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
@@ -263,7 +255,7 @@ async def add_category_emoji_button(callback: types.CallbackQuery, state: FSMCon
 
 
 @router.message(CategoryStates.waiting_for_emoji)
-async def add_category_emoji_text(message: types.Message, state: FSMContext):
+async def add_category_emoji_text(message: types.Message, state: FSMContext, services: ServiceContainer):
     """
     Process emoji sent as text message.
 
@@ -276,23 +268,26 @@ async def add_category_emoji_text(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Эмодзи слишком длинный (максимум 10 символов). Попробуй ещё раз:")
         return
 
-    await create_category_final(message.from_user.id, state, emoji, message)
+    await create_category_final(message.from_user.id, state, emoji, message, services)
     await state.clear()
     if fsm_timeout_module.fsm_timeout_service:
         fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
 
 
-async def create_category_final(telegram_id: int, state: FSMContext, emoji: str | None, message: types.Message):
+async def create_category_final(
+    telegram_id: int,
+    state: FSMContext,
+    emoji: str | None,
+    message: types.Message,
+    services: ServiceContainer
+):
     """
     Create category in database.
 
     Final FSM step: POST /api/v1/categories
     """
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
-
     # Get user
-    user = await user_service.get_by_telegram_id(telegram_id)
+    user = await services.user.get_by_telegram_id(telegram_id)
     if not user:
         await message.answer("❌ Пользователь не найден. Используй /start")
         return
@@ -303,7 +298,7 @@ async def create_category_final(telegram_id: int, state: FSMContext, emoji: str 
 
     try:
         # Create category
-        category = await category_service.create_category(
+        category = await services.category.create_category(
             user_id=user["id"],
             name=name,
             emoji=emoji,
@@ -352,25 +347,22 @@ async def create_category_final(telegram_id: int, state: FSMContext, emoji: str 
 
 @router.callback_query(F.data == "delete_category_start")
 @with_typing_action
-async def delete_category_select(callback: types.CallbackQuery):
+async def delete_category_select(callback: types.CallbackQuery, services: ServiceContainer):
     """
     Show category selection for deletion.
 
     Step 1: Display categories as inline buttons
     """
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
-
     telegram_id = callback.from_user.id
 
     # Get user
-    user = await user_service.get_by_telegram_id(telegram_id)
+    user = await services.user.get_by_telegram_id(telegram_id)
     if not user:
         await callback.answer("❌ Пользователь не найден. Используй /start", show_alert=True)
         return
 
     # Get categories
-    categories = await category_service.get_user_categories(user["id"])
+    categories = await services.category.get_user_categories(user["id"])
 
     text = "Выбери категорию для удаления:"
 
@@ -400,7 +392,7 @@ async def delete_category_select(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("delete_cat:"))
 @with_typing_action
-async def delete_category_confirm(callback: types.CallbackQuery):
+async def delete_category_confirm(callback: types.CallbackQuery, services: ServiceContainer):
     """
     Request confirmation for category deletion.
 
@@ -408,19 +400,16 @@ async def delete_category_confirm(callback: types.CallbackQuery):
     """
     category_id = int(callback.data.split(":", 1)[1])
 
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
-
     telegram_id = callback.from_user.id
 
     # Get user
-    user = await user_service.get_by_telegram_id(telegram_id)
+    user = await services.user.get_by_telegram_id(telegram_id)
     if not user:
         await callback.answer("❌ Пользователь не найден. Используй /start", show_alert=True)
         return
 
     # Get category info
-    categories = await category_service.get_user_categories(user["id"])
+    categories = await services.category.get_user_categories(user["id"])
     category = next((cat for cat in categories if cat["id"] == category_id), None)
 
     if not category:
@@ -446,7 +435,7 @@ async def delete_category_confirm(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("delete_confirm:"))
 @with_typing_action
-async def delete_category_execute(callback: types.CallbackQuery):
+async def delete_category_execute(callback: types.CallbackQuery, services: ServiceContainer):
     """
     Execute category deletion.
 
@@ -454,19 +443,16 @@ async def delete_category_execute(callback: types.CallbackQuery):
     """
     category_id = int(callback.data.split(":", 1)[1])
 
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
-
     telegram_id = callback.from_user.id
 
     # Get user
-    user = await user_service.get_by_telegram_id(telegram_id)
+    user = await services.user.get_by_telegram_id(telegram_id)
     if not user:
         await callback.answer("❌ Пользователь не найден. Используй /start", show_alert=True)
         return
 
     # Get category info before deletion
-    categories = await category_service.get_user_categories(user["id"])
+    categories = await services.category.get_user_categories(user["id"])
     category = next((cat for cat in categories if cat["id"] == category_id), None)
 
     if not category:
@@ -478,7 +464,7 @@ async def delete_category_execute(callback: types.CallbackQuery):
 
     try:
         # Delete category
-        await category_service.delete_category(category_id)
+        await services.category.delete_category(category_id)
 
         text = f"✅ Категория \"{emoji} {name}\" удалена."
 

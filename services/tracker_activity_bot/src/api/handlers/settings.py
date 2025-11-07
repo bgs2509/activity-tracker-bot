@@ -9,9 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from src.api.states.settings import SettingsStates
-from src.infrastructure.http_clients.http_client import DataAPIClient
-from src.infrastructure.http_clients.user_service import UserService
-from src.infrastructure.http_clients.user_settings_service import UserSettingsService
+from src.api.dependencies import ServiceContainer
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.api.keyboards.settings import (
     get_main_settings_keyboard,
@@ -33,29 +31,24 @@ from src.core.logging_middleware import log_user_action
 router = Router()
 logger = logging.getLogger(__name__)
 
-api_client = DataAPIClient()
-
 
 @router.callback_query(F.data == "settings")
 @with_typing_action
 @log_user_action("settings_button_clicked")
-async def show_settings_menu(callback: types.CallbackQuery):
+async def show_settings_menu(callback: types.CallbackQuery, services: ServiceContainer):
     """Show main settings menu."""
     logger.debug(
         "User opened settings menu",
         extra={"user_id": callback.from_user.id}
-    )
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+    )    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
+    user = await services.user.get_by_telegram_id(telegram_id)
     if not user:
         await callback.message.answer("⚠️ Пользователь не найден.", reply_markup=get_main_menu_keyboard())
         await callback.answer()
         return
 
-    settings = await settings_service.get_settings(user["id"])
+    settings = await services.settings.get_settings(user["id"])
     if not settings:
         await callback.message.answer("⚠️ Настройки не найдены.", reply_markup=get_main_menu_keyboard())
         await callback.answer()
@@ -184,7 +177,7 @@ async def show_settings_menu(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "settings_intervals")
 @with_typing_action
-async def show_interval_type(callback: types.CallbackQuery):
+async def show_interval_type(callback: types.CallbackQuery, services: ServiceContainer):
     """Show interval type selection."""
     text = (
         "📅 Настройка интервалов опросов\n\n"
@@ -197,14 +190,11 @@ async def show_interval_type(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "interval_weekday")
 @with_typing_action
-async def show_weekday_intervals(callback: types.CallbackQuery):
-    """Show weekday interval selection."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def show_weekday_intervals(callback: types.CallbackQuery, services: ServiceContainer):
+    """Show weekday interval selection."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     current = settings["poll_interval_weekday"]
     hours = current // 60
@@ -221,21 +211,17 @@ async def show_weekday_intervals(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("set_weekday_"))
 @with_typing_action
-async def set_weekday_interval(callback: types.CallbackQuery):
+async def set_weekday_interval(callback: types.CallbackQuery, services: ServiceContainer):
     """Set weekday interval."""
-    interval = int(callback.data.split("_")[2])
+    interval = int(callback.data.split("_")[2])    telegram_id = callback.from_user.id
 
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
-
-    await settings_service.update_settings(settings["id"], poll_interval_weekday=interval)
+    await services.settings.update_settings(settings["id"], poll_interval_weekday=interval)
 
     # Fetch updated settings and reschedule poll with new interval
-    updated_settings = await settings_service.get_settings(user["id"])
+    updated_settings = await services.settings.get_settings(user["id"])
     from src.api.handlers.poll import send_automatic_poll
     await scheduler_service.schedule_poll(
         user_id=telegram_id,
@@ -277,7 +263,7 @@ async def show_weekday_custom_input(callback: types.CallbackQuery, state: FSMCon
 
 
 @router.message(SettingsStates.waiting_for_weekday_interval_custom)
-async def process_weekday_custom_input(message: types.Message, state: FSMContext):
+async def process_weekday_custom_input(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process custom weekday interval input."""
     try:
         interval = int(message.text.strip())
@@ -288,19 +274,15 @@ async def process_weekday_custom_input(message: types.Message, state: FSMContext
                 "⚠️ Интервал должен быть от 15 до 360 минут.\n"
                 "Попробуй ещё раз:"
             )
-            return
+            return        telegram_id = message.from_user.id
 
-        user_service = UserService(api_client)
-        settings_service = UserSettingsService(api_client)
-        telegram_id = message.from_user.id
+        user = await services.user.get_by_telegram_id(telegram_id)
+        settings = await services.settings.get_settings(user["id"])
 
-        user = await user_service.get_by_telegram_id(telegram_id)
-        settings = await settings_service.get_settings(user["id"])
-
-        await settings_service.update_settings(settings["id"], poll_interval_weekday=interval)
+        await services.settings.update_settings(settings["id"], poll_interval_weekday=interval)
 
         # Fetch updated settings and reschedule poll
-        updated_settings = await settings_service.get_settings(user["id"])
+        updated_settings = await services.settings.get_settings(user["id"])
         from src.api.handlers.poll import send_automatic_poll
         await scheduler_service.schedule_poll(
             user_id=telegram_id,
@@ -338,14 +320,11 @@ async def process_weekday_custom_input(message: types.Message, state: FSMContext
 
 @router.callback_query(F.data == "interval_weekend")
 @with_typing_action
-async def show_weekend_intervals(callback: types.CallbackQuery):
-    """Show weekend interval selection."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def show_weekend_intervals(callback: types.CallbackQuery, services: ServiceContainer):
+    """Show weekend interval selection."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     current = settings["poll_interval_weekend"]
     hours = current // 60
@@ -362,21 +341,17 @@ async def show_weekend_intervals(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("set_weekend_"))
 @with_typing_action
-async def set_weekend_interval(callback: types.CallbackQuery):
+async def set_weekend_interval(callback: types.CallbackQuery, services: ServiceContainer):
     """Set weekend interval."""
-    interval = int(callback.data.split("_")[2])
+    interval = int(callback.data.split("_")[2])    telegram_id = callback.from_user.id
 
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
-
-    await settings_service.update_settings(settings["id"], poll_interval_weekend=interval)
+    await services.settings.update_settings(settings["id"], poll_interval_weekend=interval)
 
     # Fetch updated settings and reschedule poll with new interval
-    updated_settings = await settings_service.get_settings(user["id"])
+    updated_settings = await services.settings.get_settings(user["id"])
     from src.api.handlers.poll import send_automatic_poll
     await scheduler_service.schedule_poll(
         user_id=telegram_id,
@@ -418,7 +393,7 @@ async def show_weekend_custom_input(callback: types.CallbackQuery, state: FSMCon
 
 
 @router.message(SettingsStates.waiting_for_weekend_interval_custom)
-async def process_weekend_custom_input(message: types.Message, state: FSMContext):
+async def process_weekend_custom_input(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process custom weekend interval input."""
     try:
         interval = int(message.text.strip())
@@ -429,19 +404,15 @@ async def process_weekend_custom_input(message: types.Message, state: FSMContext
                 "⚠️ Интервал должен быть от 15 до 480 минут.\n"
                 "Попробуй ещё раз:"
             )
-            return
+            return        telegram_id = message.from_user.id
 
-        user_service = UserService(api_client)
-        settings_service = UserSettingsService(api_client)
-        telegram_id = message.from_user.id
+        user = await services.user.get_by_telegram_id(telegram_id)
+        settings = await services.settings.get_settings(user["id"])
 
-        user = await user_service.get_by_telegram_id(telegram_id)
-        settings = await settings_service.get_settings(user["id"])
-
-        await settings_service.update_settings(settings["id"], poll_interval_weekend=interval)
+        await services.settings.update_settings(settings["id"], poll_interval_weekend=interval)
 
         # Fetch updated settings and reschedule poll
-        updated_settings = await settings_service.get_settings(user["id"])
+        updated_settings = await services.settings.get_settings(user["id"])
         from src.api.handlers.poll import send_automatic_poll
         await scheduler_service.schedule_poll(
             user_id=telegram_id,
@@ -479,14 +450,11 @@ async def process_weekend_custom_input(message: types.Message, state: FSMContext
 
 @router.callback_query(F.data == "settings_quiet_hours")
 @with_typing_action
-async def show_quiet_hours(callback: types.CallbackQuery):
-    """Show quiet hours configuration."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def show_quiet_hours(callback: types.CallbackQuery, services: ServiceContainer):
+    """Show quiet hours configuration."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     enabled = settings["quiet_hours_start"] is not None
 
@@ -512,20 +480,17 @@ async def show_quiet_hours(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "quiet_toggle")
 @with_typing_action
-async def toggle_quiet_hours(callback: types.CallbackQuery):
-    """Toggle quiet hours on/off."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def toggle_quiet_hours(callback: types.CallbackQuery, services: ServiceContainer):
+    """Toggle quiet hours on/off."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     enabled = settings["quiet_hours_start"] is not None
 
     if enabled:
         # Disable quiet hours
-        await settings_service.update_settings(
+        await services.settings.update_settings(
             settings["id"],
             quiet_hours_start=None,
             quiet_hours_end=None
@@ -533,7 +498,7 @@ async def toggle_quiet_hours(callback: types.CallbackQuery):
         text = "✅ Тихие часы отключены\n\nТеперь бот будет опрашивать круглосуточно (в рамках установленных интервалов)."
     else:
         # Enable quiet hours with defaults
-        await settings_service.update_settings(
+        await services.settings.update_settings(
             settings["id"],
             quiet_hours_start="23:00:00",
             quiet_hours_end="07:00:00"
@@ -546,7 +511,7 @@ async def toggle_quiet_hours(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "quiet_time")
 @with_typing_action
-async def show_quiet_time_selection(callback: types.CallbackQuery):
+async def show_quiet_time_selection(callback: types.CallbackQuery, services: ServiceContainer):
     """Show selection between start and end time."""
     text = (
         "⏰ Изменить время тихих часов\n\n"
@@ -563,14 +528,11 @@ async def show_quiet_time_selection(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "quiet_select_start")
 @with_typing_action
-async def show_quiet_start_selection(callback: types.CallbackQuery):
-    """Show quiet hours start time selection."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def show_quiet_start_selection(callback: types.CallbackQuery, services: ServiceContainer):
+    """Show quiet hours start time selection."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     current_start = settings["quiet_hours_start"]
     current_text = current_start[:5] if current_start else "не установлено"
@@ -587,14 +549,11 @@ async def show_quiet_start_selection(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "quiet_select_end")
 @with_typing_action
-async def show_quiet_end_selection(callback: types.CallbackQuery):
-    """Show quiet hours end time selection."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def show_quiet_end_selection(callback: types.CallbackQuery, services: ServiceContainer):
+    """Show quiet hours end time selection."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     current_end = settings["quiet_hours_end"]
     current_text = current_end[:5] if current_end else "не установлено"
@@ -630,17 +589,13 @@ async def set_quiet_start_time(callback: types.CallbackQuery, state: FSMContext)
         await callback.answer()
         return
 
-    time_str = parts[-1]  # e.g., "23:00"
+    time_str = parts[-1]  # e.g., "23:00"    telegram_id = callback.from_user.id
 
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
-
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     # Update with full time format (HH:MM:SS)
-    await settings_service.update_settings(
+    await services.settings.update_settings(
         settings["id"],
         quiet_hours_start=f"{time_str}:00"
     )
@@ -672,17 +627,13 @@ async def set_quiet_end_time(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    time_str = parts[-1]  # e.g., "07:00"
+    time_str = parts[-1]  # e.g., "07:00"    telegram_id = callback.from_user.id
 
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
-
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     # Update with full time format (HH:MM:SS)
-    await settings_service.update_settings(
+    await services.settings.update_settings(
         settings["id"],
         quiet_hours_end=f"{time_str}:00"
     )
@@ -695,14 +646,11 @@ async def set_quiet_end_time(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "settings_reminders")
 @with_typing_action
-async def show_reminders(callback: types.CallbackQuery):
-    """Show reminder configuration."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def show_reminders(callback: types.CallbackQuery, services: ServiceContainer):
+    """Show reminder configuration."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     enabled = settings["reminder_enabled"]
     status = "Включены ✅" if enabled else "Выключены ❌"
@@ -721,18 +669,15 @@ async def show_reminders(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "reminder_toggle")
 @with_typing_action
-async def toggle_reminders(callback: types.CallbackQuery):
-    """Toggle reminders on/off."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def toggle_reminders(callback: types.CallbackQuery, services: ServiceContainer):
+    """Toggle reminders on/off."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     new_state = not settings["reminder_enabled"]
 
-    await settings_service.update_settings(settings["id"], reminder_enabled=new_state)
+    await services.settings.update_settings(settings["id"], reminder_enabled=new_state)
 
     text = "✅ Напоминания включены" if new_state else "✅ Напоминания отключены"
 
@@ -742,14 +687,11 @@ async def toggle_reminders(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "reminder_delay")
 @with_typing_action
-async def show_reminder_delay(callback: types.CallbackQuery):
-    """Show reminder delay selection."""
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+async def show_reminder_delay(callback: types.CallbackQuery, services: ServiceContainer):
+    """Show reminder delay selection."""    telegram_id = callback.from_user.id
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     current = settings["reminder_delay_minutes"]
 
@@ -788,16 +730,12 @@ async def set_reminder_delay(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    delay = int(parts[-1])
+    delay = int(parts[-1])    telegram_id = callback.from_user.id
 
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
-
-    await settings_service.update_settings(settings["id"], reminder_delay_minutes=delay)
+    await services.settings.update_settings(settings["id"], reminder_delay_minutes=delay)
 
     text = f"✅ Задержка напоминания обновлена!\n\nТеперь бот будет напоминать через {delay} минут."
 
@@ -806,7 +744,7 @@ async def set_reminder_delay(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.message(SettingsStates.waiting_for_reminder_delay_custom)
-async def process_reminder_delay_custom(message: types.Message, state: FSMContext):
+async def process_reminder_delay_custom(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process custom reminder delay input."""
     try:
         delay = int(message.text.strip())
@@ -817,16 +755,12 @@ async def process_reminder_delay_custom(message: types.Message, state: FSMContex
                 "⚠️ Задержка должна быть от 5 до 120 минут.\n"
                 "Попробуй ещё раз:"
             )
-            return
+            return        telegram_id = message.from_user.id
 
-        user_service = UserService(api_client)
-        settings_service = UserSettingsService(api_client)
-        telegram_id = message.from_user.id
+        user = await services.user.get_by_telegram_id(telegram_id)
+        settings = await services.settings.get_settings(user["id"])
 
-        user = await user_service.get_by_telegram_id(telegram_id)
-        settings = await settings_service.get_settings(user["id"])
-
-        await settings_service.update_settings(settings["id"], reminder_delay_minutes=delay)
+        await services.settings.update_settings(settings["id"], reminder_delay_minutes=delay)
 
         text = f"✅ Задержка напоминания обновлена!\n\nТеперь бот будет напоминать через {delay} минут."
 
@@ -842,7 +776,7 @@ async def process_reminder_delay_custom(message: types.Message, state: FSMContex
 
 
 @router.message(SettingsStates.waiting_for_quiet_hours_start_custom)
-async def process_custom_quiet_start(message: types.Message, state: FSMContext):
+async def process_custom_quiet_start(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process custom quiet hours start time input."""
     time_str = message.text.strip()
 
@@ -853,17 +787,13 @@ async def process_custom_quiet_start(message: types.Message, state: FSMContext):
             "Введи время в формате ЧЧ:ММ\n"
             "Например: 23:00 или 22:30"
         )
-        return
+        return    telegram_id = message.from_user.id
 
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = message.from_user.id
-
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     # Update with full time format (HH:MM:SS)
-    await settings_service.update_settings(
+    await services.settings.update_settings(
         settings["id"],
         quiet_hours_start=f"{time_str}:00"
     )
@@ -875,7 +805,7 @@ async def process_custom_quiet_start(message: types.Message, state: FSMContext):
 
 
 @router.message(SettingsStates.waiting_for_quiet_hours_end_custom)
-async def process_custom_quiet_end(message: types.Message, state: FSMContext):
+async def process_custom_quiet_end(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process custom quiet hours end time input."""
     time_str = message.text.strip()
 
@@ -886,17 +816,13 @@ async def process_custom_quiet_end(message: types.Message, state: FSMContext):
             "Введи время в формате ЧЧ:ММ\n"
             "Например: 07:00 или 08:30"
         )
-        return
+        return    telegram_id = message.from_user.id
 
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = message.from_user.id
-
-    user = await user_service.get_by_telegram_id(telegram_id)
-    settings = await settings_service.get_settings(user["id"])
+    user = await services.user.get_by_telegram_id(telegram_id)
+    settings = await services.settings.get_settings(user["id"])
 
     # Update with full time format (HH:MM:SS)
-    await settings_service.update_settings(
+    await services.settings.update_settings(
         settings["id"],
         quiet_hours_end=f"{time_str}:00"
     )
@@ -908,7 +834,7 @@ async def process_custom_quiet_end(message: types.Message, state: FSMContext):
 
 
 @router.message(Command("cancel"))
-async def cancel_settings_fsm(message: types.Message, state: FSMContext):
+async def cancel_settings_fsm(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Cancel any active FSM state in settings.
 
     Handles /cancel command to exit from:

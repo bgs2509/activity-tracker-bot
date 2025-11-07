@@ -10,6 +10,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from src.core.config import settings
 from src.core.logging import setup_logging
 from src.core.logging_middleware import FSMLoggingMiddleware, UserActionLoggingMiddleware
+from src.api.middleware import ServiceInjectionMiddleware
 from src.api.handlers.start import router as start_router
 from src.api.handlers.activity import router as activity_router
 from src.api.handlers.categories import router as categories_router
@@ -63,6 +64,10 @@ async def main():
         data_ttl=timedelta(minutes=15)    # Auto-expire FSM data after 15 minutes
     )
     dp = Dispatcher(storage=storage)
+
+    # Register service injection middleware (must be first to provide dependencies)
+    dp.update.middleware(ServiceInjectionMiddleware())
+    logger.info("Service injection middleware registered")
 
     # Register logging middleware for comprehensive DEBUG logging
     dp.update.middleware(UserActionLoggingMiddleware())

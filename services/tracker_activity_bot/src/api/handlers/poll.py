@@ -7,12 +7,8 @@ from aiogram.fsm.storage.redis import RedisStorage
 from apscheduler.triggers.date import DateTrigger
 
 from src.api.states.poll import PollStates
+from src.api.dependencies import ServiceContainer
 from src.core.config import settings as app_settings
-from src.infrastructure.http_clients.http_client import DataAPIClient
-from src.infrastructure.http_clients.activity_service import ActivityService
-from src.infrastructure.http_clients.category_service import CategoryService
-from src.infrastructure.http_clients.user_service import UserService
-from src.infrastructure.http_clients.user_settings_service import UserSettingsService
 from src.api.keyboards.poll import (
     get_poll_response_keyboard,
     get_poll_category_keyboard,
@@ -28,7 +24,6 @@ from src.core.logging_middleware import log_user_action
 router = Router()
 logger = logging.getLogger(__name__)
 
-api_client = DataAPIClient()
 
 # Redis storage for FSM state checking
 # Note: This is a separate instance from the main dispatcher's storage,
@@ -75,18 +70,18 @@ async def send_automatic_poll(bot: Bot, user_id: int):
         bot: Bot instance
         user_id: Telegram user ID
     """
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
+    from src.api.dependencies import get_service_container
+    services = get_service_container()
 
     try:
         # Get user
-        user = await user_service.get_by_telegram_id(user_id)
+        user = await services.user.get_by_telegram_id(user_id)
         if not user:
             logger.error(f"User {user_id} not found for automatic poll")
             return
 
         # Get settings
-        settings = await settings_service.get_settings(user["id"])
+        settings = await services.settings.get_settings(user["id"])
         if not settings:
             logger.error(f"Settings not found for user {user_id}")
             return
@@ -176,7 +171,7 @@ async def send_automatic_poll(bot: Bot, user_id: int):
         # Update last poll time for accurate sleep duration calculation
         try:
             poll_time = datetime.now(timezone.utc)
-            await user_service.update_last_poll_time(user["id"], poll_time)
+            await services.user.update_last_poll_time(user["id"], poll_time)
             logger.info(f"Updated last_poll_time for user {user_id}")
         except Exception as e:
             logger.warning(f"Could not update last_poll_time for user {user_id}: {e}")
@@ -195,20 +190,17 @@ async def handle_poll_skip(callback: types.CallbackQuery, state: FSMContext):
     logger.debug(
         "User skipped poll",
         extra={"user_id": callback.from_user.id}
-    )
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+    )    telegram_id = callback.from_user.id
 
     try:
         # Get user and settings
-        user = await user_service.get_by_telegram_id(telegram_id)
+        user = await services.user.get_by_telegram_id(telegram_id)
         if not user:
             await callback.message.answer("⚠️ Пользователь не найден.")
             await callback.answer()
             return
 
-        settings = await settings_service.get_settings(user["id"])
+        settings = await services.settings.get_settings(user["id"])
         if not settings:
             await callback.message.answer("⚠️ Настройки не найдены.")
             await callback.answer()
@@ -244,29 +236,24 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
     logger.debug(
         "User selected sleep in poll",
         extra={"user_id": callback.from_user.id}
-    )
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    category_service = CategoryService(api_client)
-    activity_service = ActivityService(api_client)
-    telegram_id = callback.from_user.id
+    )    telegram_id = callback.from_user.id
 
     try:
         # Get user and settings
-        user = await user_service.get_by_telegram_id(telegram_id)
+        user = await services.user.get_by_telegram_id(telegram_id)
         if not user:
             await callback.message.answer("⚠️ Пользователь не найден.")
             await callback.answer()
             return
 
-        settings = await settings_service.get_settings(user["id"])
+        settings = await services.settings.get_settings(user["id"])
         if not settings:
             await callback.message.answer("⚠️ Настройки не найдены.")
             await callback.answer()
             return
 
         # Find or create "Сон" category
-        categories = await category_service.get_user_categories(user["id"])
+        categories = await services.category.get_user_categories(user["id"])
         sleep_category = None
         for cat in categories:
             if cat["name"].lower() == "сон":
@@ -275,7 +262,7 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
 
         if not sleep_category:
             # Create sleep category
-            sleep_category = await category_service.create_category(
+            sleep_category = await services.category.create_category(
                 user_id=user["id"],
                 name="Сон",
                 emoji="😴"
@@ -299,7 +286,7 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
             start_time = end_time - timedelta(minutes=interval_minutes)
 
         # Save sleep activity
-        await activity_service.create_activity(
+        await services.activity.create_activity(
             user_id=user["id"],
             category_id=sleep_category["id"],
             description="Сон",
@@ -341,20 +328,17 @@ async def handle_poll_remind(callback: types.CallbackQuery, state: FSMContext):
     logger.debug(
         "User requested reminder for poll",
         extra={"user_id": callback.from_user.id}
-    )
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+    )    telegram_id = callback.from_user.id
 
     try:
         # Get user and settings
-        user = await user_service.get_by_telegram_id(telegram_id)
+        user = await services.user.get_by_telegram_id(telegram_id)
         if not user:
             await callback.message.answer("⚠️ Пользователь не найден.")
             await callback.answer()
             return
 
-        settings = await settings_service.get_settings(user["id"])
+        settings = await services.settings.get_settings(user["id"])
         if not settings:
             await callback.message.answer("⚠️ Настройки не найдены.")
             await callback.answer()
@@ -399,7 +383,7 @@ async def handle_poll_remind(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "poll_reminder_ok")
 @with_typing_action
-async def handle_poll_reminder_ok(callback: types.CallbackQuery):
+async def handle_poll_reminder_ok(callback: types.CallbackQuery, services: ServiceContainer):
     """Handle reminder confirmation."""
     await callback.message.answer(
         "👌 Отлично!",
@@ -420,21 +404,18 @@ async def handle_poll_activity_start(callback: types.CallbackQuery, state: FSMCo
     logger.debug(
         "User started activity from poll",
         extra={"user_id": callback.from_user.id}
-    )
-    user_service = UserService(api_client)
-    category_service = CategoryService(api_client)
-    telegram_id = callback.from_user.id
+    )    telegram_id = callback.from_user.id
 
     try:
         # Get user
-        user = await user_service.get_by_telegram_id(telegram_id)
+        user = await services.user.get_by_telegram_id(telegram_id)
         if not user:
             await callback.message.answer("⚠️ Пользователь не найден.")
             await callback.answer()
             return
 
         # Get categories
-        categories = await category_service.get_user_categories(user["id"])
+        categories = await services.category.get_user_categories(user["id"])
 
         if not categories:
             await callback.message.answer(
@@ -480,15 +461,11 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
 
     After category is selected, ask user for activity description.
     """
-    category_id = int(callback.data.split("_")[-1])
-
-    user_service = UserService(api_client)
-    settings_service = UserSettingsService(api_client)
-    telegram_id = callback.from_user.id
+    category_id = int(callback.data.split("_")[-1])    telegram_id = callback.from_user.id
 
     try:
         # Get user and settings
-        user = await user_service.get_by_telegram_id(telegram_id)
+        user = await services.user.get_by_telegram_id(telegram_id)
         if not user:
             await callback.message.answer("⚠️ Пользователь не найден.")
             await callback.answer()
@@ -497,7 +474,7 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
                 fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
             return
 
-        settings = await settings_service.get_settings(user["id"])
+        settings = await services.settings.get_settings(user["id"])
         if not settings:
             await callback.message.answer("⚠️ Настройки не найдены.")
             await callback.answer()
@@ -563,7 +540,7 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
 
 
 @router.message(PollStates.waiting_for_poll_description)
-async def handle_poll_description(message: types.Message, state: FSMContext):
+async def handle_poll_description(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Handle description input for poll activity recording.
 
     After user provides description, create activity with all collected data.
@@ -595,10 +572,7 @@ async def handle_poll_description(message: types.Message, state: FSMContext):
         await state.clear()
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
-        return
-
-    activity_service = ActivityService(api_client)
-    telegram_id = message.from_user.id
+        return    telegram_id = message.from_user.id
 
     try:
         # Parse times
@@ -606,7 +580,7 @@ async def handle_poll_description(message: types.Message, state: FSMContext):
         end_time = datetime.fromisoformat(end_time_str)
 
         # Create activity
-        await activity_service.create_activity(
+        await services.activity.create_activity(
             user_id=user_id,
             category_id=category_id,
             description=description,

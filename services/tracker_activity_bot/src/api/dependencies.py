@@ -53,7 +53,83 @@ async def close_api_client() -> None:
         logger.info("Closed Data API HTTP client")
 
 
-# Service dependency providers
+# Service Container with lazy initialization
+
+
+class ServiceContainer:
+    """
+    Service container providing lazy initialization of all services.
+
+    This container eliminates repeated service instantiation across handlers
+    by providing centralized, lazy-loaded service instances.
+
+    Example:
+        @router.callback_query(F.data == "action")
+        async def handler(callback: types.CallbackQuery, services: ServiceContainer):
+            user = await services.user.get_by_telegram_id(callback.from_user.id)
+    """
+
+    def __init__(self, api_client: Optional[DataAPIClient] = None):
+        """
+        Initialize service container.
+
+        Args:
+            api_client: HTTP client instance, uses shared client if not provided
+        """
+        self._api_client = api_client or get_api_client()
+        self._user_service: Optional[UserService] = None
+        self._category_service: Optional[CategoryService] = None
+        self._activity_service: Optional[ActivityService] = None
+        self._settings_service: Optional[UserSettingsService] = None
+
+    @property
+    def user(self) -> UserService:
+        """Get user service instance (lazy initialization)."""
+        if self._user_service is None:
+            self._user_service = UserService(self._api_client)
+        return self._user_service
+
+    @property
+    def category(self) -> CategoryService:
+        """Get category service instance (lazy initialization)."""
+        if self._category_service is None:
+            self._category_service = CategoryService(self._api_client)
+        return self._category_service
+
+    @property
+    def activity(self) -> ActivityService:
+        """Get activity service instance (lazy initialization)."""
+        if self._activity_service is None:
+            self._activity_service = ActivityService(self._api_client)
+        return self._activity_service
+
+    @property
+    def settings(self) -> UserSettingsService:
+        """Get user settings service instance (lazy initialization)."""
+        if self._settings_service is None:
+            self._settings_service = UserSettingsService(self._api_client)
+        return self._settings_service
+
+
+# Shared service container instance
+_service_container: Optional[ServiceContainer] = None
+
+
+def get_service_container() -> ServiceContainer:
+    """
+    Get or create shared service container.
+
+    Returns:
+        Shared service container instance
+    """
+    global _service_container
+    if _service_container is None:
+        _service_container = ServiceContainer()
+        logger.info("Created shared service container")
+    return _service_container
+
+
+# Legacy service dependency providers (kept for backward compatibility)
 
 
 def get_activity_service() -> ActivityService:
