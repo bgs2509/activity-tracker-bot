@@ -55,12 +55,7 @@ class UserSettingsService:
             settings_data.poll_interval_weekend
         )
 
-        # Business validation: quiet hours
-        if settings_data.quiet_hours_start and settings_data.quiet_hours_end:
-            self._validate_quiet_hours(
-                settings_data.quiet_hours_start,
-                settings_data.quiet_hours_end
-            )
+        # Note: Quiet hours validation is handled by Pydantic schema (time type)
 
         return await self.repository.create(settings_data)
 
@@ -107,12 +102,7 @@ class UserSettingsService:
             weekend = settings_data.poll_interval_weekend or existing.poll_interval_weekend
             self._validate_poll_intervals(weekday, weekend)
 
-        # Business validation: quiet hours (if provided)
-        if settings_data.quiet_hours_start is not None or settings_data.quiet_hours_end is not None:
-            start = settings_data.quiet_hours_start or existing.quiet_hours_start
-            end = settings_data.quiet_hours_end or existing.quiet_hours_end
-            if start and end:
-                self._validate_quiet_hours(start, end)
+        # Note: Quiet hours validation is handled by Pydantic schema (time type)
 
         return await self.repository.update(user_id, settings_data)
 
@@ -142,36 +132,4 @@ class UserSettingsService:
         if weekend > 1440:
             raise ValueError(
                 f"Weekend poll interval ({weekend}m) cannot exceed 24 hours (1440m)"
-            )
-
-    def _validate_quiet_hours(self, start: str, end: str) -> None:
-        """
-        Validate quiet hours time range.
-
-        Args:
-            start: Quiet hours start time (HH:MM format)
-            end: Quiet hours end time (HH:MM format)
-
-        Raises:
-            ValueError: If time format is invalid
-        """
-        # Validate time format
-        try:
-            start_parts = start.split(":")
-            end_parts = end.split(":")
-            if len(start_parts) != 2 or len(end_parts) != 2:
-                raise ValueError("Invalid time format")
-
-            start_hour, start_min = int(start_parts[0]), int(start_parts[1])
-            end_hour, end_min = int(end_parts[0]), int(end_parts[1])
-
-            if not (0 <= start_hour < 24 and 0 <= start_min < 60):
-                raise ValueError(f"Invalid start time: {start}")
-            if not (0 <= end_hour < 24 and 0 <= end_min < 60):
-                raise ValueError(f"Invalid end time: {end}")
-
-        except (ValueError, IndexError) as e:
-            raise ValueError(
-                f"Quiet hours must be in HH:MM format (24-hour). "
-                f"Got start={start}, end={end}. Error: {e}"
             )

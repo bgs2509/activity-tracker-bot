@@ -18,6 +18,7 @@ from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.services.scheduler_service import scheduler_service
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.decorators import with_typing_action
+from src.application.utils.time_helpers import get_poll_interval, calculate_poll_start_time
 from src.core.constants import POLL_POSTPONE_MINUTES
 from src.core.logging_middleware import log_user_action
 
@@ -138,12 +139,7 @@ async def send_automatic_poll(bot: Bot, user_id: int):
             logger.warning(f"Could not check FSM state for user {user_id}: {e}")
 
         # Calculate time since last poll for accurate message
-        is_weekend = datetime.now(timezone.utc).weekday() >= 5
-        interval_minutes = (
-            settings["poll_interval_weekend"]
-            if is_weekend
-            else settings["poll_interval_weekday"]
-        )
+        interval_minutes = get_poll_interval(settings)
 
         hours = interval_minutes // 60
         minutes = interval_minutes % 60
@@ -190,7 +186,8 @@ async def handle_poll_skip(callback: types.CallbackQuery, state: FSMContext):
     logger.debug(
         "User skipped poll",
         extra={"user_id": callback.from_user.id}
-    )    telegram_id = callback.from_user.id
+    )
+    telegram_id = callback.from_user.id
 
     try:
         # Get user and settings
@@ -236,7 +233,8 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
     logger.debug(
         "User selected sleep in poll",
         extra={"user_id": callback.from_user.id}
-    )    telegram_id = callback.from_user.id
+    )
+    telegram_id = callback.from_user.id
 
     try:
         # Get user and settings
@@ -277,13 +275,7 @@ async def handle_poll_sleep(callback: types.CallbackQuery, state: FSMContext):
             start_time = datetime.fromisoformat(last_poll.replace('Z', '+00:00'))
         else:
             # Fallback: use poll interval to estimate sleep duration
-            is_weekend = end_time.weekday() >= 5  # Saturday=5, Sunday=6
-            interval_minutes = (
-                settings["poll_interval_weekend"]
-                if is_weekend
-                else settings["poll_interval_weekday"]
-            )
-            start_time = end_time - timedelta(minutes=interval_minutes)
+            start_time = calculate_poll_start_time(end_time, settings)
 
         # Save sleep activity
         await services.activity.create_activity(
@@ -328,7 +320,8 @@ async def handle_poll_remind(callback: types.CallbackQuery, state: FSMContext):
     logger.debug(
         "User requested reminder for poll",
         extra={"user_id": callback.from_user.id}
-    )    telegram_id = callback.from_user.id
+    )
+    telegram_id = callback.from_user.id
 
     try:
         # Get user and settings
@@ -404,7 +397,8 @@ async def handle_poll_activity_start(callback: types.CallbackQuery, state: FSMCo
     logger.debug(
         "User started activity from poll",
         extra={"user_id": callback.from_user.id}
-    )    telegram_id = callback.from_user.id
+    )
+    telegram_id = callback.from_user.id
 
     try:
         # Get user
@@ -461,7 +455,8 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
 
     After category is selected, ask user for activity description.
     """
-    category_id = int(callback.data.split("_")[-1])    telegram_id = callback.from_user.id
+    category_id = int(callback.data.split("_")[-1])
+    telegram_id = callback.from_user.id
 
     try:
         # Get user and settings
@@ -485,16 +480,7 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
 
         # Calculate time range based on poll interval
         end_time = datetime.now(timezone.utc)
-
-        # Use appropriate interval based on day of week
-        is_weekend = end_time.weekday() >= 5  # Saturday=5, Sunday=6
-        interval_minutes = (
-            settings["poll_interval_weekend"]
-            if is_weekend
-            else settings["poll_interval_weekday"]
-        )
-
-        start_time = end_time - timedelta(minutes=interval_minutes)
+        start_time = calculate_poll_start_time(end_time, settings)
 
         # Save data to state and ask for description
         await state.update_data(
@@ -572,7 +558,9 @@ async def handle_poll_description(message: types.Message, state: FSMContext, ser
         await state.clear()
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
-        return    telegram_id = message.from_user.id
+        return
+
+    telegram_id = message.from_user.id
 
     try:
         # Parse times
