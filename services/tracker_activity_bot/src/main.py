@@ -13,7 +13,8 @@ from src.api.handlers.start import router as start_router
 from src.api.handlers.activity import router as activity_router
 from src.api.handlers.categories import router as categories_router
 from src.api.handlers.settings import router as settings_router
-from src.api.handlers.poll import router as poll_router
+from src.api.handlers.poll import router as poll_router, close_fsm_storage
+from src.api.dependencies import close_api_client
 from src.application.services.scheduler_service import scheduler_service
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 
@@ -68,8 +69,18 @@ async def main():
         scheduler_service.stop()
         logger.info("Scheduler stopped")
 
+        # Close FSM storage to prevent connection leaks
+        await close_fsm_storage()
+        logger.info("FSM storage closed")
+
+        # Close HTTP API client to prevent connection pool leaks
+        await close_api_client()
+        logger.info("HTTP API client closed")
+
+        # Close bot session and main storage
         await bot.session.close()
         await storage.close()
+        logger.info("Bot shutdown complete")
 
 
 if __name__ == "__main__":
