@@ -22,7 +22,7 @@ sudo GIT_SSH_COMMAND='ssh -i /home/bgs/.ssh/HenryBud_Ubuntu_Lenovo73 -o Identiti
 # Build and start production containers
 echo ""
 echo "🔨 Building and starting production containers..."
-docker compose up --build -d
+docker compose --env-file .env up --build -d
 
 # Wait for database to be ready
 echo ""
