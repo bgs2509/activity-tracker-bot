@@ -1,6 +1,9 @@
 # Environment
 .env
 .env.local
+.env.*.local
+# Allow .env.test (contains safe dummy values for testing)
+!.env.test
 
 # Python
 __pycache__/
