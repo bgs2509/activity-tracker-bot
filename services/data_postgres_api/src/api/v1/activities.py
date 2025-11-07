@@ -14,7 +14,6 @@ from src.application.services.activity_service import ActivityService
 from src.schemas.activity import (
     ActivityCreate,
     ActivityResponse,
-    ActivityListResponse,
 )
 
 router = APIRouter(prefix="/activities", tags=["activities"])
@@ -51,35 +50,29 @@ async def create_activity(
 
 @router.get(
     "/",
-    response_model=ActivityListResponse,
+    response_model=list[ActivityResponse],
     summary="List activities",
-    description="Get paginated activities for user"
+    description="Get recent activities for user"
 )
 @handle_service_errors
 async def get_activities(
     user_id: Annotated[int, Query(description="User ID")],
-    limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 10,
-    offset: Annotated[int, Query(ge=0, description="Items to skip")] = 0,
+    limit: Annotated[int, Query(ge=1, le=100, description="Maximum items to return")] = 10,
     service: Annotated[ActivityService, Depends(get_activity_service)] = None
-) -> ActivityListResponse:
+) -> list[ActivityResponse]:
     """
-    Get activities for user with pagination.
+    Get recent activities for user.
 
     Args:
         user_id: User identifier from query string
         limit: Maximum activities to return (default: 10)
-        offset: Number of activities to skip (default: 0)
         service: Activity service instance (injected)
 
     Returns:
-        Paginated list of activities with total count
+        List of recent activities
 
     Raises:
-        HTTPException: 400 if pagination parameters invalid
+        HTTPException: 400 if limit is invalid
     """
-    activities, total = await service.get_user_activities(user_id, limit, offset)
-
-    return ActivityListResponse(
-        total=total,
-        items=[ActivityResponse.model_validate(act) for act in activities]
-    )
+    activities = await service.get_user_activities(user_id, limit)
+    return [ActivityResponse.model_validate(act) for act in activities]

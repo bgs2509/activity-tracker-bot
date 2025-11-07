@@ -31,10 +31,9 @@ class ActivityService:
     async def get_user_activities(
         self,
         user_id: int,
-        limit: int = 10,
-        offset: int = 0
+        limit: int = 10
     ) -> dict:
-        """Get activities for a user with pagination."""
+        """Get recent activities for a user."""
         return await self.client.get(
-            f"/api/v1/activities?user_id={user_id}&limit={limit}&offset={offset}"
+            f"/api/v1/activities?user_id={user_id}&limit={limit}"
         )

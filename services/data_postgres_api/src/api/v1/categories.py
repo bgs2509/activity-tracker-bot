@@ -14,9 +14,6 @@ from src.application.services.category_service import CategoryService
 from src.schemas.category import (
     CategoryCreate,
     CategoryResponse,
-    CategoryBulkCreate,
-    CategoryBulkResponse,
-    CategoryItem,
 )
 
 router = APIRouter(prefix="/categories", tags=["categories"])
@@ -31,29 +28,6 @@ async def create_category(
     """Create new category with duplicate check."""
     category = await service.create_category(category_data)
     return CategoryResponse.model_validate(category)
-
-
-@router.post("/bulk-create", response_model=CategoryBulkResponse, status_code=status.HTTP_201_CREATED)
-async def bulk_create_categories(
-    bulk_data: CategoryBulkCreate,
-    service: Annotated[CategoryService, Depends(get_category_service)]
-) -> CategoryBulkResponse:
-    """Create multiple categories, skipping duplicates."""
-    categories_to_create = [
-        CategoryCreate(
-            user_id=bulk_data.user_id,
-            name=item.name,
-            emoji=item.emoji,
-            is_default=item.is_default
-        )
-        for item in bulk_data.categories
-    ]
-    
-    created = await service.bulk_create_categories(bulk_data.user_id, categories_to_create)
-    return CategoryBulkResponse(
-        created_count=len(created),
-        categories=[CategoryResponse.model_validate(cat) for cat in created]
-    )
 
 
 @router.get("/", response_model=list[CategoryResponse])

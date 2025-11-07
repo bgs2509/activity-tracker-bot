@@ -576,9 +576,8 @@ async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
 async def show_my_activities(callback: types.CallbackQuery, services: ServiceContainer, user: dict):
     """Show user's recent activities."""
     try:
-        # Get user's activities
-        response = await services.activity.get_user_activities(user["id"], limit=MAX_ACTIVITY_LIMIT)
-        activities = response.get("items", [])
+        # Get user's activities (returns list directly)
+        activities = await services.activity.get_user_activities(user["id"], limit=MAX_ACTIVITY_LIMIT)
 
         # Format and send
         text = format_activity_list(activities)
@@ -595,26 +594,9 @@ async def show_my_activities(callback: types.CallbackQuery, services: ServiceCon
         await callback.answer()
 
 
-# NOTE: "categories" callback handler removed to avoid conflict with categories.py
-# The full-featured categories handler is in src/api/handlers/categories.py
-
-
-@router.callback_query(F.data == "statistics")
-@with_typing_action
-async def show_statistics(callback: types.CallbackQuery):
-    """Show user statistics (placeholder for future implementation)."""
-    text = (
-        "📊 Статистика\n\n"
-        "⚠️ Эта функция находится в разработке.\n\n"
-        "В будущем здесь будет:\n"
-        "• Общее время активностей\n"
-        "• Распределение по категориям\n"
-        "• Графики и визуализации\n"
-        "• Топ активностей за период"
-    )
-
-    await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
-    await callback.answer()
+# NOTE: Removed handlers to avoid duplication and clean up YAGNI violations:
+# - "categories" callback handler (full implementation in categories.py)
+# - "statistics" placeholder handler (not implemented, button removed from menu)
 
 
 @router.message(Command("cancel"))

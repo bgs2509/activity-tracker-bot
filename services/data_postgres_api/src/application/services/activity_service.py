@@ -76,27 +76,23 @@ class ActivityService:
     async def get_user_activities(
         self,
         user_id: int,
-        limit: int = 10,
-        offset: int = 0
-    ) -> tuple[list[Activity], int]:
+        limit: int = 10
+    ) -> list[Activity]:
         """
-        Get paginated activities for user.
+        Get recent activities for user.
 
         Args:
             user_id: User identifier
             limit: Maximum activities to return (default: 10)
-            offset: Number of activities to skip (default: 0)
 
         Returns:
-            Tuple of (activities list, total count)
+            List of recent activities
 
         Raises:
-            ValueError: If limit or offset are invalid
+            ValueError: If limit is invalid
         """
-        # Business validation: pagination parameters
+        # Business validation: limit parameter
         if limit < 1 or limit > 100:
             raise ValueError(f"Limit must be between 1 and 100, got {limit}")
-        if offset < 0:
-            raise ValueError(f"Offset must be >= 0, got {offset}")
 
-        return await self.repository.get_by_user(user_id, limit, offset)
+        return await self.repository.get_recent_by_user(user_id, limit)

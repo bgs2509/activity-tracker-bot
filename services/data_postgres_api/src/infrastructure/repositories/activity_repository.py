@@ -57,32 +57,25 @@ class ActivityRepository(BaseRepository[Activity, ActivityCreate, ActivityUpdate
         await self.session.refresh(activity)
         return activity
 
-    async def get_by_user(
+    async def get_recent_by_user(
         self,
         user_id: int,
-        limit: int = 10,
-        offset: int = 0
-    ) -> tuple[list[Activity], int]:
+        limit: int = 10
+    ) -> list[Activity]:
         """
-        Get activities for a user with pagination.
+        Get recent activities for a user.
+
+        Args:
+            user_id: User identifier
+            limit: Maximum activities to return
 
         Returns:
-            Tuple of (activities list, total count)
+            List of activities, ordered by most recent first
         """
-        # Get total count
-        count_result = await self.session.execute(
-            select(func.count(Activity.id)).where(Activity.user_id == user_id)
-        )
-        total = count_result.scalar_one()
-
-        # Get paginated activities
         result = await self.session.execute(
             select(Activity)
             .where(Activity.user_id == user_id)
             .order_by(Activity.start_time.desc())
             .limit(limit)
-            .offset(offset)
         )
-        activities = list(result.scalars().all())
-
-        return activities, total
+        return list(result.scalars().all())
