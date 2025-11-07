@@ -715,6 +715,439 @@ Following **KISS** and **YAGNI** principles, we DO NOT include:
 
 ---
 
+## ⚠️ Critical Anti-Patterns to Avoid
+
+> **Purpose**: Document real production issues discovered during implementation and provide clear examples of what NOT to do.
+>
+> **Source**: artifacts/analysis/refactor-2025-11-07.md (Phase 1.5)
+> **Updated**: 2025-11-07 after production stability analysis
+> **Impact**: These anti-patterns cause memory leaks, connection exhaustion, and production crashes.
+
+---
+
+### 1. Resource Management Anti-Patterns (CRITICAL)
+
+#### ❌ Anti-Pattern 1.1: Global Resources Never Closed
+
+**Problem**: Memory leaks, connection pool exhaustion, "too many open files"
+
+**Example (WRONG)**:
+```python
+# ❌ services/tracker_activity_bot/src/api/handlers/poll.py:45-48
+_fsm_storage: RedisStorage | None = None
+
+def get_fsm_storage() -> RedisStorage:
+    """Get or create FSM storage instance for state checking."""
+    global _fsm_storage
+    if _fsm_storage is None:
+        _fsm_storage = RedisStorage.from_url(app_settings.redis_url)
+    return _fsm_storage  # ⚠️ NEVER CLOSED → Memory leak!
+```
+
+**Why This Matters**:
+- Redis connection pool is NEVER closed
+- Each connection holds memory + file descriptors
+- Over days/weeks → memory exhaustion → bot crashes
+- Symptom: "too many open files" error after 3-7 days uptime
+
+**Solution (CORRECT)**:
+```python
+# ✅ services/tracker_activity_bot/src/api/handlers/poll.py
+_fsm_storage: RedisStorage | None = None
+
+def get_fsm_storage() -> RedisStorage:
+    """
+    Get shared FSM storage instance.
+
+    Returns:
+        Shared FSM storage instance
+    """
+    global _fsm_storage
+    if _fsm_storage is None:
+        _fsm_storage = RedisStorage.from_url(app_settings.redis_url)
+    return _fsm_storage
+
+async def close_fsm_storage() -> None:
+    """Close FSM storage on shutdown."""
+    global _fsm_storage
+    if _fsm_storage is not None:
+        await _fsm_storage.close()
+        _fsm_storage = None
+        logger.info("FSM storage closed")
+
+# services/tracker_activity_bot/src/main.py
+async def main() -> None:
+    """Main bot entry point."""
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await close_fsm_storage()  # ✅ Proper cleanup
+        await bot.session.close()
+        await storage.close()
+```
+
+**Architecture Rule**:
+> **All stateful resources (Redis, HTTP clients, DB connections) MUST have explicit cleanup in application lifecycle.**
+
+---
+
+#### ❌ Anti-Pattern 1.2: Multiple HTTP Client Instances
+
+**Problem**: Connection pool proliferation, memory leaks
+
+**Example (WRONG)**:
+```python
+# ❌ Multiple global instances across handlers
+# services/tracker_activity_bot/src/api/handlers/activity.py:26
+api_client = DataAPIClient()  # Instance 1
+
+# services/tracker_activity_bot/src/api/handlers/categories.py
+api_client = DataAPIClient()  # Instance 2
+
+# All NEVER closed → Connection pool leak per instance!
+```
+
+**Why This Matters**:
+- `httpx.AsyncClient` holds connection pool (default 100 connections)
+- Each instance = separate pool = wasted resources
+- NEVER closed = connections stay open forever
+- Symptom: High connection count, memory growth
+
+**Solution (CORRECT)**:
+```python
+# ✅ Single shared client with dependency injection
+# services/tracker_activity_bot/src/api/dependencies.py
+
+_api_client: DataAPIClient | None = None
+
+def get_api_client() -> DataAPIClient:
+    """Get shared HTTP client instance."""
+    global _api_client
+    if _api_client is None:
+        _api_client = DataAPIClient()
+    return _api_client
+
+async def close_api_client() -> None:
+    """Close HTTP client on shutdown."""
+    global _api_client
+    if _api_client is not None:
+        await _api_client.close()
+        _api_client = None
+        logger.info("HTTP client closed")
+
+# Use dependency injection in handlers
+def get_activity_service() -> ActivityService:
+    """Provide activity service with shared HTTP client."""
+    client = get_api_client()  # ✅ Shared instance
+    return ActivityService(client)
+```
+
+**Architecture Rule**:
+> **Use Dependency Injection for shared resources. Single HTTP client instance per service.**
+
+---
+
+#### ❌ Anti-Pattern 1.3: Creating New Connection Pools on Each Operation
+
+**Problem**: Inefficient resource usage, slow performance
+
+**Example (WRONG)**:
+```python
+# ❌ services/tracker_activity_bot/src/application/services/fsm_timeout_service.py:172
+async def send_reminder(bot: Bot, user_id: int, state: State, action: str):
+    """Send reminder to user about unfinished dialog."""
+    try:
+        # Creates NEW RedisStorage every time!
+        storage = RedisStorage.from_url(app_settings.redis_url)  # New pool!
+
+        # ... use storage ...
+
+        await storage.close()  # Closes after use
+        # BUT: Creating new pool each time is INEFFICIENT!
+```
+
+**Why This Matters**:
+- Each `RedisStorage.from_url()` creates NEW connection pool
+- Connection pool creation is expensive (DNS, handshake, auth)
+- Happening on EVERY reminder/cleanup (every 10-13 minutes)
+- Unnecessary overhead, slower performance
+
+**Solution (CORRECT)**:
+```python
+# ✅ Reuse shared FSM storage
+async def send_reminder(bot: Bot, user_id: int, state: State, action: str):
+    """Send reminder to user about unfinished dialog."""
+    try:
+        # Reuse shared storage instead of creating new one!
+        from src.api.handlers.poll import get_fsm_storage
+
+        storage = get_fsm_storage()  # ✅ Reuses existing pool!
+
+        # ... use storage ...
+
+        # DON'T close storage here - it's shared!
+```
+
+**Architecture Rule**:
+> **Reuse shared connection pools. NEVER create new pools for each operation.**
+
+---
+
+### 2. Error Handling Anti-Patterns (HIGH)
+
+#### ❌ Anti-Pattern 2.1: Bare except:pass (Silent Failures)
+
+**Problem**: Impossible to debug production issues
+
+**Example (WRONG)**:
+```python
+# ❌ services/tracker_activity_bot/src/application/services/scheduler_service.py:103
+if user_id in self.jobs:
+    try:
+        self.scheduler.remove_job(self.jobs[user_id])
+    except Exception:
+        pass  # ⚠️ Silently swallows ALL exceptions!
+```
+
+**Why This Matters**:
+- No way to know something went wrong
+- Production debugging becomes impossible
+- Violates observability requirements
+- Hidden bugs accumulate
+
+**Solution (CORRECT)**:
+```python
+# ✅ Always log exceptions with context
+if user_id in self.jobs:
+    try:
+        self.scheduler.remove_job(self.jobs[user_id])
+    except Exception as e:
+        logger.warning(
+            "Failed to remove scheduler job",
+            extra={
+                "user_id": user_id,
+                "job_id": self.jobs.get(user_id),
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+        )
+```
+
+**Architecture Rule**:
+> **NEVER use bare except:pass. All exceptions MUST be logged with context.**
+
+---
+
+### 3. Lifecycle Management Anti-Patterns (HIGH)
+
+#### ❌ Anti-Pattern 3.1: Deprecated Lifecycle APIs
+
+**Problem**: Will break in future framework versions
+
+**Example (WRONG)**:
+```python
+# ❌ services/data_postgres_api/src/main.py:37, 50
+@app.on_event("startup")  # Deprecated in FastAPI 0.93+
+async def startup_event():
+    """Application startup tasks."""
+    logger.info("Starting data_postgres_api service")
+    # ...
+
+@app.on_event("shutdown")  # Will be removed!
+async def shutdown_event():
+    """Cleanup on shutdown."""
+    await engine.dispose()
+```
+
+**Why This Matters**:
+- `@app.on_event()` deprecated since FastAPI 0.93
+- Will be removed in future versions
+- Breaking change will happen without warning
+- Technical debt accumulation
+
+**Solution (CORRECT)**:
+```python
+# ✅ Use modern lifespan context manager
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan context manager.
+
+    Handles startup and shutdown events.
+    """
+    # Startup
+    logger.info("Starting data_postgres_api service")
+
+    if settings.enable_db_auto_create:
+        logger.warning("Auto-creating database tables (development mode only!)")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    logger.info("Application startup complete")
+
+    yield  # Application is running
+
+    # Shutdown
+    logger.info("Shutting down data_postgres_api service")
+    await engine.dispose()
+    logger.info("Database engine disposed")
+
+# Create FastAPI app with lifespan
+app = FastAPI(
+    title=settings.app_name,
+    description="HTTP Data Access Service for PostgreSQL",
+    version="1.0.0",
+    lifespan=lifespan  # ✅ Use lifespan context manager
+)
+```
+
+**Architecture Rule**:
+> **Use modern lifecycle APIs (lifespan). Monitor framework deprecation warnings.**
+
+---
+
+#### ❌ Anti-Pattern 3.2: No Graceful Shutdown
+
+**Problem**: Data loss on container stop, interrupted transactions
+
+**Example (WRONG)**:
+```python
+# ❌ services/tracker_activity_bot/src/main.py
+async def main() -> None:
+    """Main bot entry point."""
+    # No signal handlers!
+    await dp.start_polling(bot)
+    # Docker SIGTERM → immediate kill → lost jobs, corrupted FSM state!
+```
+
+**Why This Matters**:
+- Docker stop sends SIGTERM → immediate kill
+- Pending scheduler jobs lost
+- Database transactions interrupted
+- FSM state corrupted
+- Data inconsistency
+
+**Solution (CORRECT)**:
+```python
+# ✅ Proper signal handling
+import signal
+import asyncio
+
+_shutdown_event = asyncio.Event()
+
+def handle_shutdown_signal(signum, frame):
+    """
+    Handle shutdown signals (SIGTERM, SIGINT).
+
+    Args:
+        signum: Signal number
+        frame: Current stack frame
+    """
+    logger.info(
+        "Received shutdown signal",
+        extra={"signal": signal.Signals(signum).name}
+    )
+    _shutdown_event.set()
+
+async def main() -> None:
+    """Main bot entry point."""
+    # Register signal handlers
+    signal.signal(signal.SIGTERM, handle_shutdown_signal)
+    signal.signal(signal.SIGINT, handle_shutdown_signal)
+    logger.info("Signal handlers registered")
+
+    try:
+        # Start polling with graceful shutdown
+        polling_task = asyncio.create_task(
+            dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        )
+
+        # Wait for either polling to complete or shutdown signal
+        await asyncio.wait(
+            [polling_task, asyncio.create_task(_shutdown_event.wait())],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+        if _shutdown_event.is_set():
+            logger.info("Graceful shutdown initiated")
+            polling_task.cancel()
+            try:
+                await polling_task
+            except asyncio.CancelledError:
+                logger.info("Polling task cancelled")
+
+    finally:
+        # Cleanup all resources
+        scheduler_service.stop(wait=True)  # ✅ Wait for pending jobs
+        logger.info("Scheduler stopped")
+
+        await close_fsm_storage()
+        await close_api_client()
+        await bot.session.close()
+        await storage.close()
+
+        logger.info("Bot shutdown complete")
+```
+
+**Architecture Rule**:
+> **All services MUST handle SIGTERM/SIGINT for graceful shutdown.**
+
+---
+
+### 4. Summary: Critical Rules
+
+| Rule | Priority | Impact | Symptom |
+|------|----------|--------|---------|
+| **Close all stateful resources** | 🔴 CRITICAL | Memory leaks, connection exhaustion | "too many open files", crashes after 3-7 days |
+| **Single shared HTTP client** | 🔴 CRITICAL | Connection pool exhaustion | High memory, slow responses |
+| **Reuse connection pools** | 🟠 HIGH | Performance degradation | Slow operations, high CPU |
+| **Always log exceptions** | 🟠 HIGH | Debugging impossible | Silent failures, hidden bugs |
+| **Use modern lifecycle APIs** | 🟠 HIGH | Breaking changes | Application won't start on upgrade |
+| **Handle shutdown signals** | 🟡 MEDIUM | Data loss on restart | Corrupted state, lost jobs |
+
+**Monitoring Commands** (after deployment):
+```bash
+# Monitor memory usage
+docker stats tracker_activity_bot
+
+# Monitor open file descriptors
+docker exec tracker_activity_bot sh -c 'ls /proc/$$/fd | wc -l'
+
+# Monitor active connections
+docker exec tracker_activity_bot sh -c 'netstat -an | grep ESTABLISHED | wc -l'
+
+# Monitor Redis connections
+docker exec tracker_redis redis-cli CLIENT LIST | wc -l
+```
+
+**Expected Values** (healthy system):
+- Memory usage: < 200MB after 24h
+- Open file descriptors: < 100
+- Active connections: < 50
+- Redis connections: 2-5
+
+---
+
+### 5. Prevention Checklist
+
+Before deploying to production, verify:
+
+- [ ] All global resources have explicit `close()` methods
+- [ ] All `close()` methods called in `finally` blocks
+- [ ] HTTP clients use dependency injection (single shared instance)
+- [ ] No `except: pass` without logging
+- [ ] Using `lifespan` context manager (not `@app.on_event()`)
+- [ ] Signal handlers registered for SIGTERM/SIGINT
+- [ ] Health checks verify resource connections
+- [ ] Monitoring dashboard tracks memory/connections over time
+
+**Reference**: See `artifacts/analysis/refactor-2025-11-07.md` Phase 1.5 for detailed fixes.
+
+---
+
 ## Consequences
 
 ### Positive Impacts
@@ -867,6 +1300,50 @@ Following **KISS** and **YAGNI** principles, we DO NOT include:
 
 ## Follow-Up Actions
 
+### ⚠️ URGENT: Week 0 (Resource Leak Fixes - MUST DO FIRST!)
+
+**Priority**: 🔴🔴 CRITICAL (Production Stability)
+**Estimated Time**: 4-6 hours
+**Reference**: See "Critical Anti-Patterns to Avoid" section above and `artifacts/analysis/refactor-2025-11-07.md` Phase 1.5
+
+**Tasks**:
+
+0.1. **Fix global FSM storage leak** (1 hour)
+   - Add `close_fsm_storage()` function to poll.py
+   - Call in main.py finally block
+   - Test bot restarts cleanly
+
+0.2. **Fix HTTP client leaks** (1 hour)
+   - Create `dependencies.py` with shared client
+   - Add `close_api_client()` function
+   - Call in main.py finally block
+
+0.3. **Fix multiple Redis instances in fsm_timeout_service** (2 hours)
+   - Replace `RedisStorage.from_url()` with `get_fsm_storage()`
+   - Remove individual `storage.close()` calls
+   - Test reminders and cleanup work
+
+0.4. **Fix bare except:pass blocks** (30 min)
+   - Add logging to all exception handlers
+   - Include context (user_id, error type)
+
+0.5. **Migrate from deprecated @app.on_event()** (1 hour)
+   - Create `lifespan()` context manager in data_postgres_api
+   - Remove `@app.on_event()` decorators
+   - Test startup and shutdown
+
+0.6. **Add graceful shutdown** (1-2 hours) - OPTIONAL
+   - Add SIGTERM/SIGINT signal handlers
+   - Test `docker compose stop` doesn't lose data
+
+**Success Criteria**:
+- Bot runs 7+ days without memory leaks
+- No "too many open files" errors
+- Clean shutdown without errors
+- All exceptions are logged
+
+---
+
 ### Immediate (Week 1)
 
 1. **Add mypy configuration** in both services
@@ -967,8 +1444,26 @@ Following **KISS** and **YAGNI** principles, we DO NOT include:
 ### Status Updates
 
 - **Initial Version**: 2025-11-07 (ADR created)
+- **Updated**: 2025-11-07 (Added "Critical Anti-Patterns to Avoid" section based on production analysis)
 - **Last Reviewed**: 2025-11-07
-- **Next Review**: After Phase 2 completion (Type Safety & Quality)
+- **Next Review**: After Week 0 completion (Resource Leak Fixes), then Phase 2 (Type Safety & Quality)
+
+### Change Log
+
+**2025-11-07 - v1.1**:
+- ➕ Added comprehensive "Critical Anti-Patterns to Avoid" section
+- ➕ Documented 6 critical anti-patterns from production analysis
+- ➕ Added monitoring commands and expected values
+- ➕ Added prevention checklist
+- ➕ Added Week 0 URGENT tasks to Follow-Up Actions
+- 📚 Source: artifacts/analysis/refactor-2025-11-07.md Phase 1.5
+- 🎯 Impact: Prevents memory leaks, connection exhaustion, production crashes
+
+**2025-11-07 - v1.0**:
+- ✨ Initial ADR created
+- 📐 Defined Improved Hybrid Architecture
+- 📋 Documented all architectural decisions
+- ✅ Phase 1 marked as complete
 
 ### Storage Location
 
