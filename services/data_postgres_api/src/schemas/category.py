@@ -13,6 +13,13 @@ class CategoryCreate(BaseModel):
     is_default: bool = Field(default=False, description="Is default category")
 
 
+class CategoryBulkCreate(BaseModel):
+    """Schema for bulk creating categories."""
+
+    user_id: int = Field(..., description="User ID")
+    categories: list[dict] = Field(..., description="List of categories to create")
+
+
 class CategoryResponse(BaseModel):
     """Schema for category response."""
 
