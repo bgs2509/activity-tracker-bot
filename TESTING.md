@@ -35,11 +35,157 @@ activity-tracker-bot/
         └── test_docker_health.py       # Docker health tests
 ```
 
+## Environment Variables for Testing
+
+### Overview
+
+The project uses **two separate environment configurations**:
+
+1. **`.env`** (NOT in git) - Real secrets for production/development
+2. **`.env.test`** (IN git) - Safe dummy values for testing
+
+This separation ensures that:
+- ✅ Tests can run without exposing real secrets
+- ✅ New developers can run tests immediately after cloning
+- ✅ CI/CD pipelines work without secret management complexity
+- ✅ No risk of accidentally committing sensitive tokens
+
+### Why Environment Variables Are Needed
+
+Both services use `pydantic-settings` to validate configuration at startup. Some fields are **required** (no defaults):
+
+**data_postgres_api requires:**
+- `DATABASE_URL` - PostgreSQL connection string
+- Other fields have defaults (LOG_LEVEL, etc.)
+
+**tracker_activity_bot requires:**
+- `TELEGRAM_BOT_TOKEN` - Telegram bot API token
+- `DATA_API_URL` - URL to data_postgres_api service
+- `REDIS_URL` - Redis connection for FSM storage
+
+Without these variables, even unit tests will fail with `pydantic_core.ValidationError` when importing Settings classes.
+
+### Using .env.test for Testing
+
+The `.env.test` file contains **safe dummy values** that pass pydantic validation:
+
+```bash
+# .env.test (safe to commit to git)
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-DUMMY-TEST-TOKEN
+DATABASE_URL=postgresql+asyncpg://test_user:test_password@localhost:5432/test_db
+DATA_API_URL=http://localhost:8000
+REDIS_URL=redis://localhost:6379/0
+LOG_LEVEL=DEBUG
+```
+
+**Important:** These values are **NEVER used for actual connections** in unit tests! All external dependencies (database, Redis, Telegram API, HTTP client) are mocked. The values only need to satisfy format validation.
+
+### How Tests Load Environment Variables
+
+Test configuration files (`services/*/tests/conftest.py`) automatically load `.env.test` using `python-dotenv`:
+
+```python
+# conftest.py loads .env.test BEFORE importing any application code
+from dotenv import load_dotenv
+
+project_root = Path(__file__).parent.parent.parent.parent
+test_env_path = project_root / ".env.test"
+
+if test_env_path.exists():
+    load_dotenv(test_env_path, override=False)
+else:
+    # Fallback values if .env.test is missing
+    os.environ.setdefault("TELEGRAM_BOT_TOKEN", "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-TEST")
+    # ... other fallbacks
+```
+
+### Setting Up Your Real Environment
+
+For running the actual services (not tests), create a `.env` file with real credentials:
+
+```bash
+# Copy template
+cp .env.example .env
+
+# Edit .env and add your real Telegram bot token from @BotFather
+nano .env
+```
+
+**IMPORTANT:** Never commit `.env` to git! It's already in `.gitignore`.
+
+### Docker-Based Testing
+
+When running tests inside Docker containers, you have two options:
+
+**Option 1: Use .env.test (automatic)**
+```bash
+# .env.test is automatically loaded by conftest.py
+make test-unit-docker
+```
+
+**Option 2: Pass environment variables via docker compose**
+```bash
+# Override variables for specific test runs
+docker compose exec -e TELEGRAM_BOT_TOKEN=test tracker_activity_bot pytest tests/unit/ -v
+```
+
+### Local Testing Without Docker
+
+If you want to run tests locally (not in Docker):
+
+1. Install test dependencies in a virtual environment:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies for the service you want to test
+pip install -r services/data_postgres_api/requirements.txt
+# or
+pip install -r services/tracker_activity_bot/requirements.txt
+```
+
+2. Run tests (`.env.test` will be loaded automatically):
+```bash
+cd services/data_postgres_api && pytest tests/unit/ -v
+cd services/tracker_activity_bot && pytest tests/unit/ -v
+```
+
+### Security Best Practices
+
+✅ **DO:**
+- Commit `.env.test` to git (contains safe dummy values)
+- Use `.env` for real secrets (never commit)
+- Keep dummy tokens clearly marked as FAKE/DUMMY/TEST
+- Use valid format for dummy values (e.g., Telegram token: `10digits:43chars`)
+
+❌ **DON'T:**
+- Never commit `.env` file to git
+- Never use real secrets in test files
+- Never use real secrets in `.env.test`
+- Never hardcode secrets in application code
+
+### Verifying Environment Setup
+
+To verify your environment is configured correctly:
+
+```bash
+# Check that .env.test exists
+ls -la .env.test
+
+# Check that .env is in .gitignore
+git check-ignore .env  # Should output: .env
+
+# Run import tests (will fail if env vars are missing)
+make test-imports-docker
+```
+
 ## Running Tests
 
 ### Method 1: Using Makefile Commands (Recommended)
 
-The easiest way to run tests is using the provided Makefile commands:
+The easiest way to run tests is using the provided Makefile commands.
+
+#### Local Testing (requires local pytest installation)
 
 ```bash
 # Run import smoke tests (fast, no Docker required)
@@ -60,6 +206,30 @@ make test-coverage
 # Run all tests
 make test-all
 ```
+
+#### Docker-Based Testing (recommended, no local setup needed)
+
+These commands run tests **inside Docker containers**, eliminating the need for local Python environment setup:
+
+```bash
+# Run unit tests inside containers (auto-starts containers)
+make test-unit-docker
+
+# Run import tests inside containers
+make test-imports-docker
+
+# Run tests with coverage inside containers
+make test-coverage-docker
+
+# Run all Docker-based tests
+make test-all-docker
+```
+
+**Benefits of Docker-based testing:**
+- ✅ No local Python environment needed
+- ✅ Matches production environment exactly
+- ✅ All dependencies automatically installed
+- ✅ Automatic container startup with `--wait` flag
 
 ### Method 2: Running Tests Manually
 
