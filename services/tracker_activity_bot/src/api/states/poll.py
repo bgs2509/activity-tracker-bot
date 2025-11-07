@@ -7,3 +7,4 @@ class PollStates(StatesGroup):
 
     waiting_for_poll_response = State()
     waiting_for_poll_category = State()
+    waiting_for_poll_description = State()

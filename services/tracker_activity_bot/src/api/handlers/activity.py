@@ -720,6 +720,8 @@ async def handle_fsm_reminder_continue(callback: types.CallbackQuery, state: FSM
         text = "😀 Выбери эмодзи для категории"
     elif "waiting_for_poll_category" in state_str:
         text = "✏️ Выбери категорию для активности"
+    elif "waiting_for_poll_description" in state_str:
+        text = "✏️ Опиши активность из опроса"
     elif "interval" in state_str:
         text = "⏰ Введи интервал опроса в минутах"
     elif "quiet_hours" in state_str:

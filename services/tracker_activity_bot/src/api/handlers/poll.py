@@ -460,13 +460,12 @@ async def handle_poll_activity_start(callback: types.CallbackQuery, state: FSMCo
 async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMContext):
     """Handle category selection in poll activity recording.
 
-    Creates activity with automatic time calculation based on poll interval.
+    After category is selected, ask user for activity description.
     """
     category_id = int(callback.data.split("_")[-1])
 
     user_service = UserService(api_client)
     settings_service = UserSettingsService(api_client)
-    activity_service = ActivityService(api_client)
     telegram_id = callback.from_user.id
 
     try:
@@ -476,8 +475,8 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
             await callback.message.answer("⚠️ Пользователь не найден.")
             await callback.answer()
             await state.clear()
-            if fsm_timeout_service:
-                fsm_timeout_service.cancel_timeout(callback.from_user.id)
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
             return
 
         settings = await settings_service.get_settings(user["id"])
@@ -485,8 +484,8 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
             await callback.message.answer("⚠️ Настройки не найдены.")
             await callback.answer()
             await state.clear()
-            if fsm_timeout_service:
-                fsm_timeout_service.cancel_timeout(callback.from_user.id)
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
             return
 
         # Calculate time range based on poll interval
@@ -502,55 +501,136 @@ async def handle_poll_category_select(callback: types.CallbackQuery, state: FSMC
 
         start_time = end_time - timedelta(minutes=interval_minutes)
 
-        # Create activity with generic description
-        await activity_service.create_activity(
-            user_id=user["id"],
+        # Save data to state and ask for description
+        await state.update_data(
             category_id=category_id,
-            description="Активность",
-            tags=[],
+            start_time=start_time.isoformat(),
+            end_time=end_time.isoformat(),
+            settings=settings,
+            user_timezone=user.get("timezone", "Europe/Moscow")
+        )
+        await state.set_state(PollStates.waiting_for_poll_description)
+
+        # Schedule FSM timeout
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+                user_id=callback.from_user.id,
+                state=PollStates.waiting_for_poll_description,
+                bot=callback.bot
+            )
+
+        # Format duration and time
+        from src.application.utils.formatters import format_time, format_duration
+        start_time_str = format_time(start_time)
+        end_time_str = format_time(end_time)
+        duration_str = format_duration(interval_minutes)
+
+        text = (
+            f"✏️ Опиши активность\n\n"
+            f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
+            f"Напиши, чем ты занимался (минимум 3 символа).\n"
+            f"Можешь добавить теги через #хештег"
+        )
+
+        await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Error in handle_poll_category_select: {e}")
+        await callback.message.answer("⚠️ Произошла ошибка.")
+        await state.clear()
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
+        await callback.answer()
+
+
+@router.message(PollStates.waiting_for_poll_description)
+async def handle_poll_description(message: types.Message, state: FSMContext):
+    """Handle description input for poll activity recording.
+
+    After user provides description, create activity with all collected data.
+    """
+    description = message.text.strip()
+
+    if not description or len(description) < 3:
+        await message.answer("⚠️ Описание должно содержать минимум 3 символа. Попробуй ещё раз.")
+        return
+
+    # Extract tags from description
+    from src.application.utils.formatters import extract_tags
+    tags = extract_tags(description)
+
+    # Get data from state
+    data = await state.get_data()
+    category_id = data.get("category_id")
+    start_time_str = data.get("start_time")
+    end_time_str = data.get("end_time")
+    settings = data.get("settings")
+    user_timezone = data.get("user_timezone")
+    user_id = data.get("user_id")
+
+    if not all([category_id, start_time_str, end_time_str, user_id]):
+        await message.answer(
+            "⚠️ Недостаточно данных для сохранения.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
+        return
+
+    activity_service = ActivityService(api_client)
+    telegram_id = message.from_user.id
+
+    try:
+        # Parse times
+        start_time = datetime.fromisoformat(start_time_str)
+        end_time = datetime.fromisoformat(end_time_str)
+
+        # Create activity
+        await activity_service.create_activity(
+            user_id=user_id,
+            category_id=category_id,
+            description=description,
+            tags=tags,
             start_time=start_time,
             end_time=end_time
         )
 
         # Schedule next poll
-        user_timezone = user.get("timezone", "Europe/Moscow")
         await scheduler_service.schedule_poll(
             user_id=telegram_id,
             settings=settings,
             user_timezone=user_timezone,
             send_poll_callback=send_automatic_poll,
-            bot=callback.bot
+            bot=message.bot
         )
 
         # Format duration
-        duration_minutes = interval_minutes
-        hours = duration_minutes // 60
-        minutes = duration_minutes % 60
-        if hours > 0 and minutes > 0:
-            duration_str = f"{hours}ч {minutes}м"
-        elif hours > 0:
-            duration_str = f"{hours}ч"
-        else:
-            duration_str = f"{minutes}м"
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        from src.application.utils.formatters import format_duration
+        duration_str = format_duration(duration_minutes)
 
-        await callback.message.answer(
+        await message.answer(
             f"✅ Активность сохранена!\n\n"
+            f"{description}\n"
             f"Продолжительность: {duration_str}\n\n"
             f"Следующий опрос придёт по расписанию.",
             reply_markup=get_main_menu_keyboard()
         )
         await state.clear()
         if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
-        await callback.answer()
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
 
     except Exception as e:
-        logger.error(f"Error in handle_poll_category_select: {e}")
-        await callback.message.answer("⚠️ Произошла ошибка при сохранении.")
+        logger.error(f"Error in handle_poll_description: {e}")
+        await message.answer(
+            "⚠️ Произошла ошибка при сохранении активности.",
+            reply_markup=get_main_menu_keyboard()
+        )
         await state.clear()
         if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
-        await callback.answer()
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
 
 
 @router.callback_query(PollStates.waiting_for_poll_category, F.data == "poll_cancel")
