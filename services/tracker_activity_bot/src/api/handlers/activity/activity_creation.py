@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from aiogram import Router, types, F
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 
 from src.api.states.activity import ActivityStates
@@ -58,6 +59,44 @@ async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
     )
 
     await callback.message.answer(text, reply_markup=get_start_time_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(
+    StateFilter(ActivityStates.waiting_for_start_time, ActivityStates.waiting_for_end_time),
+    F.data == "cancel"
+)
+@with_typing_action
+@log_user_action("activity_creation_cancelled")
+async def cancel_activity_creation(callback: types.CallbackQuery, state: FSMContext):
+    """Cancel activity creation process.
+
+    Handles the cancel button in time selection keyboards.
+    Clears FSM state and returns user to main menu.
+
+    Args:
+        callback: Telegram callback query from cancel button
+        state: FSM context for state management
+    """
+    logger.debug(
+        "Activity creation cancelled",
+        extra={
+            "user_id": callback.from_user.id,
+            "current_state": await state.get_state()
+        }
+    )
+
+    # Clear FSM state
+    await state.clear()
+
+    # Cancel FSM timeout if exists
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
+
+    await callback.message.answer(
+        "❌ Запись активности отменена.",
+        reply_markup=get_main_menu_keyboard()
+    )
     await callback.answer()
 
 

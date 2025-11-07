@@ -19,14 +19,6 @@ from .helpers import cancel_activity_recording
 
 router = Router()
 logger = logging.getLogger(__name__)
-async def cancel_action(callback: types.CallbackQuery, state: FSMContext):
-    """Cancel current action."""
-    await clear_state_and_timeout(state, callback.from_user.id)
-    await callback.message.answer(
-        "❌ Действие отменено.",
-        reply_markup=get_main_menu_keyboard()
-    )
-    await callback.answer()
 
 
 @router.callback_query(F.data == "my_activities")
