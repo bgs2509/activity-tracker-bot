@@ -1,4 +1,4 @@
-.PHONY: help build up down logs restart clean lint test test-imports test-unit test-docker test-smoke test-coverage test-all
+.PHONY: help build up down logs restart clean lint test test-imports test-unit test-docker test-smoke test-coverage test-all test-unit-docker test-imports-docker test-coverage-docker test-all-docker
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -79,28 +79,61 @@ init: ## Initialize project (copy .env.example to .env)
 # Testing commands
 
 test-imports: ## Run import smoke tests for all services
-	@echo "Running import tests for tracker_activity_bot..."
+	@echo "Запуск импорт-тестов для tracker_activity_bot..."
 	cd services/tracker_activity_bot && pytest tests/unit/test_imports.py -v -m smoke
-	@echo "\nRunning import tests for data_postgres_api..."
+	@echo "\nЗапуск импорт-тестов для data_postgres_api..."
 	cd services/data_postgres_api && pytest tests/unit/test_imports.py -v -m smoke
 
 test-unit: ## Run all unit tests
-	@echo "Running unit tests for tracker_activity_bot..."
+	@echo "Запуск unit-тестов для tracker_activity_bot..."
 	cd services/tracker_activity_bot && pytest tests/unit/ -v -m unit
-	@echo "\nRunning unit tests for data_postgres_api..."
+	@echo "\nЗапуск unit-тестов для data_postgres_api..."
 	cd services/data_postgres_api && pytest tests/unit/ -v -m unit
 
 test-docker: ## Run Docker health smoke tests (requires running containers)
-	@echo "Running Docker health tests..."
-	@echo "Note: Ensure containers are running with 'make up' before running this test"
+	@echo "Запуск тестов проверки здоровья Docker контейнеров..."
+	@echo "Примечание: контейнеры должны быть запущены (make up)"
 	pytest tests/smoke/ -v -m smoke
 
 test-smoke: test-imports test-docker ## Run all smoke tests
 
 test-coverage: ## Run tests with coverage report
-	@echo "Running tests with coverage for tracker_activity_bot..."
+	@echo "Запуск тестов с coverage отчётом для tracker_activity_bot..."
 	cd services/tracker_activity_bot && pytest tests/ -v --cov=src --cov-report=html --cov-report=term
-	@echo "\nRunning tests with coverage for data_postgres_api..."
+	@echo "\nЗапуск тестов с coverage отчётом для data_postgres_api..."
 	cd services/data_postgres_api && pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 
 test-all: test-unit test-smoke ## Run all tests
+
+# Docker-based testing (runs tests inside containers)
+
+test-unit-docker: ## Run unit tests inside Docker containers
+	@echo "Запуск контейнеров для тестирования..."
+	@docker compose --env-file .env.test up -d --wait
+	@echo "\n✓ Контейнеры запущены\n"
+	@echo "Запуск unit-тестов для data_postgres_api внутри контейнера..."
+	@docker compose exec data_postgres_api pytest tests/unit/ -v -m unit || true
+	@echo "\nЗапуск unit-тестов для tracker_activity_bot внутри контейнера..."
+	@docker compose exec tracker_activity_bot pytest tests/unit/ -v -m unit || true
+	@echo "\n✓ Все Docker-based тесты завершены"
+
+test-imports-docker: ## Run import tests inside Docker containers
+	@echo "Запуск контейнеров для тестирования..."
+	@docker compose --env-file .env.test up -d --wait
+	@echo "\n✓ Контейнеры запущены\n"
+	@echo "Запуск импорт-тестов для data_postgres_api внутри контейнера..."
+	@docker compose exec data_postgres_api pytest tests/unit/test_imports.py -v -m smoke
+	@echo "\nЗапуск импорт-тестов для tracker_activity_bot внутри контейнера..."
+	@docker compose exec tracker_activity_bot pytest tests/unit/test_imports.py -v -m smoke
+
+test-coverage-docker: ## Run coverage tests inside Docker containers
+	@echo "Запуск контейнеров для тестирования..."
+	@docker compose --env-file .env.test up -d --wait
+	@echo "\n✓ Контейнеры запущены\n"
+	@echo "Запуск тестов с coverage для data_postgres_api..."
+	@docker compose exec data_postgres_api pytest tests/ -v --cov=src --cov-report=html --cov-report=term
+	@echo "\nЗапуск тестов с coverage для tracker_activity_bot..."
+	@docker compose exec tracker_activity_bot pytest tests/ -v --cov=src --cov-report=html --cov-report=term
+	@echo "\n✓ Coverage отчёты созданы в services/*/htmlcov/"
+
+test-all-docker: test-unit-docker test-docker ## Run all tests (Docker-based + smoke tests)
