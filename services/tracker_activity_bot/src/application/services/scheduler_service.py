@@ -40,11 +40,21 @@ class SchedulerService:
             self.scheduler.start()
             logger.info("Scheduler started with AsyncIOExecutor")
 
-    def stop(self):
-        """Stop the scheduler."""
+    def stop(self, wait: bool = True):
+        """
+        Stop the scheduler gracefully.
+
+        Args:
+            wait: If True, wait for pending jobs to complete before shutdown.
+                  Prevents job interruption during graceful shutdown.
+                  Default: True for production safety.
+        """
         if self.scheduler.running:
-            self.scheduler.shutdown()
-            logger.info("Scheduler stopped")
+            self.scheduler.shutdown(wait=wait)
+            if wait:
+                logger.info("Scheduler stopped (waited for pending jobs to complete)")
+            else:
+                logger.info("Scheduler stopped (did not wait for pending jobs)")
 
     async def schedule_poll(
         self,
@@ -99,8 +109,16 @@ class SchedulerService:
         if user_id in self.jobs:
             try:
                 self.scheduler.remove_job(self.jobs[user_id])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "Failed to remove existing poll job",
+                    extra={
+                        "user_id": user_id,
+                        "job_id": self.jobs.get(user_id),
+                        "error": str(e),
+                        "error_type": type(e).__name__
+                    }
+                )
 
         # Schedule new job - AsyncIOExecutor handles async functions automatically
         job = self.scheduler.add_job(

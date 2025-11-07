@@ -1,6 +1,7 @@
 """Aiogram bot entry point for tracker_activity_bot service."""
 import asyncio
 import logging
+import signal
 from datetime import timedelta
 
 from aiogram import Bot, Dispatcher
@@ -22,9 +23,33 @@ from src.application.services import fsm_timeout_service as fsm_timeout_module
 setup_logging(service_name="tracker_activity_bot", log_level=settings.log_level)
 logger = logging.getLogger(__name__)
 
+# Global shutdown event for graceful shutdown
+_shutdown_event = asyncio.Event()
+
+
+def handle_shutdown_signal(signum: int, frame):
+    """
+    Handle shutdown signals (SIGTERM, SIGINT) for graceful shutdown.
+
+    Args:
+        signum: Signal number
+        frame: Current stack frame
+    """
+    signal_name = signal.Signals(signum).name
+    logger.info(
+        "Received shutdown signal, initiating graceful shutdown",
+        extra={"signal": signal_name}
+    )
+    _shutdown_event.set()
+
 
 async def main():
-    """Main bot entry point."""
+    """Main bot entry point with graceful shutdown support."""
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, handle_shutdown_signal)
+    signal.signal(signal.SIGINT, handle_shutdown_signal)
+    logger.info("Signal handlers registered (SIGTERM, SIGINT)")
+
     logger.info("Starting tracker_activity_bot")
 
     # Initialize bot and dispatcher
@@ -60,12 +85,33 @@ async def main():
     fsm_timeout_module.fsm_timeout_service = FSMTimeoutService(scheduler_service.scheduler)
     logger.info("FSM timeout service initialized")
 
-    # Start polling
+    # Start polling with graceful shutdown support
     logger.info("Bot started, polling...")
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        # Start polling in background task
+        polling_task = asyncio.create_task(
+            dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        )
+
+        # Wait for either polling to complete or shutdown signal
+        shutdown_task = asyncio.create_task(_shutdown_event.wait())
+
+        done, pending = await asyncio.wait(
+            [polling_task, shutdown_task],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+        # If shutdown signal received, cancel polling gracefully
+        if _shutdown_event.is_set():
+            logger.info("Graceful shutdown initiated, stopping polling...")
+            polling_task.cancel()
+            try:
+                await polling_task
+            except asyncio.CancelledError:
+                logger.info("Polling task cancelled successfully")
+
     finally:
-        # Shutdown scheduler
+        # Shutdown scheduler (wait for pending jobs)
         scheduler_service.stop()
         logger.info("Scheduler stopped")
 

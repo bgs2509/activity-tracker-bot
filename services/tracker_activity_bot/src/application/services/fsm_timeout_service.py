@@ -167,9 +167,9 @@ async def send_reminder(bot: Bot, user_id: int, state: State, action: str):
         action: Human-readable action description
     """
     try:
-        # Get FSM storage
-        from aiogram.fsm.storage.redis import RedisStorage
-        storage = RedisStorage.from_url(app_settings.redis_url)
+        # Get shared FSM storage (reuses existing connection pool)
+        from src.api.handlers.poll import get_fsm_storage
+        storage = get_fsm_storage()
 
         # Check if user is still in same state
         key = StorageKey(
@@ -209,7 +209,7 @@ async def send_reminder(bot: Bot, user_id: int, state: State, action: str):
         from src.application.services.scheduler_service import scheduler_service
         fsm_timeout_service._schedule_cleanup(bot, user_id, state)
 
-        await storage.close()
+        # DON'T close storage - it's shared!
 
     except Exception as e:
         logger.error(f"Error sending FSM reminder to user {user_id}: {e}")
@@ -227,9 +227,9 @@ async def cleanup_stale_state(bot: Bot, user_id: int, state: State):
         state: Expected FSM state object
     """
     try:
-        # Get FSM storage
-        from aiogram.fsm.storage.redis import RedisStorage
-        storage = RedisStorage.from_url(app_settings.redis_url)
+        # Get shared FSM storage (reuses existing connection pool)
+        from src.api.handlers.poll import get_fsm_storage
+        storage = get_fsm_storage()
 
         # Check if user is still in same state (didn't click Continue)
         key = StorageKey(
@@ -265,7 +265,7 @@ async def cleanup_stale_state(bot: Bot, user_id: int, state: State):
                 f"Error sending poll after FSM cleanup for user {user_id}: {e}"
             )
 
-        await storage.close()
+        # DON'T close storage - it's shared!
 
     except Exception as e:
         logger.error(f"Error cleaning up FSM state for user {user_id}: {e}")

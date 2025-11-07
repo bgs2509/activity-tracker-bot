@@ -1,5 +1,6 @@
 """FastAPI application entry point for data_postgres_api service."""
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,11 +18,47 @@ from src.domain.models.base import Base
 setup_logging(service_name="data_postgres_api", log_level=settings.log_level)
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan context manager.
+
+    Handles startup and shutdown events in modern FastAPI style.
+    Replaces deprecated @app.on_event() decorators.
+
+    Args:
+        app: FastAPI application instance
+
+    Yields:
+        Control to application runtime
+    """
+    # Startup
+    logger.info("Starting data_postgres_api service")
+
+    # Database schema is managed by Alembic migrations
+    # For development/testing with auto-creation, set ENABLE_DB_AUTO_CREATE=true
+    if settings.enable_db_auto_create:
+        logger.warning("Auto-creating database tables (development mode only!)")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    logger.info("Application startup complete")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down data_postgres_api service")
+    await engine.dispose()
+    logger.info("Database engine disposed")
+
+
+# Create FastAPI app with lifespan context manager
 app = FastAPI(
     title=settings.app_name,
     description="HTTP Data Access Service for PostgreSQL",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware (PoC level - allow all origins)
@@ -32,26 +69,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Application startup tasks."""
-    logger.info("Starting data_postgres_api service")
-    # Database schema is managed by Alembic migrations
-    # For development/testing with auto-creation, set ENABLE_DB_AUTO_CREATE=true
-    if settings.enable_db_auto_create:
-        logger.warning("Auto-creating database tables (development mode only!)")
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    logger.info("Application startup complete")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("Shutting down data_postgres_api service")
-    await engine.dispose()
 
 
 # Include routers
