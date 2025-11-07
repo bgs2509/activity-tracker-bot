@@ -62,3 +62,9 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
+
+# Backup files
+*.old
+*.bak
+*.backup
+*~.nib
