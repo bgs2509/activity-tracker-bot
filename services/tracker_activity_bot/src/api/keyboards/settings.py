@@ -1,6 +1,8 @@
 """Keyboards for settings configuration."""
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+from src.application.utils.formatters import format_duration
+
 
 def get_main_settings_keyboard() -> InlineKeyboardMarkup:
     """Get main settings menu keyboard."""
@@ -28,9 +30,7 @@ def get_weekday_interval_keyboard(current: int = 120) -> InlineKeyboardMarkup:
     intervals = [30, 60, 90, 120, 180, 240, 360]
     buttons = []
     for interval in intervals:
-        hours = interval // 60
-        minutes = interval % 60
-        label = f"{hours}ч {minutes}м" if minutes else f"{hours} час{'а' if hours < 5 else 'ов'}"
+        label = format_duration(interval)
         if interval == current:
             label = f"✓ {label}"
         buttons.append([InlineKeyboardButton(
@@ -49,9 +49,7 @@ def get_weekend_interval_keyboard(current: int = 180) -> InlineKeyboardMarkup:
     intervals = [30, 60, 120, 180, 240, 360, 480]
     buttons = []
     for interval in intervals:
-        hours = interval // 60
-        minutes = interval % 60
-        label = f"{hours}ч {minutes}м" if minutes else f"{hours} час{'а' if hours < 5 else 'ов'}"
+        label = format_duration(interval)
         if interval == current:
             label = f"✓ {label}"
         buttons.append([InlineKeyboardButton(

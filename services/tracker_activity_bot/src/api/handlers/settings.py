@@ -26,6 +26,7 @@ from src.api.keyboards.settings import (
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.application.services.scheduler_service import scheduler_service
 from src.application.utils.decorators import with_typing_action
+from src.application.utils.formatters import format_duration
 from src.core.logging_middleware import log_user_action
 
 router = Router()
@@ -56,27 +57,11 @@ async def show_settings_menu(callback: types.CallbackQuery, services: ServiceCon
 
     # Format weekday interval
     weekday_minutes = settings["poll_interval_weekday"]
-    if weekday_minutes < 60:
-        weekday_str = f"{weekday_minutes}м"
-    else:
-        weekday_h = weekday_minutes // 60
-        weekday_m = weekday_minutes % 60
-        if weekday_m == 0:
-            weekday_str = f"{weekday_h}ч"
-        else:
-            weekday_str = f"{weekday_h}ч {weekday_m}м"
+    weekday_str = format_duration(weekday_minutes)
 
     # Format weekend interval
     weekend_minutes = settings["poll_interval_weekend"]
-    if weekend_minutes < 60:
-        weekend_str = f"{weekend_minutes}м"
-    else:
-        weekend_h = weekend_minutes // 60
-        weekend_m = weekend_minutes % 60
-        if weekend_m == 0:
-            weekend_str = f"{weekend_h}ч"
-        else:
-            weekend_str = f"{weekend_h}ч {weekend_m}м"
+    weekend_str = format_duration(weekend_minutes)
 
     quiet_enabled = settings["quiet_hours_start"] is not None
     quiet_text = f"С {settings['quiet_hours_start'][:5]} до {settings['quiet_hours_end'][:5]}" if quiet_enabled else "Выключены"
@@ -293,14 +278,7 @@ async def process_weekday_custom_input(message: types.Message, state: FSMContext
         )
         logger.info(f"Rescheduled poll for user {telegram_id} with custom weekday interval {interval}")
 
-        hours = interval // 60
-        minutes = interval % 60
-        if hours > 0 and minutes > 0:
-            interval_str = f"{hours}ч {minutes}м"
-        elif hours > 0:
-            interval_str = f"{hours}ч"
-        else:
-            interval_str = f"{minutes}м"
+        interval_str = format_duration(interval)
 
         text = (
             f"✅ Интервал для будних дней обновлён!\n\n"
@@ -423,14 +401,7 @@ async def process_weekend_custom_input(message: types.Message, state: FSMContext
         )
         logger.info(f"Rescheduled poll for user {telegram_id} with custom weekend interval {interval}")
 
-        hours = interval // 60
-        minutes = interval % 60
-        if hours > 0 and minutes > 0:
-            interval_str = f"{hours}ч {minutes}м"
-        elif hours > 0:
-            interval_str = f"{hours}ч"
-        else:
-            interval_str = f"{minutes}м"
+        interval_str = format_duration(interval)
 
         text = (
             f"✅ Интервал для выходных обновлён!\n\n"
