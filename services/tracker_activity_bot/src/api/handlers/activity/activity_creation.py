@@ -435,7 +435,7 @@ async def process_description(message: types.Message, state: FSMContext, service
 
         await message.answer(
             text,
-            reply_markup=get_poll_category_keyboard(categories)
+            reply_markup=get_poll_category_keyboard(categories, cancel_callback="activity_cancel_category")
         )
 
     except Exception as e:
@@ -479,12 +479,14 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
     await callback.answer()
 
 
-@router.callback_query(ActivityStates.waiting_for_category, F.data == "poll_cancel")
+@router.callback_query(ActivityStates.waiting_for_category, F.data == "activity_cancel_category")
 @with_typing_action
 async def cancel_category_selection(callback: types.CallbackQuery, state: FSMContext):
     """Handle cancel button in category selection.
 
     User clicked cancel button - clear state and return to main menu.
+    Note: Uses 'activity_cancel_category' instead of 'poll_cancel' to avoid
+    conflicts with poll handler which uses the same callback_data but different state.
     """
     await state.clear()
     await callback.message.answer(

@@ -58,16 +58,6 @@ async def show_categories_list(
     await callback.answer()
 
 
-@router.callback_query(F.data == "main_menu")
-@with_typing_action
-async def show_main_menu(callback: types.CallbackQuery):
-    """Return to main menu.
-
-    Handles navigation back to main menu from categories.
-
-    Args:
-        callback: Callback query from button press
-    """
-    text = "Выбери действие:"
-    await callback.message.edit_text(text, reply_markup=get_main_menu_keyboard())
-    await callback.answer()
+# NOTE: "main_menu" callback handler is defined in settings/main_menu.py
+# to avoid duplication. That handler clears FSM state which is important
+# for returning to main menu from any context.
