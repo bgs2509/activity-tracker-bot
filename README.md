@@ -214,10 +214,45 @@ cd services/tracker_activity_bot && pytest
 
 ## 📚 Documentation
 
-- **Framework docs**: `.framework/docs/INDEX.md`
-- **Prompt**: `artifacts/prompts/step-01-v01.md`
-- **Architecture guide**: `.framework/docs/guides/architecture-guide.md`
-- **Naming conventions**: `.framework/docs/atomic/architecture/naming/README.md`
+### 👨‍💻 For Developers
+
+**New to the project?** Start here:
+1. [Developer Onboarding](docs/onboarding/README.md) - ~40 min to productive
+   - [Prerequisites](docs/onboarding/00-prerequisites.md) - Required tools
+   - [Setup Guide](docs/onboarding/01-setup.md) - First-time setup
+   - [Architecture Tour](docs/onboarding/02-architecture-tour.md) - Code walkthrough
+
+**Service Documentation**:
+- [Bot Service README](services/tracker_activity_bot/README.md) - Telegram bot patterns
+- [API Service README](services/data_postgres_api/README.md) - Data API patterns
+
+**API Reference**:
+- [API Endpoints Reference](docs/api/endpoints-reference.md) - Complete endpoint docs
+- [Interactive API Docs](http://localhost:8080/docs) - Swagger UI (when running)
+
+### 🤖 For AI Tools
+
+**Start Here**: [Architecture Snapshot](docs/project-context/architecture-snapshot.md) - Current state of architecture
+
+**Essential Reading**:
+1. [Code Patterns](docs/project-context/code-patterns.md) - 8 established patterns with examples
+2. [Anti-Patterns](docs/project-context/anti-patterns.md) - 10 common mistakes to AVOID
+3. [Quick Reference](docs/project-context/quick-reference.md) - Cheat sheet for common tasks
+4. [Bot-to-API Contract](docs/api/bot-to-api-contract.md) - Service communication contract
+
+### 📖 Additional Resources
+
+- [Documentation Structure](docs/DOCUMENTATION_STRUCTURE.md) - Master documentation plan
+- [Architecture Details](ARCHITECTURE.md) - Detailed architecture guide
+- [Testing Guide](TESTING.md) - Testing strategy
+- [Test Gap Analysis](docs/testing/TEST_GAPS_ANALYSIS.md) - Current test coverage
+- [ADRs](docs/adr/README.md) - Architecture decision records
+
+### 🔧 Framework Documentation
+
+- `.ai-framework/docs/INDEX.md` - General AI framework docs (submodule)
+- `.ai-framework/docs/guides/architecture-guide.md` - Framework architecture guide
+- `.ai-framework/docs/atomic/architecture/naming/README.md` - Naming conventions
 
 ## 🐛 Troubleshooting
 

@@ -1,14 +1,18 @@
-# data_postgres_api
+# Data Postgres API Service
 
-HTTP Data Access Service for PostgreSQL - FastAPI microservice.
+**Type**: HTTP REST API (FastAPI 0.109.0)
 
-## Architecture
+**Purpose**: Single point of data access to PostgreSQL database.
+
+## Overview
 
 This service is part of the **Improved Hybrid Approach** architecture. It provides HTTP-only access to PostgreSQL database.
 
 **Service Name**: `data_postgres_api` (3-part naming: `{context}_{domain}_{type}`)
-**Technology**: FastAPI, SQLAlchemy 2.0 async, Python 3.11+
+**Technology**: FastAPI 0.109.0, SQLAlchemy 2.0.25 async, Python 3.12
 **Purpose**: Single point of access to PostgreSQL database
+
+**Key Principle**: This service is the ONLY component that can access the database directly - all other services must use HTTP API.
 
 ## Endpoints
 
@@ -148,8 +152,28 @@ class UserService:
 
 ## Database Schema
 
-See `models/` directory for SQLAlchemy models:
+See `src/domain/models/` directory for SQLAlchemy models:
 - `User` - Telegram bot users
 - `Category` - Activity categories
 - `Activity` - User activities with duration tracking
 - `UserSettings` - User preferences and poll intervals
+
+## API Documentation
+
+Interactive API documentation available when service is running:
+- **Swagger UI**: http://localhost:8080/docs
+- **ReDoc**: http://localhost:8080/redoc
+
+## Documentation
+
+- [Code Patterns](../../docs/project-context/code-patterns.md)
+- [Anti-Patterns](../../docs/project-context/anti-patterns.md)
+- [API Contract](../../docs/api/bot-to-api-contract.md)
+- [API Endpoints Reference](../../docs/api/endpoints-reference.md)
+- [Onboarding Guide](../../docs/onboarding/)
+- [Architecture](../../ARCHITECTURE.md)
+
+---
+
+**Last Updated**: 2025-11-08
+**Maintained By**: Development Team

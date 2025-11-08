@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Category",
+  "description": "Activity category schema",
+  "type": "object",
+  "definitions": {
+    "CategoryCreate": {
+      "type": "object",
+      "required": ["user_id", "name"],
+      "properties": {
+        "user_id": {
+          "type": "integer",
+          "description": "User ID",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "description": "Category name",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "emoji": {
+          "type": ["string", "null"],
+          "description": "Category emoji",
+          "maxLength": 10
+        },
+        "is_default": {
+          "type": "boolean",
+          "description": "Is default category",
+          "default": false
+        }
+      }
+    },
+    "CategoryBulkCreate": {
+      "type": "object",
+      "required": ["user_id", "categories"],
+      "properties": {
+        "user_id": {
+          "type": "integer",
+          "description": "User ID",
+          "minimum": 1
+        },
+        "categories": {
+          "type": "array",
+          "description": "List of categories to create",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "emoji": {
+                "type": ["string", "null"],
+                "maxLength": 10
+              },
+              "is_default": {
+                "type": "boolean",
+                "default": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "CategoryResponse": {
+      "type": "object",
+      "required": ["id", "user_id", "name", "is_default", "created_at"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Category ID"
+        },
+        "user_id": {
+          "type": "integer",
+          "description": "User ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Category name"
+        },
+        "emoji": {
+          "type": ["string", "null"],
+          "description": "Category emoji"
+        },
+        "is_default": {
+          "type": "boolean",
+          "description": "Is default category"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp (ISO 8601)"
+        }
+      }
+    }
+  }
+}

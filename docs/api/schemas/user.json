@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "User",
+  "description": "Telegram bot user schema",
+  "type": "object",
+  "definitions": {
+    "UserCreate": {
+      "type": "object",
+      "required": ["telegram_id"],
+      "properties": {
+        "telegram_id": {
+          "type": "integer",
+          "description": "Telegram user ID",
+          "minimum": 1
+        },
+        "username": {
+          "type": ["string", "null"],
+          "description": "Telegram username",
+          "maxLength": 255
+        },
+        "first_name": {
+          "type": ["string", "null"],
+          "description": "User's first name",
+          "maxLength": 255
+        },
+        "timezone": {
+          "type": "string",
+          "description": "User's timezone",
+          "default": "Europe/Moscow",
+          "maxLength": 50
+        }
+      }
+    },
+    "UserResponse": {
+      "type": "object",
+      "required": ["id", "telegram_id", "created_at"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Internal user ID"
+        },
+        "telegram_id": {
+          "type": "integer",
+          "description": "Telegram user ID"
+        },
+        "username": {
+          "type": ["string", "null"],
+          "description": "Telegram username"
+        },
+        "first_name": {
+          "type": ["string", "null"],
+          "description": "User's first name"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "User's timezone"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp (ISO 8601)"
+        },
+        "last_poll_time": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Last poll timestamp (ISO 8601)"
+        }
+      }
+    },
+    "UserUpdate": {
+      "type": "object",
+      "properties": {
+        "last_poll_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last poll timestamp (ISO 8601)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UserSettings",
+  "description": "User settings schema",
+  "type": "object",
+  "definitions": {
+    "UserSettingsCreate": {
+      "type": "object",
+      "required": ["user_id"],
+      "properties": {
+        "user_id": {
+          "type": "integer",
+          "description": "User ID",
+          "minimum": 1
+        },
+        "poll_interval_weekday": {
+          "type": "integer",
+          "description": "Poll interval for weekdays (minutes)",
+          "minimum": 15,
+          "maximum": 720,
+          "default": 120
+        },
+        "poll_interval_weekend": {
+          "type": "integer",
+          "description": "Poll interval for weekends (minutes)",
+          "minimum": 15,
+          "maximum": 1440,
+          "default": 180
+        },
+        "quiet_hours_start": {
+          "type": "string",
+          "format": "time",
+          "description": "Quiet hours start time (HH:MM:SS)",
+          "default": "23:00:00"
+        },
+        "quiet_hours_end": {
+          "type": "string",
+          "format": "time",
+          "description": "Quiet hours end time (HH:MM:SS)",
+          "default": "07:00:00"
+        },
+        "reminder_enabled": {
+          "type": "boolean",
+          "description": "Enable reminders",
+          "default": true
+        },
+        "reminder_delay_minutes": {
+          "type": "integer",
+          "description": "Reminder delay (minutes)",
+          "minimum": 5,
+          "maximum": 120,
+          "default": 30
+        }
+      }
+    },
+    "UserSettingsUpdate": {
+      "type": "object",
+      "properties": {
+        "poll_interval_weekday": {
+          "type": "integer",
+          "minimum": 15,
+          "maximum": 720
+        },
+        "poll_interval_weekend": {
+          "type": "integer",
+          "minimum": 15,
+          "maximum": 1440
+        },
+        "quiet_hours_start": {
+          "type": "string",
+          "format": "time"
+        },
+        "quiet_hours_end": {
+          "type": "string",
+          "format": "time"
+        },
+        "reminder_enabled": {
+          "type": "boolean"
+        },
+        "reminder_delay_minutes": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 120
+        }
+      }
+    },
+    "UserSettingsResponse": {
+      "type": "object",
+      "required": ["id", "user_id", "poll_interval_weekday", "poll_interval_weekend", "quiet_hours_start", "quiet_hours_end", "reminder_enabled", "reminder_delay_minutes"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Settings ID"
+        },
+        "user_id": {
+          "type": "integer",
+          "description": "User ID"
+        },
+        "poll_interval_weekday": {
+          "type": "integer",
+          "description": "Poll interval for weekdays (minutes)"
+        },
+        "poll_interval_weekend": {
+          "type": "integer",
+          "description": "Poll interval for weekends (minutes)"
+        },
+        "quiet_hours_start": {
+          "type": "string",
+          "format": "time",
+          "description": "Quiet hours start time (HH:MM:SS)"
+        },
+        "quiet_hours_end": {
+          "type": "string",
+          "format": "time",
+          "description": "Quiet hours end time (HH:MM:SS)"
+        },
+        "reminder_enabled": {
+          "type": "boolean",
+          "description": "Enable reminders"
+        },
+        "reminder_delay_minutes": {
+          "type": "integer",
+          "description": "Reminder delay (minutes)"
+        }
+      }
+    }
+  }
+}

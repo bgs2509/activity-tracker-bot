@@ -1,14 +1,18 @@
-# tracker_activity_bot
+# Tracker Activity Bot Service
 
-Telegram Bot for activity tracking - Aiogram 3.x microservice.
+**Type**: Telegram Bot (Aiogram 3.3.0)
 
-## Architecture
+**Purpose**: User interaction layer for Activity Tracker Bot.
+
+## Overview
 
 This service is part of the **Improved Hybrid Approach** architecture. It provides user interface through Telegram and communicates with `data_postgres_api` via HTTP.
 
 **Service Name**: `tracker_activity_bot` (3-part naming: `{context}_{domain}_{type}`)
-**Technology**: Aiogram 3.x, Python 3.11+
+**Technology**: Aiogram 3.3.0, Python 3.12
 **Purpose**: Telegram bot interface for activity tracking
+
+**Key Principle**: This service NEVER accesses database directly - all data operations via HTTP API.
 
 ## Key Features
 
@@ -173,3 +177,16 @@ format_duration(45)   # "45м"
 ### PollStates
 - waiting_for_poll_description
 - waiting_for_poll_tags
+
+## Documentation
+
+- [Code Patterns](../../docs/project-context/code-patterns.md)
+- [Anti-Patterns](../../docs/project-context/anti-patterns.md)
+- [API Contract](../../docs/api/bot-to-api-contract.md)
+- [Onboarding Guide](../../docs/onboarding/)
+- [Architecture](../../ARCHITECTURE.md)
+
+---
+
+**Last Updated**: 2025-11-08
+**Maintained By**: Development Team
