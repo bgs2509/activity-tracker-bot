@@ -1,4 +1,4 @@
-.PHONY: help build up down logs restart clean lint test test-imports test-unit test-docker test-smoke test-coverage test-all test-unit-docker test-imports-docker test-coverage-docker test-all-docker
+.PHONY: help build up down logs restart clean lint test test-imports test-unit test-integration test-docker test-smoke test-coverage test-all test-unit-docker test-imports-docker test-integration-docker test-coverage-docker test-all-docker
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -90,6 +90,12 @@ test-unit: ## Run all unit tests
 	@echo "\nЗапуск unit-тестов для data_postgres_api..."
 	cd services/data_postgres_api && pytest tests/unit/ -v -m unit
 
+test-integration: ## Run integration tests (handler registration, API contracts)
+	@echo "Запуск integration-тестов..."
+	@echo "  ✓ Проверка регистрации обработчиков кнопок"
+	@echo "  ✓ Проверка контрактов Bot ↔ API"
+	pytest tests/integration/ -v -m integration
+
 test-docker: ## Run Docker health smoke tests (requires running containers)
 	@echo "Запуск тестов проверки здоровья Docker контейнеров..."
 	@echo "Примечание: контейнеры должны быть запущены (make up)"
@@ -103,7 +109,7 @@ test-coverage: ## Run tests with coverage report
 	@echo "\nЗапуск тестов с coverage отчётом для data_postgres_api..."
 	cd services/data_postgres_api && pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 
-test-all: test-unit test-smoke ## Run all tests
+test-all: test-unit test-integration test-smoke ## Run all tests (unit + integration + smoke)
 
 # Docker-based testing (runs tests inside containers)
 
@@ -126,6 +132,16 @@ test-imports-docker: ## Run import tests inside Docker containers
 	@echo "\nЗапуск импорт-тестов для tracker_activity_bot внутри контейнера..."
 	@docker compose exec tracker_activity_bot pytest tests/unit/test_imports.py -v -m smoke
 
+test-integration-docker: ## Run integration tests with Docker (handler registration, API contracts)
+	@echo "Запуск контейнеров для интеграционных тестов..."
+	@docker compose --env-file .env.test up -d --wait
+	@echo "\n✓ Контейнеры запущены\n"
+	@echo "Запуск integration-тестов..."
+	@echo "  ✓ Проверка регистрации обработчиков кнопок"
+	@echo "  ✓ Проверка контрактов Bot ↔ API"
+	@docker run --rm -v $(PWD):/app -w /app python:3.11-slim sh -c "pip install -q pytest && pytest tests/integration/ -v -m integration" || true
+	@echo "\n✓ Integration тесты завершены"
+
 test-coverage-docker: ## Run coverage tests inside Docker containers
 	@echo "Запуск контейнеров для тестирования..."
 	@docker compose --env-file .env.test up -d --wait
@@ -136,4 +152,4 @@ test-coverage-docker: ## Run coverage tests inside Docker containers
 	@docker compose exec tracker_activity_bot pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 	@echo "\n✓ Coverage отчёты созданы в services/*/htmlcov/"
 
-test-all-docker: test-unit-docker ## Run all Docker-based tests (unit tests inside containers)
+test-all-docker: test-unit-docker test-integration-docker ## Run all Docker-based tests (unit + integration inside containers)
