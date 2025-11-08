@@ -388,7 +388,7 @@ async def handle_poll_category_select(
             return
 
         # Calculate time range based on poll interval
-        end_time = datetime.now(datetime.timezone.utc)
+        end_time = datetime.now(timezone.utc)
         start_time = calculate_poll_start_time(end_time, settings)
 
         # Calculate interval for display
