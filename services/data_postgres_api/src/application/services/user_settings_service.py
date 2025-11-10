@@ -117,13 +117,13 @@ class UserSettingsService:
         Raises:
             ValueError: If intervals are invalid
         """
-        if weekday < 15:
+        if weekday < 1:
             raise ValueError(
-                f"Weekday poll interval ({weekday}m) must be at least 15 minutes"
+                f"Weekday poll interval ({weekday}m) must be at least 1 minute"
             )
-        if weekend < 15:
+        if weekend < 1:
             raise ValueError(
-                f"Weekend poll interval ({weekend}m) must be at least 15 minutes"
+                f"Weekend poll interval ({weekend}m) must be at least 1 minute"
             )
         if weekday > 1440:  # 24 hours
             raise ValueError(

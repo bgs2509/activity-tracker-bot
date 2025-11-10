@@ -86,22 +86,22 @@ async def test_create_settings_already_exists(user_settings_service, mock_reposi
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_settings_poll_interval_weekday_too_low(user_settings_service, mock_repository, valid_settings_data):
-    """Test that poll interval < 15 minutes raises ValueError."""
+    """Test that poll interval < 1 minute raises ValueError."""
     mock_repository.get_by_user_id = AsyncMock(return_value=None)
-    valid_settings_data.poll_interval_weekday = 14
+    valid_settings_data.poll_interval_weekday = 0
 
-    with pytest.raises(ValueError, match="Weekday poll interval \\(14m\\) must be at least 15 minutes"):
+    with pytest.raises(ValueError, match="Weekday poll interval \\(0m\\) must be at least 1 minute"):
         await user_settings_service.create_settings(valid_settings_data)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_settings_poll_interval_weekend_too_low(user_settings_service, mock_repository, valid_settings_data):
-    """Test that weekend poll interval < 15 minutes raises ValueError."""
+    """Test that weekend poll interval < 1 minute raises ValueError."""
     mock_repository.get_by_user_id = AsyncMock(return_value=None)
-    valid_settings_data.poll_interval_weekend = 14
+    valid_settings_data.poll_interval_weekend = 0
 
-    with pytest.raises(ValueError, match="Weekend poll interval \\(14m\\) must be at least 15 minutes"):
+    with pytest.raises(ValueError, match="Weekend poll interval \\(0m\\) must be at least 1 minute"):
         await user_settings_service.create_settings(valid_settings_data)
 
 
@@ -130,11 +130,11 @@ async def test_create_settings_poll_interval_weekend_too_high(user_settings_serv
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_settings_poll_interval_boundary_min(user_settings_service, mock_repository, valid_settings_data, mock_settings):
-    """Test that poll interval exactly 15 minutes is accepted."""
+    """Test that poll interval exactly 1 minute is accepted."""
     mock_repository.get_by_user_id = AsyncMock(return_value=None)
     mock_repository.create = AsyncMock(return_value=mock_settings)
-    valid_settings_data.poll_interval_weekday = 15
-    valid_settings_data.poll_interval_weekend = 15
+    valid_settings_data.poll_interval_weekday = 1
+    valid_settings_data.poll_interval_weekend = 1
 
     result = await user_settings_service.create_settings(valid_settings_data)
 
@@ -301,9 +301,9 @@ async def test_update_settings_poll_interval_validation(user_settings_service, m
     """Test that updating poll interval triggers validation at Pydantic schema level."""
     from pydantic import ValidationError
 
-    # Pydantic schema validation should reject 14 minutes before it reaches the service
+    # Pydantic schema validation should reject 0 minutes before it reaches the service
     with pytest.raises(ValidationError, match="greater_than_equal"):
-        UserSettingsUpdate(poll_interval_weekday=14)  # Too low - should fail at schema level
+        UserSettingsUpdate(poll_interval_weekday=0)  # Too low - should fail at schema level
 
 
 @pytest.mark.unit

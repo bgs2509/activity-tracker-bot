@@ -464,8 +464,8 @@ dt = datetime.fromisoformat(response["created_at"])
 ### Integer Ranges
 
 ```python
-poll_interval_weekday: 15-720 (15 min to 12 hours)
-poll_interval_weekend: 15-1440 (15 min to 24 hours)
+poll_interval_weekday: 1-720 (1 min to 12 hours)
+poll_interval_weekend: 1-1440 (1 min to 24 hours)
 reminder_delay_minutes: 5-120 (5 min to 2 hours)
 ```
 

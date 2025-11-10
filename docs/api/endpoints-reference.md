@@ -364,8 +364,8 @@ Content-Type: application/json
 Request Body:
 {
   "user_id": 1,                        # Required: User ID
-  "poll_interval_weekday": 120,        # Optional: 15-720 minutes (default: 120)
-  "poll_interval_weekend": 180,        # Optional: 15-1440 minutes (default: 180)
+  "poll_interval_weekday": 120,        # Optional: 1-720 minutes (default: 120)
+  "poll_interval_weekend": 180,        # Optional: 1-1440 minutes (default: 180)
   "quiet_hours_start": "23:00:00",     # Optional: HH:MM:SS (default: 23:00:00)
   "quiet_hours_end": "07:00:00",       # Optional: HH:MM:SS (default: 07:00:00)
   "reminder_enabled": true,            # Optional: boolean (default: true)
@@ -401,8 +401,8 @@ Path Parameters:
 
 Request Body (all fields optional):
 {
-  "poll_interval_weekday": 90,        # Optional: 15-720 minutes
-  "poll_interval_weekend": 150,       # Optional: 15-1440 minutes
+  "poll_interval_weekday": 90,        # Optional: 1-720 minutes
+  "poll_interval_weekend": 150,       # Optional: 1-1440 minutes
   "quiet_hours_start": "22:00:00",    # Optional: HH:MM:SS
   "quiet_hours_end": "08:00:00",      # Optional: HH:MM:SS
   "reminder_enabled": false,          # Optional: boolean
