@@ -73,14 +73,14 @@ class UserSettingsService:
 
     async def update_settings(
         self,
-        settings_id: int,
+        user_id: int,
         settings_data: UserSettingsUpdate
     ) -> Optional[UserSettings]:
         """
         Update user settings with validation.
 
         Args:
-            settings_id: Settings record identifier
+            user_id: User identifier
             settings_data: Settings update data (partial updates allowed)
 
         Returns:
@@ -89,10 +89,10 @@ class UserSettingsService:
         Raises:
             ValueError: If validation fails or settings not found
         """
-        existing = await self.repository.get_by_id(settings_id)
+        existing = await self.repository.get_by_user_id(user_id)
         if not existing:
             raise ValueError(
-                f"Settings not found with id {settings_id}. "
+                f"Settings not found for user {user_id}. "
                 f"Create settings first."
             )
 
@@ -104,7 +104,7 @@ class UserSettingsService:
 
         # Note: Quiet hours validation is handled by Pydantic schema (time type)
 
-        return await self.repository.update(settings_id, settings_data)
+        return await self.repository.update(user_id, settings_data)
 
     def _validate_poll_intervals(self, weekday: int, weekend: int) -> None:
         """
