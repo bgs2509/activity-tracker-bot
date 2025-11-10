@@ -434,7 +434,8 @@ async def handle_poll_category_select(
         # Format time and duration for display
         start_time_str = format_time(start_time)
         end_time_str = format_time(end_time)
-        duration_str = format_duration(start_time, end_time)
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        duration_str = format_duration(duration_minutes)
 
         # Get recent activities filtered by selected category
         try:

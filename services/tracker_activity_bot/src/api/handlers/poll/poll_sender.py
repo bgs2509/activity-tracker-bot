@@ -184,7 +184,8 @@ async def send_category_reminder(bot: Bot, user_id: int) -> None:
         # Format time and duration for display
         start_time_str = format_time(start_time)
         end_time_str = format_time(end_time)
-        duration_str = format_duration(start_time, end_time)
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        duration_str = format_duration(duration_minutes)
 
         # Send category selection message
         category_text = get_category_selection_message(
