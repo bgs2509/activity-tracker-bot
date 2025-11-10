@@ -18,6 +18,37 @@ def get_poll_response_keyboard() -> InlineKeyboardMarkup:
     return keyboard
 
 
+def get_poll_initial_category_keyboard(categories: List[dict]) -> InlineKeyboardMarkup:
+    """Get keyboard for initial category selection in automatic poll.
+
+    This keyboard is used when automatic poll is sent and shows only
+    category buttons without additional actions (Remind Later, Cancel).
+
+    Args:
+        categories: List of category dicts with 'id' and 'name'
+
+    Returns:
+        Keyboard with category buttons only
+    """
+    buttons = []
+
+    # Add category buttons (2 per row for better UX)
+    for i in range(0, len(categories), 2):
+        row = []
+        for j in range(i, min(i + 2, len(categories))):
+            category = categories[j]
+            emoji = category.get("emoji", "")
+            name = category["name"]
+            button_text = f"{emoji} {name}" if emoji else name
+            row.append(InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"poll_category_{category['id']}"
+            ))
+        buttons.append(row)
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def get_poll_category_keyboard(categories: List[dict], cancel_callback: str = "poll_cancel") -> InlineKeyboardMarkup:
     """Get keyboard for category selection in poll.
 

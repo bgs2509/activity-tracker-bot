@@ -8,8 +8,9 @@ from aiogram.fsm.storage.base import StorageKey
 from apscheduler.triggers.date import DateTrigger
 
 from src.api.dependencies import get_service_container
-from src.api.keyboards.poll import get_poll_response_keyboard
+from src.api.keyboards.poll import get_poll_response_keyboard, get_poll_initial_category_keyboard
 from src.api.messages.activity_messages import get_category_selection_message
+from src.api.states.poll import PollStates
 from src.application.utils.formatters import format_time, format_duration
 from src.application.utils.time_helpers import get_poll_interval, calculate_poll_period
 from src.core.constants import POLL_POSTPONE_MINUTES
@@ -54,13 +55,27 @@ async def send_automatic_poll(bot: Bot, user_id: int) -> None:
             )
             return
 
+        # Get categories
+        categories = await services.category.get_user_categories(user["id"])
+        if not categories:
+            logger.warning(
+                "User has no categories, cannot send poll",
+                extra={"user_id": user_id}
+            )
+            # Reschedule next poll anyway
+            await _update_last_poll_time(services, user, user_id)
+            return
+
         # Check if user is in active FSM state (conflict resolution)
         if await _should_postpone_poll(bot, user_id):
             await _postpone_poll(bot, user_id, services)
             return
 
-        # Send poll message
-        await _send_poll_message(bot, user_id, settings)
+        # Set FSM state to waiting for category selection
+        await _set_poll_category_state(bot, user_id)
+
+        # Send poll message with categories
+        await _send_poll_message(bot, user_id, settings, categories)
 
         # Update last poll time for accurate sleep duration calculation
         await _update_last_poll_time(services, user, user_id)
@@ -301,14 +316,15 @@ async def _postpone_poll(bot: Bot, user_id: int, services) -> None:
         )
 
 
-async def _send_poll_message(bot: Bot, user_id: int, settings: dict) -> None:
+async def _send_poll_message(bot: Bot, user_id: int, settings: dict, categories: list) -> None:
     """
-    Build and send poll message to user.
+    Build and send poll message to user with category selection.
 
     Args:
         bot: Bot instance
         user_id: Telegram user ID
         settings: User settings dict
+        categories: List of user categories
     """
     # Calculate time since last poll for accurate message
     interval_minutes = get_poll_interval(settings)
@@ -316,17 +332,17 @@ async def _send_poll_message(bot: Bot, user_id: int, settings: dict) -> None:
     # Format time string
     time_str = _format_interval_time(interval_minutes)
 
-    # Build poll message
+    # Build poll message - directly ask for category
     text = (
         "⏰ Время проверки активности!\n\n"
         f"Чем ты занимался последние {time_str}?\n\n"
-        "Выбери один из вариантов:"
+        "📂 Выбери категорию:"
     )
 
     await bot.send_message(
         chat_id=user_id,
         text=text,
-        reply_markup=get_poll_response_keyboard()
+        reply_markup=get_poll_initial_category_keyboard(categories)
     )
 
 
@@ -380,5 +396,35 @@ async def _update_last_poll_time(services, user: dict, user_id: int) -> None:
     except Exception as e:
         logger.warning(
             "Could not update last_poll_time",
+            extra={"user_id": user_id, "error": str(e)}
+        )
+
+
+async def _set_poll_category_state(bot: Bot, user_id: int) -> None:
+    """
+    Set FSM state to waiting for category selection.
+
+    Args:
+        bot: Bot instance
+        user_id: Telegram user ID
+    """
+    try:
+        storage = get_fsm_storage()
+        key = StorageKey(
+            bot_id=bot.id,
+            chat_id=user_id,
+            user_id=user_id
+        )
+
+        await storage.set_state(key, PollStates.waiting_for_poll_category)
+
+        logger.debug(
+            "Set FSM state to waiting_for_poll_category",
+            extra={"user_id": user_id}
+        )
+
+    except Exception as e:
+        logger.warning(
+            "Could not set FSM state",
             extra={"user_id": user_id, "error": str(e)}
         )
