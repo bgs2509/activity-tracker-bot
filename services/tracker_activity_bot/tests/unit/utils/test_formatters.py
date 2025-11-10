@@ -53,7 +53,7 @@ def sample_activities():
     Fixture: Sample activities for list formatting.
 
     Returns:
-        list: Activities with typical fields
+        list: Activities with typical fields including category data
     """
     return [
         {
@@ -62,7 +62,9 @@ def sample_activities():
             "start_time": "2025-11-07T10:00:00+00:00",
             "end_time": "2025-11-07T12:00:00+00:00",
             "duration_minutes": 120,
-            "tags": "python,testing"
+            "tags": "python,testing",
+            "category_name": "work",
+            "category_emoji": "💼"
         },
         {
             "id": 2,
@@ -70,7 +72,9 @@ def sample_activities():
             "start_time": "2025-11-07T13:00:00+00:00",
             "end_time": "2025-11-07T14:00:00+00:00",
             "duration_minutes": 60,
-            "tags": None
+            "tags": None,
+            "category_name": "meetings",
+            "category_emoji": "🤝"
         }
     ]
 
@@ -391,6 +395,7 @@ class TestFormatActivityList:
         assert result == "У тебя пока нет записанных активностей."
 
     @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
     def test_format_activity_list_with_single_activity(self, sample_activities):
         """
         Test formatting single activity.
@@ -412,6 +417,7 @@ class TestFormatActivityList:
         assert "━━━━━━━━━━━━━━━━━━" in result  # Separator
 
     @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
     def test_format_activity_list_includes_date_header(self, sample_activities):
         """
         Test date header in activity list.
@@ -428,6 +434,7 @@ class TestFormatActivityList:
         assert "ноября 2025" in result
 
     @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
     def test_format_activity_list_includes_time_ranges(self, sample_activities):
         """
         Test time range formatting in activities.
@@ -443,6 +450,7 @@ class TestFormatActivityList:
         assert "13:00" in result or "15:00" in result  # Moscow time
 
     @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
     def test_format_activity_list_includes_tags_with_hashtags(self, sample_activities):
         """
         Test tags formatting.
@@ -460,6 +468,7 @@ class TestFormatActivityList:
         assert "#testing" in result
 
     @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
     def test_format_activity_list_handles_activity_without_tags(self, sample_activities):
         """
         Test activity without tags.
@@ -479,6 +488,7 @@ class TestFormatActivityList:
         # Tags emoji might appear elsewhere, so just check no tags for this activity
 
     @pytest.mark.unit
+    @freeze_time("2025-11-08 20:00:00", tz_offset=0)
     def test_format_activity_list_groups_activities_by_date(self):
         """
         Test grouping activities by date.
@@ -515,6 +525,7 @@ class TestFormatActivityList:
         assert result.count("━━━━━━━━━━━━━━━━━━") >= 2
 
     @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
     def test_format_activity_list_handles_z_suffix_in_timestamps(self):
         """
         Test handling of 'Z' suffix in ISO timestamps.
@@ -540,6 +551,105 @@ class TestFormatActivityList:
 
         # Assert: Formatted successfully
         assert "Task" in result
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
+    def test_format_activity_list_displays_category_in_uppercase(self, sample_activities):
+        """
+        Test category name is displayed in UPPERCASE.
+
+        GIVEN: Activity with category_name="work"
+        WHEN: format_activity_list() is called
+        THEN: Category name is displayed as "WORK" in uppercase
+        """
+        # Act
+        result = format_activity_list(sample_activities, timezone="Europe/Moscow")
+
+        # Assert: Category names in uppercase
+        assert "WORK" in result
+        assert "MEETINGS" in result
+        assert "work" not in result  # Lowercase should not be present
+        assert "meetings" not in result
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
+    def test_format_activity_list_displays_category_emoji_with_name(self, sample_activities):
+        """
+        Test category emoji is displayed with category name.
+
+        GIVEN: Activity with category_name="work" and category_emoji="💼"
+        WHEN: format_activity_list() is called
+        THEN: Output contains "💼 WORK"
+        """
+        # Act
+        result = format_activity_list(sample_activities, timezone="Europe/Moscow")
+
+        # Assert: Emoji with uppercase category name
+        assert "💼 WORK" in result
+        assert "🤝 MEETINGS" in result
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
+    def test_format_activity_list_handles_activity_without_category(self):
+        """
+        Test activity without category data.
+
+        GIVEN: Activity with category_name=None
+        WHEN: format_activity_list() is called
+        THEN: Activity is formatted without category prefix
+        """
+        # Arrange: Activity without category
+        activities = [
+            {
+                "id": 1,
+                "description": "No category task",
+                "start_time": "2025-11-07T10:00:00+00:00",
+                "end_time": "2025-11-07T11:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None,
+                "category_name": None,
+                "category_emoji": None
+            }
+        ]
+
+        # Act
+        result = format_activity_list(activities, timezone="Europe/Moscow")
+
+        # Assert: Task description present, but no category
+        assert "No category task" in result
+        # Time should be present without category prefix
+        assert "13:00 — 14:00" in result
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
+    def test_format_activity_list_handles_category_without_emoji(self):
+        """
+        Test category without emoji.
+
+        GIVEN: Activity with category_name but no category_emoji
+        WHEN: format_activity_list() is called
+        THEN: Category name displayed without emoji
+        """
+        # Arrange: Category without emoji
+        activities = [
+            {
+                "id": 1,
+                "description": "Task",
+                "start_time": "2025-11-07T10:00:00+00:00",
+                "end_time": "2025-11-07T11:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None,
+                "category_name": "study",
+                "category_emoji": None
+            }
+        ]
+
+        # Act
+        result = format_activity_list(activities, timezone="Europe/Moscow")
+
+        # Assert: Category name in uppercase, no emoji
+        assert "STUDY" in result
+        assert "STUDY 13:00" in result  # Category followed by time
 
 
 class TestExtractTags:

@@ -124,9 +124,15 @@ def format_activity_list(activities: list[dict], timezone: str = "Europe/Moscow"
             end_str = format_time(end_time, timezone)
             duration_str = format_duration(activity["duration_minutes"])
 
-            # Category emoji (if present)
+            # Category name in UPPERCASE (if present)
             category_text = ""
-            # Note: category data would need to be joined, simplified for PoC
+            if activity.get("category_name"):
+                category_name_upper = activity["category_name"].upper()
+                # Add emoji if present
+                if activity.get("category_emoji"):
+                    category_text = f"{activity['category_emoji']} {category_name_upper} "
+                else:
+                    category_text = f"{category_name_upper} "
 
             # Description
             description = activity["description"]

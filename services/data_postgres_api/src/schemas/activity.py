@@ -1,7 +1,8 @@
 """Activity schemas."""
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
 
 
 class ActivityCreate(BaseModel):
@@ -26,7 +27,7 @@ class ActivityCreate(BaseModel):
 
 
 class ActivityResponse(BaseModel):
-    """Schema for activity response."""
+    """Schema for activity response with category data."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -39,6 +40,30 @@ class ActivityResponse(BaseModel):
     end_time: datetime
     duration_minutes: int
     created_at: datetime
+    category_name: str | None = None
+    category_emoji: str | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_category_data(cls, data: Any) -> Any:
+        """Extract category name and emoji from relationship if present."""
+        if hasattr(data, 'category') and data.category is not None:
+            if not isinstance(data, dict):
+                data_dict = {
+                    'id': data.id,
+                    'user_id': data.user_id,
+                    'category_id': data.category_id,
+                    'description': data.description,
+                    'tags': data.tags,
+                    'start_time': data.start_time,
+                    'end_time': data.end_time,
+                    'duration_minutes': data.duration_minutes,
+                    'created_at': data.created_at,
+                    'category_name': data.category.name,
+                    'category_emoji': data.category.emoji,
+                }
+                return data_dict
+        return data
 
 
 class ActivityListResponse(BaseModel):

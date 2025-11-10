@@ -1,6 +1,7 @@
 """Activity repository."""
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 from pydantic import BaseModel
 
 from src.domain.models.activity import Activity
@@ -63,22 +64,23 @@ class ActivityRepository(BaseRepository[Activity, ActivityCreate, ActivityUpdate
         limit: int = 10
     ) -> list[Activity]:
         """
-        Get recent activities for a user.
+        Get recent activities for a user with category data.
 
         Args:
             user_id: User identifier
             limit: Maximum activities to return
 
         Returns:
-            List of activities, ordered by most recent first
+            List of activities with category relationship loaded, ordered by most recent first
         """
         result = await self.session.execute(
             select(Activity)
+            .options(joinedload(Activity.category))
             .where(Activity.user_id == user_id)
             .order_by(Activity.start_time.desc())
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return list(result.unique().scalars().all())
 
     async def get_recent_by_user_and_category(
         self,
@@ -87,7 +89,7 @@ class ActivityRepository(BaseRepository[Activity, ActivityCreate, ActivityUpdate
         limit: int = 10
     ) -> list[Activity]:
         """
-        Get recent activities for a user filtered by category.
+        Get recent activities for a user filtered by category with category data.
 
         Args:
             user_id: User identifier
@@ -95,12 +97,13 @@ class ActivityRepository(BaseRepository[Activity, ActivityCreate, ActivityUpdate
             limit: Maximum activities to return
 
         Returns:
-            List of activities for the specified category, ordered by most recent first
+            List of activities with category relationship loaded for the specified category, ordered by most recent first
         """
         result = await self.session.execute(
             select(Activity)
+            .options(joinedload(Activity.category))
             .where(Activity.user_id == user_id, Activity.category_id == category_id)
             .order_by(Activity.start_time.desc())
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return list(result.unique().scalars().all())
