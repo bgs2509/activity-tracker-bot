@@ -6,7 +6,7 @@ from typing import List
 def get_recent_activities_keyboard(activities: List[dict]) -> InlineKeyboardMarkup:
     """Get keyboard with recent activities as inline buttons.
 
-    Creates a keyboard with up to 10 unique recent activity descriptions
+    Creates a keyboard with up to 8 unique recent activity descriptions
     displayed in 2 columns. Each button displays activity description
     split into 2 lines for better readability.
 
@@ -16,7 +16,7 @@ def get_recent_activities_keyboard(activities: List[dict]) -> InlineKeyboardMark
                    Activities are assumed to be ordered from newest to oldest.
 
     Returns:
-        Keyboard with unique recent activity buttons in 2 columns (5 rows max)
+        Keyboard with unique recent activity buttons in 2 columns (4 rows)
         and an option to enter custom description
     """
     buttons = []
@@ -31,8 +31,8 @@ def get_recent_activities_keyboard(activities: List[dict]) -> InlineKeyboardMark
             seen_descriptions.add(description)
             unique_activities.append(activity)
 
-            # Stop after collecting 10 unique activities
-            if len(unique_activities) >= 10:
+            # Stop after collecting 8 unique activities
+            if len(unique_activities) >= 8:
                 break
 
     # Create rows with 2 buttons each (2 columns layout)

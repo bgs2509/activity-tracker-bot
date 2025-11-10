@@ -504,9 +504,31 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
         response = await services.activity.get_user_activities_by_category(
             user_id=user_id,
             category_id=category_id,
-            limit=10
+            limit=20
         )
         recent_activities = response.get("activities", []) if isinstance(response, dict) else response
+
+        # Fallback: if category has fewer than 8 unique activities, get general activities
+        unique_descriptions = set()
+        for activity in recent_activities:
+            description = activity.get("description", "")
+            if description:
+                unique_descriptions.add(description)
+
+        if len(unique_descriptions) < 8:
+            # Request general user activities to supplement category activities
+            general_response = await services.activity.get_user_activities(
+                user_id=user_id,
+                limit=20
+            )
+            general_activities = general_response.get("activities", []) if isinstance(general_response, dict) else general_response
+
+            # Merge with category activities, prioritizing category ones
+            activity_ids = {act.get("id") for act in recent_activities}
+            for activity in general_activities:
+                if activity.get("id") not in activity_ids:
+                    recent_activities.append(activity)
+                    activity_ids.add(activity.get("id"))
 
         start_time = datetime.fromisoformat(start_time_str)
         end_time = datetime.fromisoformat(end_time_str)
@@ -604,6 +626,17 @@ async def process_category(message: types.Message, state: FSMContext, services: 
                 bot=message.bot
             )
 
+        # Get recent activities for suggestions
+        try:
+            response = await services.activity.get_user_activities(
+                user_id=user_id,
+                limit=20
+            )
+            recent_activities = response.get("activities", []) if isinstance(response, dict) else response
+        except Exception as e:
+            logger.error(f"Error fetching recent activities: {e}")
+            recent_activities = []
+
         start_time = datetime.fromisoformat(start_time_str)
         end_time = datetime.fromisoformat(end_time_str)
         start_time_str_fmt = format_time(start_time)
@@ -614,11 +647,16 @@ async def process_category(message: types.Message, state: FSMContext, services: 
         text = (
             f"✏️ Опиши активность\n\n"
             f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
-            f"Напиши, чем ты занимался (минимум 3 символа).\n"
-            f"Можешь добавить теги через #хештег"
         )
 
-        await message.answer(text, reply_markup=get_main_menu_keyboard())
+        if recent_activities:
+            text += "Выбери из последних активностей или напиши своё (минимум 3 символа):"
+            keyboard = get_recent_activities_keyboard(recent_activities)
+        else:
+            text += "Напиши, чем ты занимался (минимум 3 символа).\nМожешь добавить теги через #хештег"
+            keyboard = get_main_menu_keyboard()
+
+        await message.answer(text, reply_markup=keyboard)
 
     else:
         # Ignore other text input - user should use inline buttons
