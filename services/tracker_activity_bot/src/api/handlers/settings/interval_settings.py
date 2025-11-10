@@ -3,6 +3,7 @@
 import logging
 from typing import Union
 
+import httpx
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 
@@ -190,20 +191,43 @@ async def process_weekday_custom_input(
             return
 
         # Update and reschedule
-        await _update_interval_and_reschedule(
-            telegram_id=message.from_user.id,
-            interval=interval,
-            interval_type="weekday",
-            services=services,
-            bot=message.bot,
-            is_message=True,
-            event=message
-        )
+        try:
+            await _update_interval_and_reschedule(
+                telegram_id=message.from_user.id,
+                interval=interval,
+                interval_type="weekday",
+                services=services,
+                bot=message.bot,
+                is_message=True,
+                event=message
+            )
 
-        # Clear FSM state
-        await state.clear()
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
+            # Clear FSM state
+            await state.clear()
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
+
+        except httpx.HTTPStatusError as e:
+            # Handle API validation errors gracefully
+            logger.error(
+                "Failed to update weekday interval",
+                extra={
+                    "user_id": message.from_user.id,
+                    "interval": interval,
+                    "error": str(e)
+                }
+            )
+            error_detail = "Неизвестная ошибка"
+            try:
+                error_data = e.response.json()
+                error_detail = error_data.get("detail", str(e))
+            except Exception:
+                pass
+
+            await message.answer(
+                f"⚠️ Не удалось сохранить настройки:\n{error_detail}\n\n"
+                "Попробуй другое значение или обратись к администратору."
+            )
 
     except ValueError:
         await message.answer(
@@ -344,20 +368,43 @@ async def process_weekend_custom_input(
             return
 
         # Update and reschedule
-        await _update_interval_and_reschedule(
-            telegram_id=message.from_user.id,
-            interval=interval,
-            interval_type="weekend",
-            services=services,
-            bot=message.bot,
-            is_message=True,
-            event=message
-        )
+        try:
+            await _update_interval_and_reschedule(
+                telegram_id=message.from_user.id,
+                interval=interval,
+                interval_type="weekend",
+                services=services,
+                bot=message.bot,
+                is_message=True,
+                event=message
+            )
 
-        # Clear FSM state
-        await state.clear()
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
+            # Clear FSM state
+            await state.clear()
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
+
+        except httpx.HTTPStatusError as e:
+            # Handle API validation errors gracefully
+            logger.error(
+                "Failed to update weekend interval",
+                extra={
+                    "user_id": message.from_user.id,
+                    "interval": interval,
+                    "error": str(e)
+                }
+            )
+            error_detail = "Неизвестная ошибка"
+            try:
+                error_data = e.response.json()
+                error_detail = error_data.get("detail", str(e))
+            except Exception:
+                pass
+
+            await message.answer(
+                f"⚠️ Не удалось сохранить настройки:\n{error_detail}\n\n"
+                "Попробуй другое значение или обратись к администратору."
+            )
 
     except ValueError:
         await message.answer(
