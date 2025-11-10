@@ -1,13 +1,43 @@
 """Time selection keyboards with improved UX.
 
 Best practices applied:
-- Comprehensive time options (5m, 15m, 30m, 1h, 2h, 3h, 4h)
+- Simplified period selection in one step
 - 3 buttons per row - optimal for time selection
 - Visual grouping by time magnitude
-- Prominent "Now" button for end time
+- Clear period options from short to long
 - Consistent layout across keyboards
 """
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+
+def get_period_keyboard() -> InlineKeyboardMarkup:
+    """Get keyboard for period quick selection.
+
+    Single-step period selection combining start and end time.
+    Layout:
+    - Row 1: Short periods (15min, 30min, 1h)
+    - Row 2: Medium periods (3h, 8h, 12h)
+    - Row 3: Cancel action
+    """
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        # Short periods - most frequently used
+        [
+            InlineKeyboardButton(text="15 минут", callback_data="period_15m"),
+            InlineKeyboardButton(text="30 минут", callback_data="period_30m"),
+            InlineKeyboardButton(text="1 час", callback_data="period_1h"),
+        ],
+        # Medium to long periods
+        [
+            InlineKeyboardButton(text="3 часа", callback_data="period_3h"),
+            InlineKeyboardButton(text="8 часов", callback_data="period_8h"),
+            InlineKeyboardButton(text="12 часов", callback_data="period_12h"),
+        ],
+        # Cancel action - separated for clarity
+        [
+            InlineKeyboardButton(text="❌ Отменить", callback_data="cancel"),
+        ],
+    ])
+    return keyboard
 
 
 def get_start_time_keyboard() -> InlineKeyboardMarkup:

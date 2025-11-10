@@ -5,7 +5,6 @@ from aiogram.fsm.state import State, StatesGroup
 class ActivityStates(StatesGroup):
     """States for recording activity."""
 
-    waiting_for_start_time = State()
-    waiting_for_end_time = State()
-    waiting_for_description = State()
+    waiting_for_period = State()
     waiting_for_category = State()
+    waiting_for_description = State()

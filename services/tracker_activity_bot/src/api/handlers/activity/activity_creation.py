@@ -9,18 +9,18 @@ from aiogram.fsm.context import FSMContext
 
 from src.api.states.activity import ActivityStates
 from src.api.dependencies import ServiceContainer
-from src.api.keyboards.time_select import get_start_time_keyboard, get_end_time_keyboard
+from src.api.keyboards.time_select import get_period_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.api.keyboards.poll import get_poll_category_keyboard
 from src.api.keyboards.activity import get_recent_activities_keyboard
-from src.application.utils.time_parser import parse_time_input, parse_duration
+from src.application.utils.time_parser import parse_period
 from src.application.utils.formatters import format_time, format_duration, extract_tags
 from src.application.utils.decorators import with_typing_action
 from src.application.utils.fsm_helpers import schedule_fsm_timeout
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.core.logging_middleware import log_user_action
 
-from .helpers import START_TIME_MAP, END_TIME_MAP, validate_start_time, validate_end_time
+# Removed obsolete helper imports - now using parse_period instead
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -38,29 +38,29 @@ async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
             "username": callback.from_user.username
         }
     )
-    await state.set_state(ActivityStates.waiting_for_start_time)
+    await state.set_state(ActivityStates.waiting_for_period)
 
     # Schedule FSM timeout
     await schedule_fsm_timeout(
         callback.from_user.id,
-        ActivityStates.waiting_for_start_time,
+        ActivityStates.waiting_for_period,
         callback.bot
     )
 
     text = (
-        "⏰ Укажи время НАЧАЛА активности\n\n"
+        "⏰ ЗАДАЙ ПЕРИОД\n\n"
         "Примеры:\n"
-        "14:30 — началось в 14:30\n"
-        "90м — началось 90 минут назад\n"
-        "2ч — началось 2 часа назад"
+        "30м — последние 30 минут\n"
+        "2ч — последние 2 часа\n"
+        "14:30 — 15:30 — точный период"
     )
 
-    await callback.message.answer(text, reply_markup=get_start_time_keyboard())
+    await callback.message.answer(text, reply_markup=get_period_keyboard())
     await callback.answer()
 
 
 @router.callback_query(
-    StateFilter(ActivityStates.waiting_for_start_time, ActivityStates.waiting_for_end_time),
+    StateFilter(ActivityStates.waiting_for_period),
     F.data == "cancel"
 )
 @with_typing_action
@@ -68,7 +68,7 @@ async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
 async def cancel_activity_creation(callback: types.CallbackQuery, state: FSMContext):
     """Cancel activity creation process.
 
-    Handles the cancel button in time selection keyboards.
+    Handles the cancel button in period selection keyboard.
     Clears FSM state and returns user to main menu.
 
     Args:
@@ -97,181 +97,59 @@ async def cancel_activity_creation(callback: types.CallbackQuery, state: FSMCont
     await callback.answer()
 
 
-@router.message(ActivityStates.waiting_for_start_time)
-@log_user_action("start_time_input")
-async def process_start_time(message: types.Message, state: FSMContext):
-    """Process start time input."""
-    logger.debug(
-        "Processing start time input",
-        extra={
-            "user_id": message.from_user.id,
-            "input_text": message.text
-        }
-    )
-    try:
-        start_time = parse_time_input(message.text)
-        logger.debug(
-            "Start time parsed successfully",
-            extra={
-                "user_id": message.from_user.id,
-                "parsed_time": start_time.isoformat(),
-                "input_text": message.text
-            }
-        )
-
-        # Validate: start time should not be in future
-        now_utc = datetime.now(timezone.utc)
-        if start_time > now_utc:
-            await message.answer(
-                "⚠️ Время начала не может быть в будущем. Попробуй ещё раз.",
-                reply_markup=get_start_time_keyboard()
-            )
-            return
-
-        # Save to FSM
-        await state.update_data(start_time=start_time.isoformat())
-        await state.set_state(ActivityStates.waiting_for_end_time)
-
-        # Schedule FSM timeout
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-                user_id=message.from_user.id,
-                state=ActivityStates.waiting_for_end_time,
-                bot=message.bot
-            )
-
-        start_time_str = format_time(start_time)
-        text = (
-            f"⏰ Укажи время ОКОНЧАНИЯ активности\n\n"
-            f"Началось: {start_time_str}\n\n"
-            "Примеры:\n"
-            "16:00 — закончилось в 16:00\n"
-            "30м — длилось 30 минут\n"
-            "0 — закончилось только что"
-        )
-
-        await message.answer(text, reply_markup=get_end_time_keyboard())
-
-    except ValueError as e:
-        await message.answer(
-            f"⚠️ Не могу распознать время. {str(e)}\n\nПопробуй ещё раз.",
-            reply_markup=get_start_time_keyboard()
-        )
-
-
-@router.callback_query(F.data.startswith("time_start_"))
+@router.callback_query(F.data.startswith("period_"))
 @with_typing_action
-@log_user_action("quick_start_time_selected")
-async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
-    """Handle quick time selection for start time."""
+@log_user_action("quick_period_selected")
+async def quick_period_selection(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
+    """Handle quick period selection via inline buttons.
+
+    User clicked one of the period buttons (15m, 30m, 1h, 3h, 8h, 12h).
+    Parse the period and proceed to category selection.
+    """
     logger.debug(
-        "Quick start time selected",
+        "Quick period selected",
         extra={
             "user_id": callback.from_user.id,
-            "time_key": callback.data.replace("time_start_", "")
+            "period_key": callback.data.replace("period_", "")
         }
     )
-    time_map = {
-        "5m": "5м",
+
+    # Map callback data to period string
+    period_map = {
         "15m": "15м",
         "30m": "30м",
         "1h": "1ч",
-        "2h": "2ч",
         "3h": "3ч",
+        "8h": "8ч",
+        "12h": "12ч",
     }
-    time_key = callback.data.replace("time_start_", "")
-    time_str = time_map.get(time_key)
 
-    if time_str:
-        start_time = parse_time_input(time_str)
-        await state.update_data(start_time=start_time.isoformat())
-        await state.set_state(ActivityStates.waiting_for_end_time)
+    period_key = callback.data.replace("period_", "")
+    period_str = period_map.get(period_key)
 
-        # Schedule FSM timeout
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-                user_id=callback.from_user.id,
-                state=ActivityStates.waiting_for_end_time,
-                bot=callback.bot
-            )
-
-        start_time_str = format_time(start_time)
-        text = (
-            f"⏰ Укажи время ОКОНЧАНИЯ активности\n\n"
-            f"Началось: {start_time_str}\n\n"
-            "Примеры:\n"
-            "16:00 — закончилось в 16:00\n"
-            "30м — длилось 30 минут\n"
-            "0 — закончилось только что"
-        )
-
-        await callback.message.answer(text, reply_markup=get_end_time_keyboard())
-
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("time_end_"))
-@with_typing_action
-async def quick_end_time(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
-    """Handle quick time selection for end time."""
-    time_key = callback.data.replace("time_end_", "")
-
-    # Get start_time from state
-    data = await state.get_data()
-    start_time_str = data.get("start_time")
-
-    if not start_time_str:
-        await callback.message.answer(
-            "⚠️ Ошибка: время начала не найдено. Попробуй ещё раз.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        await state.clear()
-        # Cancel FSM timeout
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
-        await callback.answer()
+    if not period_str:
+        await callback.answer("⚠️ Неизвестная команда")
         return
 
-    start_time = datetime.fromisoformat(start_time_str)
-
     try:
-        # Map callback data to time string
-        if time_key == "now":
-            # "Сейчас" - current time
-            end_time = datetime.now(timezone.utc)
-        elif time_key == "15m":
-            # "15м длилось" - duration 15 minutes
-            end_time = parse_duration("15м", start_time)
-        elif time_key == "30m":
-            # "30м длилось" - duration 30 minutes
-            end_time = parse_duration("30м", start_time)
-        elif time_key == "1h":
-            # "1ч длилось" - duration 1 hour
-            end_time = parse_duration("1ч", start_time)
-        elif time_key == "2h":
-            # "2ч длилось" - duration 2 hours
-            end_time = parse_duration("2ч", start_time)
-        elif time_key == "3h":
-            # "3ч длилось" - duration 3 hours
-            end_time = parse_duration("3ч", start_time)
-        elif time_key == "8h":
-            # "8ч длилось" - duration 8 hours
-            end_time = parse_duration("8ч", start_time)
-        else:
-            await callback.answer("⚠️ Неизвестная команда")
-            return
+        # Parse period to get start_time and end_time
+        start_time, end_time = parse_period(period_str)
 
-        # Validate: end time should be after start time
-        if end_time <= start_time:
-            await callback.message.answer(
-                "⚠️ Время окончания должно быть позже времени начала. Попробуй ещё раз.",
-                reply_markup=get_end_time_keyboard()
-            )
-            await callback.answer()
-            return
+        logger.debug(
+            "Period parsed successfully",
+            extra={
+                "user_id": callback.from_user.id,
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "period_str": period_str
+            }
+        )
 
-        # Save to FSM and proceed to category selection
-        await state.update_data(end_time=end_time.isoformat())
+        # Save to FSM
+        await state.update_data(
+            start_time=start_time.isoformat(),
+            end_time=end_time.isoformat()
+        )
         await state.set_state(ActivityStates.waiting_for_category)
 
         # Schedule FSM timeout
@@ -328,7 +206,7 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext, servi
             await callback.answer()
 
         except Exception as e:
-            logger.error(f"Error in quick_end_time: {e}")
+            logger.error(f"Error in quick_period_selection: {e}")
             await callback.message.answer(
                 "⚠️ Произошла ошибка.",
                 reply_markup=get_main_menu_keyboard()
@@ -337,48 +215,49 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext, servi
             await callback.answer()
 
     except ValueError as e:
-        logger.error(f"Error parsing end time: {e}")
+        logger.error(f"Error parsing period: {e}")
         await callback.message.answer(
-            f"⚠️ Ошибка при обработке времени: {str(e)}",
-            reply_markup=get_end_time_keyboard()
+            f"⚠️ Ошибка при обработке периода: {str(e)}",
+            reply_markup=get_period_keyboard()
         )
         await callback.answer()
 
 
-@router.message(ActivityStates.waiting_for_end_time)
-async def process_end_time(message: types.Message, state: FSMContext, services: ServiceContainer):
-    """Process end time input (text message)."""
-    # Get start_time from state
-    data = await state.get_data()
-    start_time_str = data.get("start_time")
+@router.message(ActivityStates.waiting_for_period)
+@log_user_action("period_text_input")
+async def process_period_input(message: types.Message, state: FSMContext, services: ServiceContainer):
+    """Process period input as text message.
 
-    if not start_time_str:
-        await message.answer(
-            "⚠️ Ошибка: время начала не найдено. Попробуй ещё раз.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        await state.clear()
-        # Cancel FSM timeout
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(message.from_user.id)
-        return
-
-    start_time = datetime.fromisoformat(start_time_str)
+    User entered period as text (e.g., "30м", "2ч", "14:30 — 15:30").
+    Parse the period and proceed to category selection.
+    """
+    logger.debug(
+        "Processing period text input",
+        extra={
+            "user_id": message.from_user.id,
+            "input_text": message.text
+        }
+    )
 
     try:
-        # Parse end time using parse_duration
-        end_time = parse_duration(message.text, start_time)
+        # Parse period to get start_time and end_time
+        start_time, end_time = parse_period(message.text)
 
-        # Validate: end time should be after start time
-        if end_time <= start_time:
-            await message.answer(
-                "⚠️ Время окончания должно быть позже времени начала. Попробуй ещё раз.",
-                reply_markup=get_end_time_keyboard()
-            )
-            return
+        logger.debug(
+            "Period parsed successfully",
+            extra={
+                "user_id": message.from_user.id,
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "input_text": message.text
+            }
+        )
 
-        # Save to FSM and proceed to category selection
-        await state.update_data(end_time=end_time.isoformat())
+        # Save to FSM
+        await state.update_data(
+            start_time=start_time.isoformat(),
+            end_time=end_time.isoformat()
+        )
         await state.set_state(ActivityStates.waiting_for_category)
 
         # Schedule FSM timeout
@@ -432,7 +311,7 @@ async def process_end_time(message: types.Message, state: FSMContext, services: 
             )
 
         except Exception as e:
-            logger.error(f"Error in process_end_time: {e}")
+            logger.error(f"Error in process_period_input: {e}")
             await message.answer(
                 "⚠️ Произошла ошибка.",
                 reply_markup=get_main_menu_keyboard()
@@ -441,8 +320,8 @@ async def process_end_time(message: types.Message, state: FSMContext, services: 
 
     except ValueError as e:
         await message.answer(
-            f"⚠️ Не могу распознать время. {str(e)}\n\nПопробуй ещё раз.",
-            reply_markup=get_end_time_keyboard()
+            f"⚠️ Не могу распознать период. {str(e)}\n\nПопробуй ещё раз.",
+            reply_markup=get_period_keyboard()
         )
 
 
