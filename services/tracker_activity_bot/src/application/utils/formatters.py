@@ -1,5 +1,5 @@
 """Formatting utilities for bot messages."""
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 
@@ -54,28 +54,67 @@ def format_activity_list(activities: list[dict], timezone: str = "Europe/Moscow"
     Format activities list for display.
 
     Groups activities by date and formats each entry.
+    Shows only activities from the last 24 hours, sorted chronologically
+    (oldest first, newest last).
+
+    Args:
+        activities: List of activity dicts with start_time, end_time, etc.
+        timezone: Timezone for display (default: Europe/Moscow)
+
+    Returns:
+        Formatted activity list as string
     """
     if not activities:
         return "У тебя пока нет записанных активностей."
 
-    # Group activities by date
-    grouped = {}
+    # Get current time in user timezone for 24h filtering
+    tz = pytz.timezone(timezone)
+    now = datetime.now(tz)
+    cutoff_time = now - timedelta(hours=24)
+
+    # Filter activities from last 24 hours
+    recent_activities = []
     for activity in activities:
+        start_time = datetime.fromisoformat(activity["start_time"].replace("Z", "+00:00"))
+        # Convert to user timezone for comparison
+        start_time_local = start_time.astimezone(tz)
+
+        if start_time_local >= cutoff_time:
+            recent_activities.append(activity)
+
+    if not recent_activities:
+        return "У тебя пока нет записанных активностей за последние 24 часа."
+
+    # Group activities by date with datetime key for sorting
+    grouped = {}
+    for activity in recent_activities:
         start_time = datetime.fromisoformat(activity["start_time"].replace("Z", "+00:00"))
         date_key = format_date(start_time, timezone)
 
         if date_key not in grouped:
-            grouped[date_key] = []
+            grouped[date_key] = {
+                "datetime": start_time,  # Store datetime for sorting
+                "activities": []
+            }
 
-        grouped[date_key].append(activity)
+        grouped[date_key]["activities"].append(activity)
+
+    # Sort dates chronologically (oldest first, newest last)
+    sorted_dates = sorted(grouped.items(), key=lambda x: x[1]["datetime"])
 
     # Format output
     lines = ["📋 Твои последние активности:\n"]
 
-    for date_key, date_activities in grouped.items():
+    for date_key, date_data in sorted_dates:
         lines.append("━━━━━━━━━━━━━━━━━━")
         lines.append(f"📅 {date_key}")
         lines.append("━━━━━━━━━━━━━━━━━━\n")
+
+        # Sort activities within date by start time (earliest first)
+        date_activities = sorted(
+            date_data["activities"],
+            key=lambda a: datetime.fromisoformat(a["start_time"].replace("Z", "+00:00"))
+        )
 
         for activity in date_activities:
             start_time = datetime.fromisoformat(activity["start_time"].replace("Z", "+00:00"))

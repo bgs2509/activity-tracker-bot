@@ -21,6 +21,7 @@ Date: 2025-11-07
 import pytest
 from datetime import datetime
 import pytz
+from freezegun import freeze_time
 
 from src.application.utils.formatters import (
     format_duration,
@@ -796,3 +797,249 @@ class TestFormattersEdgeCases:
 
         # Assert: Formatted successfully
         assert "Task" in result
+
+
+class TestFormatActivityListFiltering:
+    """
+    Test suite for 24-hour filtering in format_activity_list().
+
+    Tests the new behavior where only activities from last 24 hours are shown.
+    """
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-10 09:00:00", tz_offset=0)  # UTC time
+    def test_format_activity_list_filters_activities_older_than_24_hours(self):
+        """
+        Test that activities older than 24 hours are filtered out.
+
+        GIVEN: Activities from 2 days ago and today
+        WHEN: format_activity_list() is called
+        THEN: Only today's activities are shown
+        """
+        # Arrange: Activities from different times
+        activities = [
+            {
+                "id": 1,
+                "description": "Old activity",
+                "start_time": "2025-11-08T10:00:00+00:00",  # 2 days ago
+                "end_time": "2025-11-08T11:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            },
+            {
+                "id": 2,
+                "description": "Recent activity",
+                "start_time": "2025-11-10T08:00:00+00:00",  # Today, within 24h
+                "end_time": "2025-11-10T09:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            }
+        ]
+
+        # Act
+        result = format_activity_list(activities, timezone="Europe/Moscow")
+
+        # Assert: Only recent activity shown
+        assert "Recent activity" in result
+        assert "Old activity" not in result
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-10 09:00:00", tz_offset=0)
+    def test_format_activity_list_shows_message_when_no_recent_activities(self):
+        """
+        Test message when all activities are older than 24 hours.
+
+        GIVEN: Only old activities (>24h ago)
+        WHEN: format_activity_list() is called
+        THEN: "нет записанных активностей за последние 24 часа" message shown
+        """
+        # Arrange: Only old activities
+        activities = [
+            {
+                "id": 1,
+                "description": "Old activity",
+                "start_time": "2025-11-08T10:00:00+00:00",
+                "end_time": "2025-11-08T11:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            }
+        ]
+
+        # Act
+        result = format_activity_list(activities, timezone="Europe/Moscow")
+
+        # Assert
+        assert "за последние 24 часа" in result
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-10 09:00:00", tz_offset=0)
+    def test_format_activity_list_includes_activity_exactly_24_hours_ago(self):
+        """
+        Test boundary: activity exactly 24 hours ago should be included.
+
+        GIVEN: Activity from exactly 24 hours ago
+        WHEN: format_activity_list() is called
+        THEN: Activity is included (>= cutoff)
+        """
+        # Arrange: Activity exactly 24h ago (in Moscow timezone)
+        activities = [
+            {
+                "id": 1,
+                "description": "Exactly 24h ago",
+                "start_time": "2025-11-09T09:00:00+00:00",  # Exactly 24h ago
+                "end_time": "2025-11-09T10:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            }
+        ]
+
+        # Act
+        result = format_activity_list(activities, timezone="Europe/Moscow")
+
+        # Assert
+        assert "Exactly 24h ago" in result
+
+
+class TestFormatActivityListSorting:
+    """
+    Test suite for chronological sorting in format_activity_list().
+
+    Tests that activities are sorted oldest→newest (newest at bottom).
+    """
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-10 20:59:00", tz_offset=0)
+    def test_format_activity_list_sorts_dates_chronologically(self):
+        """
+        Test dates are sorted oldest first, newest last.
+
+        GIVEN: Activities on three different dates (unsorted)
+        WHEN: format_activity_list() is called
+        THEN: Dates appear in chronological order
+        """
+        # Arrange: Activities in random date order
+        activities = [
+            {
+                "id": 1,
+                "description": "Day 3",
+                "start_time": "2025-11-10T10:00:00+00:00",
+                "end_time": "2025-11-10T11:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            },
+            {
+                "id": 2,
+                "description": "Day 1",
+                "start_time": "2025-11-09T21:00:00+00:00",  # Within 24h
+                "end_time": "2025-11-09T22:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            },
+            {
+                "id": 3,
+                "description": "Day 2",
+                "start_time": "2025-11-10T05:00:00+00:00",
+                "end_time": "2025-11-10T06:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            }
+        ]
+
+        # Act
+        result = format_activity_list(activities, timezone="Europe/Moscow")
+
+        # Assert: Check order in output
+        day1_pos = result.find("Day 1")
+        day2_pos = result.find("Day 2")
+        day3_pos = result.find("Day 3")
+
+        assert day1_pos < day2_pos < day3_pos, "Activities should be in chronological order"
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-10 20:59:00", tz_offset=0)
+    def test_format_activity_list_sorts_activities_within_date(self):
+        """
+        Test activities within same date are sorted by time (earliest first).
+
+        GIVEN: Multiple activities on same date (unsorted)
+        WHEN: format_activity_list() is called
+        THEN: Activities appear in time order (earliest→latest)
+        """
+        # Arrange: Activities on same date, random order
+        activities = [
+            {
+                "id": 1,
+                "description": "Evening task",
+                "start_time": "2025-11-10T15:00:00+00:00",  # 18:00 Moscow
+                "end_time": "2025-11-10T16:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            },
+            {
+                "id": 2,
+                "description": "Morning task",
+                "start_time": "2025-11-10T06:00:00+00:00",  # 09:00 Moscow
+                "end_time": "2025-11-10T07:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            },
+            {
+                "id": 3,
+                "description": "Afternoon task",
+                "start_time": "2025-11-10T10:00:00+00:00",  # 13:00 Moscow
+                "end_time": "2025-11-10T11:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            }
+        ]
+
+        # Act
+        result = format_activity_list(activities, timezone="Europe/Moscow")
+
+        # Assert: Check order
+        morning_pos = result.find("Morning task")
+        afternoon_pos = result.find("Afternoon task")
+        evening_pos = result.find("Evening task")
+
+        assert morning_pos < afternoon_pos < evening_pos, \
+            "Activities within date should be sorted by time"
+
+    @pytest.mark.unit
+    @freeze_time("2025-11-10 17:00:00", tz_offset=0)
+    def test_format_activity_list_newest_appears_at_bottom(self):
+        """
+        Test that newest activity appears at bottom of output.
+
+        GIVEN: Activities spanning 24 hours
+        WHEN: format_activity_list() is called
+        THEN: Most recent activity is at the end
+        """
+        # Arrange
+        activities = [
+            {
+                "id": 1,
+                "description": "Oldest",
+                "start_time": "2025-11-09T17:01:00+00:00",  # Just within 24h
+                "end_time": "2025-11-09T18:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            },
+            {
+                "id": 2,
+                "description": "Newest",
+                "start_time": "2025-11-10T16:00:00+00:00",
+                "end_time": "2025-11-10T17:00:00+00:00",
+                "duration_minutes": 60,
+                "tags": None
+            }
+        ]
+
+        # Act
+        result = format_activity_list(activities, timezone="Europe/Moscow")
+        lines = result.split("\n")
+
+        # Assert: "Newest" should appear after "Oldest"
+        oldest_line = next(i for i, line in enumerate(lines) if "Oldest" in line)
+        newest_line = next(i for i, line in enumerate(lines) if "Newest" in line)
+
+        assert newest_line > oldest_line, "Newest activity should be at bottom"
