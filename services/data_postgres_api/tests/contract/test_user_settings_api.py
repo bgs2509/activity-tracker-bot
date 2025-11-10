@@ -7,7 +7,7 @@ for /api/v1/user-settings endpoints using FastAPI TestClient.
 Test Coverage:
     - POST /user-settings: Create settings with validation
     - GET /user-settings: Retrieve settings by user_id
-    - PUT /user-settings/{user_id}: Update settings (partial)
+    - PATCH /user-settings/{user_id}: Update settings (partial)
     - Schema validation: time ranges, boolean flags
     - Error cases: 404, 422 validation
 
@@ -201,7 +201,7 @@ class TestUpdateSettingsEndpoint:
         Test partial settings update.
 
         GIVEN: Partial update data (only some fields)
-        WHEN: PUT /api/v1/user-settings/{user_id} is called
+        WHEN: PATCH /api/v1/user-settings/{user_id} is called
         THEN: 200 with updated settings
         """
         # Arrange
@@ -214,7 +214,7 @@ class TestUpdateSettingsEndpoint:
 
         # Act
         with patch('src.api.dependencies.get_user_settings_service', return_value=mock_settings_service):
-            response = client.put("/api/v1/user-settings/1", json=request_data)
+            response = client.patch("/api/v1/user-settings/1", json=request_data)
 
         # Assert
         assert response.status_code == 200
@@ -231,7 +231,7 @@ class TestUpdateSettingsEndpoint:
         Test update of non-existent settings.
 
         GIVEN: Settings do not exist
-        WHEN: PUT request is made
+        WHEN: PATCH request is made
         THEN: 404 Not Found
         """
         # Arrange
@@ -239,7 +239,7 @@ class TestUpdateSettingsEndpoint:
 
         # Act
         with patch('src.api.dependencies.get_user_settings_service', return_value=mock_settings_service):
-            response = client.put(
+            response = client.patch(
                 "/api/v1/user-settings/999",
                 json={"poll_interval_weekday": 90}
             )
@@ -258,7 +258,7 @@ class TestUpdateSettingsEndpoint:
         Test update with no changes.
 
         GIVEN: Empty update data
-        WHEN: PUT request is made
+        WHEN: PATCH request is made
         THEN: 200 with unchanged settings
         """
         # Arrange
@@ -266,7 +266,7 @@ class TestUpdateSettingsEndpoint:
 
         # Act
         with patch('src.api.dependencies.get_user_settings_service', return_value=mock_settings_service):
-            response = client.put("/api/v1/user-settings/1", json={})
+            response = client.patch("/api/v1/user-settings/1", json={})
 
         # Assert
         assert response.status_code == 200

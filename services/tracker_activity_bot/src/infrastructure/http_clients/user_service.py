@@ -45,6 +45,6 @@ class UserService:
             Updated user data
         """
         return await self.client.patch(
-            f"/api/v1/users/{user_id}",
-            json={"last_poll_time": poll_time.isoformat()}
+            f"/api/v1/users/{user_id}/last-poll-time",
+            json={"poll_time": poll_time.isoformat()}
         )

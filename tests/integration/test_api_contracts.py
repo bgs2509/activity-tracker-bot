@@ -40,9 +40,22 @@ def extract_api_endpoints() -> Dict[str, Set[str]]:
         -> {"GET": {"/api/v1/users/by-telegram/{telegram_id}"}}
     """
     endpoints = {}
-    api_path = Path("services/data_postgres_api/src/api/v1/")
 
-    if not api_path.exists():
+    # Try multiple possible paths (host, Docker container, etc.)
+    possible_paths = [
+        Path("services/data_postgres_api/src/api/v1/"),  # Running from repo root
+        Path("/app/services/data_postgres_api/src/api/v1/"),  # Docker with full mount
+        Path("../services/data_postgres_api/src/api/v1/"),  # Relative from tests dir
+    ]
+
+    api_path = None
+    for path in possible_paths:
+        if path.exists():
+            api_path = path
+            break
+
+    if api_path is None:
+        # No API source code found - return empty dict
         return endpoints
 
     for file in api_path.glob("*.py"):
@@ -51,9 +64,15 @@ def extract_api_endpoints() -> Dict[str, Set[str]]:
 
         content = file.read_text()
 
-        # Pattern: @router.METHOD("path") or @router.METHOD("/path")
-        pattern = r'@router\.(get|post|patch|put|delete)\(["\']([^"\']+)["\']\)'
-        for match in re.finditer(pattern, content):
+        # Extract router prefix from file (e.g., APIRouter(prefix="/users"))
+        prefix_match = re.search(r'APIRouter\s*\(\s*prefix\s*=\s*["\']([^"\']+)["\']', content)
+        router_prefix = prefix_match.group(1) if prefix_match else f"/{file.stem}"
+
+        # Pattern: @router.METHOD("path", ...) or @router.METHOD("/path")
+        # Allows for additional parameters like response_model, status_code, etc.
+        # Uses DOTALL to match across newlines for multiline decorators
+        pattern = r'@router\.(get|post|patch|put|delete)\s*\(\s*["\']([^"\']+)["\']'
+        for match in re.finditer(pattern, content, re.DOTALL):
             method, path = match.groups()
 
             # Normalize path
@@ -62,12 +81,8 @@ def extract_api_endpoints() -> Dict[str, Set[str]]:
 
             # Add /api/v1 prefix if not present
             if not path.startswith('/api'):
-                # Get base path from filename (e.g., users.py -> /users)
-                base = file.stem
-                if path.startswith(f'/{base}'):
-                    full_path = f"/api/v1{path}"
-                else:
-                    full_path = f"/api/v1/{base}{path}"
+                # Use router prefix + endpoint path
+                full_path = f"/api/v1{router_prefix}{path}" if path != "/" else f"/api/v1{router_prefix}/"
             else:
                 full_path = path
 
@@ -91,9 +106,23 @@ def extract_bot_client_calls() -> Dict[str, Set[str]]:
         -> {"GET": {"/api/v1/users/by-telegram/{id}"}}
     """
     calls = {}
-    client_path = Path("services/tracker_activity_bot/src/infrastructure/http_clients/")
 
-    if not client_path.exists():
+    # Try multiple possible paths (host, Docker container, etc.)
+    possible_paths = [
+        Path("services/tracker_activity_bot/src/infrastructure/http_clients/"),  # Running from repo root
+        Path("/app/services/tracker_activity_bot/src/infrastructure/http_clients/"),  # Docker with full mount
+        Path("../services/tracker_activity_bot/src/infrastructure/http_clients/"),  # Relative from tests dir
+        Path("src/infrastructure/http_clients/"),  # Inside bot container
+    ]
+
+    client_path = None
+    for path in possible_paths:
+        if path.exists():
+            client_path = path
+            break
+
+    if client_path is None:
+        # No bot client code found - return empty dict
         return calls
 
     for file in client_path.glob("*_service.py"):
@@ -131,9 +160,22 @@ def extract_contract_test_paths() -> Dict[str, Set[str]]:
         -> {"GET": {"/api/v1/users/by-telegram/{id}"}}
     """
     test_paths = {}
-    contract_test_dir = Path("services/data_postgres_api/tests/contract/")
 
-    if not contract_test_dir.exists():
+    # Try multiple possible paths (host, Docker container, etc.)
+    possible_paths = [
+        Path("services/data_postgres_api/tests/contract/"),  # Running from repo root
+        Path("/app/services/data_postgres_api/tests/contract/"),  # Docker with full mount
+        Path("../services/data_postgres_api/tests/contract/"),  # Relative from tests dir
+    ]
+
+    contract_test_dir = None
+    for path in possible_paths:
+        if path.exists():
+            contract_test_dir = path
+            break
+
+    if contract_test_dir is None:
+        # No contract tests found - return empty dict
         return test_paths
 
     for file in contract_test_dir.glob("test_*.py"):
@@ -146,6 +188,11 @@ def extract_contract_test_paths() -> Dict[str, Set[str]]:
 
             # Normalize numeric IDs to {id}
             normalized_path = re.sub(r'/\d+', '/{id}', path)
+
+            # Also normalize test values that look like placeholders for path parameters
+            # Common patterns: not_a_number, invalid_id, test_value, etc.
+            # These are used in validation error tests and should map to {id}
+            normalized_path = re.sub(r'/(not_a_number|invalid|test|unknown|nonexistent)(?=[/?]|$)', '/{id}', normalized_path)
 
             test_paths.setdefault(method.upper(), set()).add(normalized_path)
 
@@ -165,7 +212,17 @@ def normalize_path(path: str) -> str:
     Examples:
         "/api/v1/users/{user_id}" -> "/api/v1/users/{id}"
         "/api/v1/users/123" -> "/api/v1/users/{id}"
+        "/api/v1/activities?user_id=1&limit=10" -> "/api/v1/activities"
+        "/api/v1/activities/" -> "/api/v1/activities"
     """
+    # Remove query parameters
+    if '?' in path:
+        path = path.split('?')[0]
+
+    # Remove trailing slash for consistency
+    if path.endswith('/') and path != '/':
+        path = path.rstrip('/')
+
     # Replace all path parameters with {id}
     normalized = re.sub(r'\{[^}]+\}', '{id}', path)
     # Replace numeric values with {id}

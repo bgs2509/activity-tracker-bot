@@ -6,8 +6,8 @@ for /api/v1/users endpoints using FastAPI TestClient.
 
 Test Coverage:
     - POST /users: Create user with validation
-    - GET /users/by-telegram-id/{id}: User retrieval
-    - PUT /users/{id}/last-poll-time: Poll time update
+    - GET /users/by-telegram/{id}: User retrieval
+    - PATCH /users/{id}/last-poll-time: Poll time update
     - Schema validation: Required fields, types, optional fields
     - Error cases: 404, 422 validation errors
 
@@ -298,7 +298,7 @@ class TestCreateUserEndpoint:
 
 class TestGetUserByTelegramIdEndpoint:
     """
-    Test suite for GET /api/v1/users/by-telegram-id/{telegram_id} endpoint.
+    Test suite for GET /api/v1/users/by-telegram/{telegram_id} endpoint.
 
     Tests user retrieval by Telegram ID with error handling.
     """
@@ -314,7 +314,7 @@ class TestGetUserByTelegramIdEndpoint:
         Test successful user retrieval.
 
         GIVEN: User exists with telegram_id=123456789
-        WHEN: GET /api/v1/users/by-telegram-id/123456789 is called
+        WHEN: GET /api/v1/users/by-telegram/123456789 is called
         THEN: 200 status with user data
         """
         # Arrange
@@ -322,7 +322,7 @@ class TestGetUserByTelegramIdEndpoint:
 
         # Act
         with patch('src.api.dependencies.get_user_service', return_value=mock_user_service):
-            response = client.get("/api/v1/users/by-telegram-id/123456789")
+            response = client.get("/api/v1/users/by-telegram/123456789")
 
         # Assert
         assert response.status_code == 200
@@ -343,7 +343,7 @@ class TestGetUserByTelegramIdEndpoint:
         Test user not found case.
 
         GIVEN: User with telegram_id does not exist
-        WHEN: GET /api/v1/users/by-telegram-id/{id} is called
+        WHEN: GET /api/v1/users/by-telegram/{id} is called
         THEN: 404 Not Found with error detail
         """
         # Arrange: User not found
@@ -351,7 +351,7 @@ class TestGetUserByTelegramIdEndpoint:
 
         # Act
         with patch('src.api.dependencies.get_user_service', return_value=mock_user_service):
-            response = client.get("/api/v1/users/by-telegram-id/999999999")
+            response = client.get("/api/v1/users/by-telegram/999999999")
 
         # Assert: 404 error
         assert response.status_code == 404
@@ -368,11 +368,11 @@ class TestGetUserByTelegramIdEndpoint:
         Test path parameter validation.
 
         GIVEN: telegram_id as non-integer in URL
-        WHEN: GET /api/v1/users/by-telegram-id/invalid is called
+        WHEN: GET /api/v1/users/by-telegram/invalid is called
         THEN: 422 with validation error
         """
         # Act
-        response = client.get("/api/v1/users/by-telegram-id/not_a_number")
+        response = client.get("/api/v1/users/by-telegram/not_a_number")
 
         # Assert: Path validation error
         assert response.status_code == 422
@@ -409,7 +409,7 @@ class TestGetUserByTelegramIdEndpoint:
 
         # Act
         with patch('src.api.dependencies.get_user_service', return_value=mock_user_service):
-            response = client.get(f"/api/v1/users/by-telegram-id/{telegram_id}")
+            response = client.get(f"/api/v1/users/by-telegram/{telegram_id}")
 
         # Assert: Correct ID in response
         assert response.status_code == 200
@@ -419,7 +419,7 @@ class TestGetUserByTelegramIdEndpoint:
 
 class TestUpdateLastPollTimeEndpoint:
     """
-    Test suite for PUT /api/v1/users/{user_id}/last-poll-time endpoint.
+    Test suite for PATCH /api/v1/users/{user_id}/last-poll-time endpoint.
 
     Tests poll time updates with datetime validation.
     """
@@ -435,7 +435,7 @@ class TestUpdateLastPollTimeEndpoint:
         Test successful poll time update.
 
         GIVEN: Valid user_id and poll_time
-        WHEN: PUT /api/v1/users/{user_id}/last-poll-time is called
+        WHEN: PATCH /api/v1/users/{user_id}/last-poll-time is called
         THEN: 200 status with updated user
         """
         # Arrange
@@ -448,7 +448,7 @@ class TestUpdateLastPollTimeEndpoint:
 
         # Act
         with patch('src.api.dependencies.get_user_service', return_value=mock_user_service):
-            response = client.put(
+            response = client.patch(
                 "/api/v1/users/1/last-poll-time",
                 json={"poll_time": poll_time}
             )
@@ -468,7 +468,7 @@ class TestUpdateLastPollTimeEndpoint:
         Test poll time update for non-existent user.
 
         GIVEN: user_id does not exist
-        WHEN: PUT request is made
+        WHEN: PATCH request is made
         THEN: 404 Not Found
         """
         # Arrange: Service returns None (user not found)
@@ -476,7 +476,7 @@ class TestUpdateLastPollTimeEndpoint:
 
         # Act
         with patch('src.api.dependencies.get_user_service', return_value=mock_user_service):
-            response = client.put(
+            response = client.patch(
                 "/api/v1/users/999/last-poll-time",
                 json={"poll_time": "2025-11-07T14:30:00Z"}
             )
@@ -493,11 +493,11 @@ class TestUpdateLastPollTimeEndpoint:
         Test datetime validation.
 
         GIVEN: Invalid datetime format
-        WHEN: PUT request is made
+        WHEN: PATCH request is made
         THEN: 422 validation error
         """
         # Act
-        response = client.put(
+        response = client.patch(
             "/api/v1/users/1/last-poll-time",
             json={"poll_time": "invalid-datetime"}
         )
@@ -514,11 +514,11 @@ class TestUpdateLastPollTimeEndpoint:
         Test missing required field.
 
         GIVEN: poll_time not provided
-        WHEN: PUT request is made
+        WHEN: PATCH request is made
         THEN: 422 validation error
         """
         # Act
-        response = client.put(
+        response = client.patch(
             "/api/v1/users/1/last-poll-time",
             json={}
         )
@@ -594,7 +594,7 @@ class TestUsersAPIErrorHandling:
 
         # Act
         with patch('src.api.dependencies.get_user_service', return_value=mock_user_service):
-            response = client.put(
+            response = client.patch(
                 "/api/v1/users/1/last-poll-time",
                 json={"poll_time": "2025-11-07T14:30:00Z"}
             )
