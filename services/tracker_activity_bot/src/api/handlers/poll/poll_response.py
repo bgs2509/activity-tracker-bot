@@ -28,6 +28,7 @@ from src.application.utils.formatters import (
 )
 from src.application.utils.time_helpers import (
     calculate_poll_start_time,
+    calculate_poll_period,
     get_poll_interval
 )
 from src.core.logging_middleware import log_user_action
@@ -322,6 +323,18 @@ async def handle_poll_activity_start(
             await callback.answer()
             return
 
+        # Calculate poll period based on last activity
+        start_time, end_time = await calculate_poll_period(
+            services.activity,
+            user["id"],
+            settings
+        )
+
+        # Format time and duration for display
+        start_time_str = format_time(start_time)
+        end_time_str = format_time(end_time)
+        duration_str = format_duration(start_time, end_time)
+
         # Store user_id in state for later use
         await state.update_data(user_id=user["id"])
         await state.set_state(PollStates.waiting_for_poll_category)
@@ -334,7 +347,13 @@ async def handle_poll_activity_start(
                 callback.bot
             )
 
-        text = get_category_selection_message(source="poll")
+        text = get_category_selection_message(
+            source="poll",
+            start_time=start_time_str,
+            end_time=end_time_str,
+            duration=duration_str,
+            add_motivation=True
+        )
 
         await callback.message.answer(
             text,
@@ -385,12 +404,12 @@ async def handle_poll_category_select(
             )
             return
 
-        # Calculate time range based on poll interval
-        end_time = datetime.now(timezone.utc)
-        start_time = calculate_poll_start_time(end_time, settings)
-
-        # Calculate interval for display
-        interval_minutes = get_poll_interval(settings)
+        # Calculate time range based on last activity (same as shown in category window)
+        start_time, end_time = await calculate_poll_period(
+            services.activity,
+            user["id"],
+            settings
+        )
 
         # Save data to state and ask for description
         await state.update_data(
@@ -410,10 +429,10 @@ async def handle_poll_category_select(
                 bot=callback.bot
             )
 
-        # Format duration and time
+        # Format time and duration for display
         start_time_str = format_time(start_time)
         end_time_str = format_time(end_time)
-        duration_str = format_duration(interval_minutes)
+        duration_str = format_duration(start_time, end_time)
 
         text = (
             f"✏️ Опиши активность\n\n"

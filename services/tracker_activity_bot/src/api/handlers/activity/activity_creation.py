@@ -201,7 +201,8 @@ async def quick_period_selection(callback: types.CallbackQuery, state: FSMContex
                 source="manual",
                 start_time=start_time_str,
                 end_time=end_time_str,
-                duration=duration_str
+                duration=duration_str,
+                add_motivation=True
             )
 
             await callback.message.answer(
@@ -308,7 +309,8 @@ async def process_period_input(message: types.Message, state: FSMContext, servic
                 source="manual",
                 start_time=start_time_str,
                 end_time=end_time_str,
-                duration=duration_str
+                duration=duration_str,
+                add_motivation=True
             )
 
             await message.answer(

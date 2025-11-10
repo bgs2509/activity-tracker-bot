@@ -10,7 +10,8 @@ from apscheduler.triggers.date import DateTrigger
 from src.api.dependencies import get_service_container
 from src.api.keyboards.poll import get_poll_response_keyboard
 from src.api.messages.activity_messages import get_category_selection_message
-from src.application.utils.time_helpers import get_poll_interval
+from src.application.utils.formatters import format_time, format_duration
+from src.application.utils.time_helpers import get_poll_interval, calculate_poll_period
 from src.core.constants import POLL_POSTPONE_MINUTES
 
 from .helpers import get_fsm_storage
@@ -140,6 +141,9 @@ async def send_category_reminder(bot: Bot, user_id: int) -> None:
             )
             return
 
+        # Get settings
+        settings = await services.user_settings.get_by_user_id(user["id"])
+
         # Get categories
         categories = await services.category.get_user_categories(user["id"])
 
@@ -155,8 +159,26 @@ async def send_category_reminder(bot: Bot, user_id: int) -> None:
             )
             return
 
+        # Calculate poll period based on last activity
+        start_time, end_time = await calculate_poll_period(
+            services.activity,
+            user["id"],
+            settings
+        )
+
+        # Format time and duration for display
+        start_time_str = format_time(start_time)
+        end_time_str = format_time(end_time)
+        duration_str = format_duration(start_time, end_time)
+
         # Send category selection message
-        category_text = get_category_selection_message(source="poll")
+        category_text = get_category_selection_message(
+            source="poll",
+            start_time=start_time_str,
+            end_time=end_time_str,
+            duration=duration_str,
+            add_motivation=True
+        )
         text = f"⏰ Напоминание!\n\n{category_text}"
 
         # Import here to avoid circular dependency
