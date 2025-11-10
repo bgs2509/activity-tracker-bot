@@ -37,3 +37,14 @@ class ActivityService:
         return await self.client.get(
             f"/api/v1/activities?user_id={user_id}&limit={limit}"
         )
+
+    async def get_user_activities_by_category(
+        self,
+        user_id: int,
+        category_id: int,
+        limit: int = 10
+    ) -> dict:
+        """Get recent activities for a user filtered by category."""
+        return await self.client.get(
+            f"/api/v1/activities?user_id={user_id}&category_id={category_id}&limit={limit}"
+        )

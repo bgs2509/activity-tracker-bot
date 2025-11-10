@@ -96,3 +96,29 @@ class ActivityService:
             raise ValueError(f"Limit must be between 1 and 100, got {limit}")
 
         return await self.repository.get_recent_by_user(user_id, limit)
+
+    async def get_user_activities_by_category(
+        self,
+        user_id: int,
+        category_id: int,
+        limit: int = 10
+    ) -> list[Activity]:
+        """
+        Get recent activities for user filtered by category.
+
+        Args:
+            user_id: User identifier
+            category_id: Category identifier to filter by
+            limit: Maximum activities to return (default: 10)
+
+        Returns:
+            List of recent activities for the specified category
+
+        Raises:
+            ValueError: If limit is invalid
+        """
+        # Business validation: limit parameter
+        if limit < 1 or limit > 100:
+            raise ValueError(f"Limit must be between 1 and 100, got {limit}")
+
+        return await self.repository.get_recent_by_user_and_category(user_id, category_id, limit)

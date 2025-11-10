@@ -52,19 +52,21 @@ async def create_activity(
     "/",
     response_model=list[ActivityResponse],
     summary="List activities",
-    description="Get recent activities for user"
+    description="Get recent activities for user, optionally filtered by category"
 )
 @handle_service_errors
 async def get_activities(
     user_id: Annotated[int, Query(description="User ID")],
+    category_id: Annotated[int | None, Query(description="Category ID to filter by")] = None,
     limit: Annotated[int, Query(ge=1, le=100, description="Maximum items to return")] = 10,
     service: Annotated[ActivityService, Depends(get_activity_service)] = None
 ) -> list[ActivityResponse]:
     """
-    Get recent activities for user.
+    Get recent activities for user, optionally filtered by category.
 
     Args:
         user_id: User identifier from query string
+        category_id: Optional category ID to filter activities by
         limit: Maximum activities to return (default: 10)
         service: Activity service instance (injected)
 
@@ -74,5 +76,8 @@ async def get_activities(
     Raises:
         HTTPException: 400 if limit is invalid
     """
-    activities = await service.get_user_activities(user_id, limit)
+    if category_id is not None:
+        activities = await service.get_user_activities_by_category(user_id, category_id, limit)
+    else:
+        activities = await service.get_user_activities(user_id, limit)
     return [ActivityResponse.model_validate(act) for act in activities]

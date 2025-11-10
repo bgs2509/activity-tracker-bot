@@ -79,3 +79,28 @@ class ActivityRepository(BaseRepository[Activity, ActivityCreate, ActivityUpdate
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def get_recent_by_user_and_category(
+        self,
+        user_id: int,
+        category_id: int,
+        limit: int = 10
+    ) -> list[Activity]:
+        """
+        Get recent activities for a user filtered by category.
+
+        Args:
+            user_id: User identifier
+            category_id: Category identifier to filter by
+            limit: Maximum activities to return
+
+        Returns:
+            List of activities for the specified category, ordered by most recent first
+        """
+        result = await self.session.execute(
+            select(Activity)
+            .where(Activity.user_id == user_id, Activity.category_id == category_id)
+            .order_by(Activity.start_time.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
