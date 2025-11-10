@@ -16,6 +16,8 @@ from src.api.middleware.correlation import CorrelationIDMiddleware
 from src.api.middleware.logging import RequestLoggingMiddleware
 from src.infrastructure.database.connection import engine, get_db
 from src.domain.models.base import Base
+# Import all models for SQLAlchemy relationship resolution
+from src.domain.models import User, Category, Activity, UserSettings
 
 # Configure structured JSON logging (MANDATORY for Level 1)
 setup_logging(service_name="data_postgres_api", log_level=settings.log_level)

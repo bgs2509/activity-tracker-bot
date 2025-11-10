@@ -6,7 +6,6 @@ and deletion FSM flow.
 
 Test Coverage:
     - show_categories_list: Display user's categories
-    - show_main_menu: Navigation back to main menu
     - add_category_start: Start creation FSM
     - add_category_name: Name validation and saving
     - add_category_emoji_button: Emoji selection via buttons
@@ -31,9 +30,9 @@ from aiogram.fsm.context import FSMContext
 import httpx
 
 from src.api.handlers.categories.category_list import (
-    show_categories_list,
-    show_main_menu
+    show_categories_list
 )
+# Note: main_menu handler is in src.api.handlers.settings.main_menu, not here
 from src.api.handlers.categories.category_creation import (
     add_category_start,
     add_category_name,
@@ -190,28 +189,31 @@ class TestShowCategoriesList:
         assert "Твои категории" in message_text
 
 
-class TestShowMainMenu:
-    """Test suite for show_main_menu handler."""
-
-    @pytest.mark.unit
-    async def test_show_main_menu_returns_to_menu(
-        self,
-        mock_callback
-    ):
-        """
-        Test main menu navigation.
-
-        GIVEN: User clicks main menu button
-        WHEN: show_main_menu is called
-        THEN: Main menu is shown
-        """
-        # Act
-        await show_main_menu(mock_callback)
-
-        # Assert: Main menu shown
-        mock_callback.message.edit_text.assert_called_once()
-        message_text = mock_callback.message.edit_text.call_args[0][0]
-        assert "Выбери действие" in message_text
+# Commented out: main_menu handler moved to src.api.handlers.settings.main_menu
+# and is tested in test_settings_handlers.py
+#
+# class TestShowMainMenu:
+#     """Test suite for show_main_menu handler."""
+#
+#     @pytest.mark.unit
+#     async def test_show_main_menu_returns_to_menu(
+#         self,
+#         mock_callback
+#     ):
+#         """
+#         Test main menu navigation.
+#
+#         GIVEN: User clicks main menu button
+#         WHEN: show_main_menu is called
+#         THEN: Main menu is shown
+#         """
+#         # Act
+#         await show_main_menu(mock_callback)
+#
+#         # Assert: Main menu shown
+#         mock_callback.message.edit_text.assert_called_once()
+#         message_text = mock_callback.message.edit_text.call_args[0][0]
+#         assert "Выбери действие" in message_text
 
 
 # ============================================================================
