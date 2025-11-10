@@ -6,28 +6,40 @@ from typing import List
 def get_recent_activities_keyboard(activities: List[dict]) -> InlineKeyboardMarkup:
     """Get keyboard with recent activities as inline buttons.
 
-    Creates a keyboard with up to 10 recent activity descriptions
+    Creates a keyboard with up to 10 unique recent activity descriptions
     displayed in 2 columns. Each button displays activity description
     split into 2 lines for better readability.
 
     Args:
         activities: List of activity dicts with 'id' and 'description' fields.
                    Expected from API response with ActivityResponse schema.
+                   Activities are assumed to be ordered from newest to oldest.
 
     Returns:
-        Keyboard with recent activity buttons in 2 columns (5 rows max)
+        Keyboard with unique recent activity buttons in 2 columns (5 rows max)
         and an option to enter custom description
     """
     buttons = []
 
-    # Take only first 10 activities
-    recent_activities = activities[:10]
+    # Remove duplicates by description, keeping first occurrence (most recent)
+    seen_descriptions = set()
+    unique_activities = []
+
+    for activity in activities:
+        description = activity.get("description", "")
+        if description and description not in seen_descriptions:
+            seen_descriptions.add(description)
+            unique_activities.append(activity)
+
+            # Stop after collecting 10 unique activities
+            if len(unique_activities) >= 10:
+                break
 
     # Create rows with 2 buttons each (2 columns layout)
-    for i in range(0, len(recent_activities), 2):
+    for i in range(0, len(unique_activities), 2):
         row = []
-        for j in range(i, min(i + 2, len(recent_activities))):
-            activity = recent_activities[j]
+        for j in range(i, min(i + 2, len(unique_activities))):
+            activity = unique_activities[j]
             description = activity.get("description", "")
 
             # Split description into 2 lines for better readability
