@@ -26,7 +26,7 @@ def get_poll_category_keyboard(categories: List[dict], cancel_callback: str = "p
         cancel_callback: Callback data for cancel button (default: "poll_cancel")
 
     Returns:
-        Keyboard with category buttons and cancel option
+        Keyboard with category buttons, remind later, and cancel option
     """
     buttons = []
 
@@ -43,6 +43,9 @@ def get_poll_category_keyboard(categories: List[dict], cancel_callback: str = "p
                 callback_data=f"poll_category_{category['id']}"
             ))
         buttons.append(row)
+
+    # Add "Remind Later" button
+    buttons.append([InlineKeyboardButton(text="⏸ Напомнить позже", callback_data="poll_category_remind_later")])
 
     # Add cancel button with custom callback_data
     buttons.append([InlineKeyboardButton(text="❌ Отменить", callback_data=cancel_callback)])

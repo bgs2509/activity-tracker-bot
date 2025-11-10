@@ -113,6 +113,76 @@ async def send_reminder(bot: Bot, user_id: int) -> None:
         )
 
 
+async def send_category_reminder(bot: Bot, user_id: int) -> None:
+    """
+    Send reminder to user about category selection.
+
+    This is used when user clicks "Remind Later" button during
+    category selection in poll activity recording flow.
+
+    Args:
+        bot: Bot instance
+        user_id: Telegram user ID
+
+    Raises:
+        Does not raise exceptions - logs errors internally
+    """
+    services = get_service_container()
+
+    try:
+        # Get user
+        user = await services.user.get_by_telegram_id(user_id)
+        if not user:
+            logger.error(
+                "User not found for category reminder",
+                extra={"user_id": user_id}
+            )
+            return
+
+        # Get categories
+        categories = await services.category.get_user_categories(user["id"])
+
+        if not categories:
+            # If user has no categories, send them to main menu
+            text = (
+                "⏰ Напоминание!\n\n"
+                "У тебя нет категорий. Сначала создай категорию."
+            )
+            await bot.send_message(
+                chat_id=user_id,
+                text=text
+            )
+            return
+
+        # Send category selection message
+        text = (
+            "⏰ Напоминание!\n\n"
+            "✏️ Чем ты занимался?\n\n"
+            "Выбери категорию активности:"
+        )
+
+        # Import here to avoid circular dependency
+        from src.api.keyboards.poll import get_poll_category_keyboard
+
+        await bot.send_message(
+            chat_id=user_id,
+            text=text,
+            reply_markup=get_poll_category_keyboard(categories)
+        )
+
+        logger.info(
+            "Sent category reminder to user",
+            extra={"user_id": user_id}
+        )
+
+    except Exception as e:
+        logger.error(
+            "Error sending category reminder",
+            extra={"user_id": user_id, "error": str(e)},
+            exc_info=True
+        )
+
+
 # Helper functions (DRY principle)
 
 

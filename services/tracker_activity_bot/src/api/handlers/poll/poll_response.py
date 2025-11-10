@@ -32,7 +32,7 @@ from src.application.utils.time_helpers import (
 from src.core.logging_middleware import log_user_action
 
 from .helpers import get_user_and_settings
-from .poll_sender import send_automatic_poll, send_reminder
+from .poll_sender import send_automatic_poll, send_reminder, send_category_reminder
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -572,6 +572,87 @@ async def handle_poll_cancel(
         reply_markup=get_main_menu_keyboard()
     )
     await callback.answer()
+
+
+@router.callback_query(
+    PollStates.waiting_for_poll_category,
+    F.data == "poll_category_remind_later"
+)
+@with_typing_action
+@log_user_action("poll_category_remind_later_clicked")
+async def handle_poll_category_remind_later(
+    callback: types.CallbackQuery,
+    state: FSMContext
+) -> None:
+    """Handle 'Remind Later' in category selection.
+
+    Schedules reminder to return to category selection based on
+    user's reminder delay settings. Clears FSM state.
+
+    Args:
+        callback: Telegram callback query
+        state: FSM context for state clearing
+    """
+    telegram_id = callback.from_user.id
+
+    logger.debug(
+        "User requested reminder for category selection",
+        extra={"user_id": telegram_id}
+    )
+
+    try:
+        user, settings = await get_user_and_settings(telegram_id, services)
+        if not user or not settings:
+            await callback.message.answer("⚠️ Ошибка получения настроек.")
+            await callback.answer()
+            return
+
+        # Check if reminders are enabled
+        if not settings["reminder_enabled"]:
+            await callback.message.answer(
+                "⚠️ Напоминания отключены в настройках.\n\n"
+                "Включи их в разделе \"Настройки\" → \"Напоминания\".",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await callback.answer()
+            await state.clear()
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+            return
+
+        # Schedule reminder
+        delay_minutes = settings["reminder_delay_minutes"]
+        reminder_time = datetime.now(timezone.utc) + timedelta(
+            minutes=delay_minutes
+        )
+
+        # AsyncIOExecutor handles async functions directly
+        services.scheduler.scheduler.add_job(
+            lambda: send_category_reminder(callback.bot, telegram_id),
+            trigger=DateTrigger(run_date=reminder_time),
+            id=f"category_reminder_{telegram_id}_{reminder_time.timestamp()}",
+            replace_existing=True
+        )
+
+        await callback.message.answer(
+            f"⏸ Хорошо, напомню через {delay_minutes} минут.",
+            reply_markup=get_poll_reminder_keyboard()
+        )
+        await callback.answer()
+
+        # Clear FSM state since user will start fresh when reminder comes
+        await state.clear()
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
+    except Exception as e:
+        logger.error(
+            "Error in handle_poll_category_remind_later",
+            extra={"user_id": telegram_id, "error": str(e)},
+            exc_info=True
+        )
+        await callback.message.answer("⚠️ Произошла ошибка.")
+        await callback.answer()
 
 
 # ==============================================================================
