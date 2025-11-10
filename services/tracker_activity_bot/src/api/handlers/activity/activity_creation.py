@@ -468,10 +468,11 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
             bot=callback.bot
         )
 
-    # Get recent activities for all user history (not filtered by category)
+    # Get recent activities filtered by selected category
     try:
-        response = await services.activity.get_user_activities(
+        response = await services.activity.get_user_activities_by_category(
             user_id=user_id,
+            category_id=category_id,
             limit=20
         )
         recent_activities = response.get("activities", []) if isinstance(response, dict) else response
