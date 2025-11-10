@@ -12,6 +12,7 @@ from src.api.dependencies import ServiceContainer
 from src.api.keyboards.time_select import get_start_time_keyboard, get_end_time_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.api.keyboards.poll import get_poll_category_keyboard
+from src.api.keyboards.activity import get_recent_activities_keyboard
 from src.application.utils.time_parser import parse_time_input, parse_duration
 from src.application.utils.formatters import format_time, format_duration, extract_tags
 from src.application.utils.decorators import with_typing_action
@@ -215,7 +216,7 @@ async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("time_end_"))
 @with_typing_action
-async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
+async def quick_end_time(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
     """Handle quick time selection for end time."""
     time_key = callback.data.replace("time_end_", "")
 
@@ -273,32 +274,71 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
             await callback.answer()
             return
 
-        # Save to FSM and proceed to next step
+        # Save to FSM and proceed to category selection
         await state.update_data(end_time=end_time.isoformat())
-        await state.set_state(ActivityStates.waiting_for_description)
+        await state.set_state(ActivityStates.waiting_for_category)
 
         # Schedule FSM timeout
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.schedule_timeout(
                 user_id=callback.from_user.id,
-                state=ActivityStates.waiting_for_description,
+                state=ActivityStates.waiting_for_category,
                 bot=callback.bot
             )
 
-        start_time_str = format_time(start_time)
-        end_time_str = format_time(end_time)
-        duration_minutes = int((end_time - start_time).total_seconds() / 60)
-        duration_str = format_duration(duration_minutes)
+        # Get user's categories
+        telegram_id = callback.from_user.id
 
-        text = (
-            f"✏️ Опиши активность\n\n"
-            f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
-            f"Напиши, чем ты занимался (минимум 3 символа).\n"
-            f"Можешь добавить теги через #хештег"
-        )
+        try:
+            user = await services.user.get_by_telegram_id(telegram_id)
+            if not user:
+                await callback.message.answer(
+                    "⚠️ Пользователь не найден.",
+                    reply_markup=get_main_menu_keyboard()
+                )
+                await state.clear()
+                await callback.answer()
+                return
 
-        await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
-        await callback.answer()
+            categories = await services.category.get_user_categories(user["id"])
+
+            if not categories:
+                await callback.message.answer(
+                    "⚠️ У тебя нет категорий. Создай категорию в настройках.",
+                    reply_markup=get_main_menu_keyboard()
+                )
+                await state.clear()
+                await callback.answer()
+                return
+
+            # Store user_id for later
+            await state.update_data(user_id=user["id"])
+
+            start_time_str = format_time(start_time)
+            end_time_str = format_time(end_time)
+            duration_minutes = int((end_time - start_time).total_seconds() / 60)
+            duration_str = format_duration(duration_minutes)
+
+            text = (
+                f"📂 Выбери категорию\n\n"
+                f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
+                "Или отправь \"0\" чтобы пропустить."
+            )
+
+            await callback.message.answer(
+                text,
+                reply_markup=get_poll_category_keyboard(categories, cancel_callback="activity_cancel_category")
+            )
+            await callback.answer()
+
+        except Exception as e:
+            logger.error(f"Error in quick_end_time: {e}")
+            await callback.message.answer(
+                "⚠️ Произошла ошибка.",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await state.clear()
+            await callback.answer()
 
     except ValueError as e:
         logger.error(f"Error parsing end time: {e}")
@@ -310,7 +350,7 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.message(ActivityStates.waiting_for_end_time)
-async def process_end_time(message: types.Message, state: FSMContext):
+async def process_end_time(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process end time input (text message)."""
     # Get start_time from state
     data = await state.get_data()
@@ -341,31 +381,67 @@ async def process_end_time(message: types.Message, state: FSMContext):
             )
             return
 
-        # Save to FSM and proceed to next step
+        # Save to FSM and proceed to category selection
         await state.update_data(end_time=end_time.isoformat())
-        await state.set_state(ActivityStates.waiting_for_description)
+        await state.set_state(ActivityStates.waiting_for_category)
 
         # Schedule FSM timeout
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.schedule_timeout(
                 user_id=message.from_user.id,
-                state=ActivityStates.waiting_for_description,
+                state=ActivityStates.waiting_for_category,
                 bot=message.bot
             )
 
-        start_time_str = format_time(start_time)
-        end_time_str = format_time(end_time)
-        duration_minutes = int((end_time - start_time).total_seconds() / 60)
-        duration_str = format_duration(duration_minutes)
+        # Get user's categories
+        telegram_id = message.from_user.id
 
-        text = (
-            f"✏️ Опиши активность\n\n"
-            f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
-            f"Напиши, чем ты занимался (минимум 3 символа).\n"
-            f"Можешь добавить теги через #хештег"
-        )
+        try:
+            user = await services.user.get_by_telegram_id(telegram_id)
+            if not user:
+                await message.answer(
+                    "⚠️ Пользователь не найден.",
+                    reply_markup=get_main_menu_keyboard()
+                )
+                await state.clear()
+                return
 
-        await message.answer(text, reply_markup=get_main_menu_keyboard())
+            categories = await services.category.get_user_categories(user["id"])
+
+            if not categories:
+                await message.answer(
+                    "⚠️ У тебя нет категорий. Создай категорию в настройках.",
+                    reply_markup=get_main_menu_keyboard()
+                )
+                await state.clear()
+                return
+
+            # Store user_id for later
+            await state.update_data(user_id=user["id"])
+
+            start_time_str = format_time(start_time)
+            end_time_str = format_time(end_time)
+            duration_minutes = int((end_time - start_time).total_seconds() / 60)
+            duration_str = format_duration(duration_minutes)
+
+            text = (
+                f"📂 Выбери категорию\n\n"
+                f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
+                "Или отправь \"0\" чтобы пропустить."
+            )
+
+            await message.answer(
+                text,
+                reply_markup=get_poll_category_keyboard(categories, cancel_callback="activity_cancel_category")
+            )
+
+        except Exception as e:
+            logger.error(f"Error in process_end_time: {e}")
+            await message.answer(
+                "⚠️ Произошла ошибка.",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await state.clear()
 
     except ValueError as e:
         await message.answer(
@@ -374,9 +450,124 @@ async def process_end_time(message: types.Message, state: FSMContext):
         )
 
 
+@router.callback_query(ActivityStates.waiting_for_description, F.data.startswith("activity_desc_"))
+@with_typing_action
+async def select_recent_activity(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
+    """Handle selection of recent activity from inline buttons.
+
+    User clicked on one of the recent activity buttons - use that description
+    to save the activity.
+    """
+    # Extract activity_id from callback data
+    activity_id_str = callback.data.replace("activity_desc_", "")
+
+    try:
+        activity_id = int(activity_id_str)
+    except ValueError:
+        await callback.message.answer("⚠️ Ошибка при обработке выбора.")
+        await callback.answer()
+        return
+
+    # Get all data from state
+    data = await state.get_data()
+    user_id = data.get("user_id")
+    category_id = data.get("category_id")
+
+    # Fetch the selected activity to get its description
+    try:
+        # We need to fetch the activity by ID to get its full description
+        # For now, we'll ask the user to use get_user_activities and find it
+        # But a better approach would be to store descriptions in callback_data or state
+
+        # Get recent activities again to find the description
+        if category_id:
+            response = await services.activity.get_user_activities_by_category(
+                user_id=user_id,
+                category_id=category_id,
+                limit=10
+            )
+        else:
+            response = await services.activity.get_user_activities(
+                user_id=user_id,
+                limit=10
+            )
+
+        recent_activities = response.get("activities", []) if isinstance(response, dict) else response
+
+        # Find the activity with matching ID
+        selected_activity = next(
+            (act for act in recent_activities if act.get("id") == activity_id),
+            None
+        )
+
+        if not selected_activity:
+            await callback.message.answer("⚠️ Активность не найдена.")
+            await callback.answer()
+            return
+
+        description = selected_activity.get("description", "")
+        tags = extract_tags(description)
+
+        # Save activity with selected description
+        await save_activity(
+            callback.message, state, user_id, category_id, callback.from_user.id, services, description, tags
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Error selecting recent activity: {e}")
+        await callback.message.answer(
+            "⚠️ Ошибка при сохранении активности.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await callback.answer()
+
+
+@router.callback_query(ActivityStates.waiting_for_description, F.data == "activity_custom_desc")
+@with_typing_action
+async def enter_custom_description(callback: types.CallbackQuery, state: FSMContext):
+    """Handle 'Enter custom description' button.
+
+    User wants to enter their own description instead of selecting from recent activities.
+    Just prompt them to enter text and stay in waiting_for_description state.
+    """
+    data = await state.get_data()
+    start_time_str = data.get("start_time")
+    end_time_str = data.get("end_time")
+
+    if not all([start_time_str, end_time_str]):
+        await callback.message.answer(
+            "⚠️ Ошибка: недостаточно данных. Попробуй ещё раз.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        await callback.answer()
+        return
+
+    start_time = datetime.fromisoformat(start_time_str)
+    end_time = datetime.fromisoformat(end_time_str)
+    start_time_str_fmt = format_time(start_time)
+    end_time_str_fmt = format_time(end_time)
+    duration_minutes = int((end_time - start_time).total_seconds() / 60)
+    duration_str = format_duration(duration_minutes)
+
+    text = (
+        f"✏️ Опиши активность\n\n"
+        f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
+        f"Напиши, чем ты занимался (минимум 3 символа).\n"
+        f"Можешь добавить теги через #хештег"
+    )
+
+    await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
+    await callback.answer()
+
+
 @router.message(ActivityStates.waiting_for_description)
 async def process_description(message: types.Message, state: FSMContext, services: ServiceContainer):
-    """Process activity description (text message)."""
+    """Process activity description (text message).
+
+    Description is entered as text - save activity with all collected data.
+    """
     description = message.text.strip()
 
     if not description or len(description) < 3:
@@ -386,65 +577,15 @@ async def process_description(message: types.Message, state: FSMContext, service
     # Extract tags from description
     tags = extract_tags(description)
 
-    # Save to FSM
-    await state.update_data(description=description, tags=tags)
-    await state.set_state(ActivityStates.waiting_for_category)
+    # Get all data from state
+    data = await state.get_data()
+    user_id = data.get("user_id")
+    category_id = data.get("category_id")
 
-    # Schedule FSM timeout
-    if fsm_timeout_module.fsm_timeout_service:
-        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-            user_id=message.from_user.id,
-            state=ActivityStates.waiting_for_category,
-            bot=message.bot
-        )
-
-    # Get user's categories
-    telegram_id = message.from_user.id
-
-    try:
-        user = await services.user.get_by_telegram_id(telegram_id)
-        if not user:
-            await message.answer(
-                "⚠️ Пользователь не найден.",
-                reply_markup=get_main_menu_keyboard()
-            )
-            await state.clear()
-            return
-
-        categories = await services.category.get_user_categories(user["id"])
-
-        if not categories:
-            await message.answer(
-                "⚠️ У тебя нет категорий. Активность будет сохранена без категории.",
-                reply_markup=get_main_menu_keyboard()
-            )
-            # Save without category
-            await save_activity(message, state, user["id"], None, message.from_user.id, services)
-            return
-
-        # Store categories and user_id for callback handlers
-        await state.update_data(
-            categories=categories,
-            user_id=user["id"]
-        )
-
-        text = (
-            "📂 Выбери категорию\n\n"
-            "Или отправь \"0\" чтобы пропустить."
-        )
-
-        await message.answer(
-            text,
-            reply_markup=get_poll_category_keyboard(categories, cancel_callback="activity_cancel_category")
-        )
-
-    except Exception as e:
-        logger.error(f"Error in process_description: {e}")
-        await message.answer(
-            "⚠️ Произошла ошибка.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        await state.clear()
+    # Save activity
+    await save_activity(
+        message, state, user_id, category_id, message.from_user.id, services, description, tags
+    )
 
 
 @router.callback_query(ActivityStates.waiting_for_category, F.data.startswith("poll_category_"))
@@ -452,31 +593,87 @@ async def process_description(message: types.Message, state: FSMContext, service
 async def process_category_callback(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
     """Process category selection via inline button.
 
-    User selected category from inline keyboard. Extract category_id
-    from callback_data and proceed to time selection.
+    User selected category from inline keyboard. Now fetch recent activities
+    for this category and show them as inline buttons for description input.
     """
     category_id = int(callback.data.split("_")[-1])
 
     data = await state.get_data()
-    categories = data.get("categories", [])
     user_id = data.get("user_id")
+    start_time_str = data.get("start_time")
+    end_time_str = data.get("end_time")
 
-    # Find selected category for display
-    selected_category = next(
-        (cat for cat in categories if cat["id"] == category_id),
-        None
-    )
-
-    if not selected_category:
-        await callback.message.answer("⚠️ Категория не найдена.")
+    if not all([user_id, start_time_str, end_time_str]):
+        await callback.message.answer(
+            "⚠️ Ошибка: недостаточно данных. Попробуй ещё раз.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
         await callback.answer()
         return
 
-    # Save activity with selected category
-    await save_activity(
-        callback.message, state, user_id, category_id, callback.from_user.id, services
-    )
-    await callback.answer()
+    # Save selected category_id to state
+    await state.update_data(category_id=category_id)
+    await state.set_state(ActivityStates.waiting_for_description)
+
+    # Schedule FSM timeout
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+            user_id=callback.from_user.id,
+            state=ActivityStates.waiting_for_description,
+            bot=callback.bot
+        )
+
+    # Get recent activities for this category
+    try:
+        response = await services.activity.get_user_activities_by_category(
+            user_id=user_id,
+            category_id=category_id,
+            limit=10
+        )
+        recent_activities = response.get("activities", []) if isinstance(response, dict) else response
+
+        start_time = datetime.fromisoformat(start_time_str)
+        end_time = datetime.fromisoformat(end_time_str)
+        start_time_str_fmt = format_time(start_time)
+        end_time_str_fmt = format_time(end_time)
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        duration_str = format_duration(duration_minutes)
+
+        text = (
+            f"✏️ Опиши активность\n\n"
+            f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
+        )
+
+        if recent_activities:
+            text += "Выбери из последних активностей или напиши своё (минимум 3 символа):"
+            keyboard = get_recent_activities_keyboard(recent_activities)
+        else:
+            text += "Напиши, чем ты занимался (минимум 3 символа).\nМожешь добавить теги через #хештег"
+            keyboard = get_main_menu_keyboard()
+
+        await callback.message.answer(text, reply_markup=keyboard)
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Error fetching recent activities: {e}")
+        # Fallback: just ask for description without suggestions
+        start_time = datetime.fromisoformat(start_time_str)
+        end_time = datetime.fromisoformat(end_time_str)
+        start_time_str_fmt = format_time(start_time)
+        end_time_str_fmt = format_time(end_time)
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        duration_str = format_duration(duration_minutes)
+
+        text = (
+            f"✏️ Опиши активность\n\n"
+            f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
+            f"Напиши, чем ты занимался (минимум 3 символа).\n"
+            f"Можешь добавить теги через #хештег"
+        )
+
+        await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
+        await callback.answer()
 
 
 @router.callback_query(ActivityStates.waiting_for_category, F.data == "activity_cancel_category")
@@ -507,28 +704,47 @@ async def process_category(message: types.Message, state: FSMContext, services: 
 
     # Only allow "0" to skip category - main selection via inline buttons
     if text == "0":
-        telegram_id = message.from_user.id
+        data = await state.get_data()
+        user_id = data.get("user_id")
+        start_time_str = data.get("start_time")
+        end_time_str = data.get("end_time")
 
-        try:
-            user = await services.user.get_by_telegram_id(telegram_id)
-            if not user:
-                await message.answer(
-                    "⚠️ Пользователь не найден.",
-                    reply_markup=get_main_menu_keyboard()
-                )
-                await state.clear()
-                return
-
-            # Save activity without category
-            await save_activity(message, state, user["id"], None, message.from_user.id, services)
-
-        except Exception as e:
-            logger.error(f"Error in process_category: {e}")
+        if not all([user_id, start_time_str, end_time_str]):
             await message.answer(
-                "⚠️ Произошла ошибка.",
+                "⚠️ Ошибка: недостаточно данных. Попробуй ещё раз.",
                 reply_markup=get_main_menu_keyboard()
             )
             await state.clear()
+            return
+
+        # Skip category - proceed to description without category_id
+        await state.update_data(category_id=None)
+        await state.set_state(ActivityStates.waiting_for_description)
+
+        # Schedule FSM timeout
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+                user_id=message.from_user.id,
+                state=ActivityStates.waiting_for_description,
+                bot=message.bot
+            )
+
+        start_time = datetime.fromisoformat(start_time_str)
+        end_time = datetime.fromisoformat(end_time_str)
+        start_time_str_fmt = format_time(start_time)
+        end_time_str_fmt = format_time(end_time)
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        duration_str = format_duration(duration_minutes)
+
+        text = (
+            f"✏️ Опиши активность\n\n"
+            f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
+            f"Напиши, чем ты занимался (минимум 3 символа).\n"
+            f"Можешь добавить теги через #хештег"
+        )
+
+        await message.answer(text, reply_markup=get_main_menu_keyboard())
+
     else:
         # Ignore other text input - user should use inline buttons
         await message.answer(
@@ -543,14 +759,31 @@ async def save_activity(
     user_id: int,
     category_id: int | None,
     telegram_user_id: int,
-    services: ServiceContainer
+    services: ServiceContainer,
+    description: str | None = None,
+    tags: list[str] | None = None
 ):
-    """Save activity to database."""
+    """Save activity to database.
+
+    Args:
+        message: Telegram message object
+        state: FSM context
+        user_id: Internal user ID
+        category_id: Category ID or None
+        telegram_user_id: Telegram user ID
+        services: Service container
+        description: Activity description (if not provided, will get from state)
+        tags: Activity tags (if not provided, will get from state)
+    """
     data = await state.get_data()
     start_time_str = data.get("start_time")
     end_time_str = data.get("end_time")
-    description = data.get("description")
-    tags = data.get("tags", [])
+
+    # Use provided description/tags or get from state
+    if description is None:
+        description = data.get("description")
+    if tags is None:
+        tags = data.get("tags", [])
 
     if not all([start_time_str, end_time_str, description]):
         await message.answer(
