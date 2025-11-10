@@ -47,8 +47,15 @@ class ActivityResponse(BaseModel):
     @classmethod
     def extract_category_data(cls, data: Any) -> Any:
         """Extract category name and emoji from relationship if present."""
-        if hasattr(data, 'category') and data.category is not None:
-            if not isinstance(data, dict):
+        # Skip if already a dict (no need to process)
+        if isinstance(data, dict):
+            return data
+
+        # For SQLAlchemy models, check if category relationship is loaded
+        # Use __dict__ to avoid triggering lazy load
+        if hasattr(data, '__dict__') and 'category' in data.__dict__:
+            category = data.__dict__['category']
+            if category is not None:
                 data_dict = {
                     'id': data.id,
                     'user_id': data.user_id,
@@ -59,8 +66,8 @@ class ActivityResponse(BaseModel):
                     'end_time': data.end_time,
                     'duration_minutes': data.duration_minutes,
                     'created_at': data.created_at,
-                    'category_name': data.category.name,
-                    'category_emoji': data.category.emoji,
+                    'category_name': category.name,
+                    'category_emoji': category.emoji,
                 }
                 return data_dict
         return data
