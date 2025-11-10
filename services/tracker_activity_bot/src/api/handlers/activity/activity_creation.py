@@ -398,45 +398,6 @@ async def select_recent_activity(callback: types.CallbackQuery, state: FSMContex
         await callback.answer()
 
 
-@router.callback_query(ActivityStates.waiting_for_description, F.data == "activity_custom_desc")
-@with_typing_action
-async def enter_custom_description(callback: types.CallbackQuery, state: FSMContext):
-    """Handle 'Enter custom description' button.
-
-    User wants to enter their own description instead of selecting from recent activities.
-    Just prompt them to enter text and stay in waiting_for_description state.
-    """
-    data = await state.get_data()
-    start_time_str = data.get("start_time")
-    end_time_str = data.get("end_time")
-
-    if not all([start_time_str, end_time_str]):
-        await callback.message.answer(
-            "⚠️ Ошибка: недостаточно данных. Попробуй ещё раз.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        await state.clear()
-        await callback.answer()
-        return
-
-    start_time = datetime.fromisoformat(start_time_str)
-    end_time = datetime.fromisoformat(end_time_str)
-    start_time_str_fmt = format_time(start_time)
-    end_time_str_fmt = format_time(end_time)
-    duration_minutes = int((end_time - start_time).total_seconds() / 60)
-    duration_str = format_duration(duration_minutes)
-
-    text = (
-        f"✏️ Опиши активность\n\n"
-        f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
-        f"Напиши, чем ты занимался (минимум 3 символа).\n"
-        f"Можешь добавить теги через #хештег"
-    )
-
-    await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
-    await callback.answer()
-
-
 @router.message(ActivityStates.waiting_for_description)
 async def process_description(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process activity description (text message).
@@ -499,36 +460,13 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
             bot=callback.bot
         )
 
-    # Get recent activities for this category
+    # Get recent activities for all user history (not filtered by category)
     try:
-        response = await services.activity.get_user_activities_by_category(
+        response = await services.activity.get_user_activities(
             user_id=user_id,
-            category_id=category_id,
             limit=20
         )
         recent_activities = response.get("activities", []) if isinstance(response, dict) else response
-
-        # Fallback: if category has fewer than 8 unique activities, get general activities
-        unique_descriptions = set()
-        for activity in recent_activities:
-            description = activity.get("description", "")
-            if description:
-                unique_descriptions.add(description)
-
-        if len(unique_descriptions) < 8:
-            # Request general user activities to supplement category activities
-            general_response = await services.activity.get_user_activities(
-                user_id=user_id,
-                limit=20
-            )
-            general_activities = general_response.get("activities", []) if isinstance(general_response, dict) else general_response
-
-            # Merge with category activities, prioritizing category ones
-            activity_ids = {act.get("id") for act in recent_activities}
-            for activity in general_activities:
-                if activity.get("id") not in activity_ids:
-                    recent_activities.append(activity)
-                    activity_ids.add(activity.get("id"))
 
         start_time = datetime.fromisoformat(start_time_str)
         end_time = datetime.fromisoformat(end_time_str)
@@ -543,11 +481,11 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
         )
 
         if recent_activities:
-            text += "Выбери из последних активностей или напиши своё (минимум 3 символа):"
+            text += "Выбери из последних или напиши своё (минимум 3 символа).\nМожешь добавить теги через #хештег"
             keyboard = get_recent_activities_keyboard(recent_activities)
         else:
             text += "Напиши, чем ты занимался (минимум 3 символа).\nМожешь добавить теги через #хештег"
-            keyboard = get_main_menu_keyboard()
+            keyboard = None
 
         await callback.message.answer(text, reply_markup=keyboard)
         await callback.answer()
@@ -569,7 +507,7 @@ async def process_category_callback(callback: types.CallbackQuery, state: FSMCon
             f"Можешь добавить теги через #хештег"
         )
 
-        await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
+        await callback.message.answer(text)
         await callback.answer()
 
 
@@ -650,11 +588,11 @@ async def process_category(message: types.Message, state: FSMContext, services: 
         )
 
         if recent_activities:
-            text += "Выбери из последних активностей или напиши своё (минимум 3 символа):"
+            text += "Выбери из последних или напиши своё (минимум 3 символа).\nМожешь добавить теги через #хештег"
             keyboard = get_recent_activities_keyboard(recent_activities)
         else:
             text += "Напиши, чем ты занимался (минимум 3 символа).\nМожешь добавить теги через #хештег"
-            keyboard = get_main_menu_keyboard()
+            keyboard = None
 
         await message.answer(text, reply_markup=keyboard)
 

@@ -16,8 +16,8 @@ def get_recent_activities_keyboard(activities: List[dict]) -> InlineKeyboardMark
                    Activities are assumed to be ordered from newest to oldest.
 
     Returns:
-        Keyboard with unique recent activity buttons in 2 columns (4 rows)
-        and an option to enter custom description
+        Keyboard with unique recent activity buttons in 2 columns (4 rows max).
+        User can also enter custom description as text message (not a button).
     """
     buttons = []
 
@@ -51,12 +51,6 @@ def get_recent_activities_keyboard(activities: List[dict]) -> InlineKeyboardMark
                 callback_data=f"activity_desc_{activity['id']}"
             ))
         buttons.append(row)
-
-    # Add "Enter custom description" button
-    buttons.append([InlineKeyboardButton(
-        text="✏️ Ввести своё",
-        callback_data="activity_custom_desc"
-    )])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
