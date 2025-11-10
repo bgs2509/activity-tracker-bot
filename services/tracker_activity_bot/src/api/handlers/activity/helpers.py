@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 # Quick time selection maps (DRY)
 START_TIME_MAP = {
-    "5m": "5м",
     "15m": "15м",
     "30m": "30м",
     "1h": "1ч",
     "2h": "2ч",
     "3h": "3ч",
+    "8h": "8ч",
 }
 
 END_TIME_MAP = {
@@ -26,6 +26,7 @@ END_TIME_MAP = {
     "1h": "1ч",
     "2h": "2ч",
     "3h": "3ч",
+    "8h": "8ч",
 }
 
 

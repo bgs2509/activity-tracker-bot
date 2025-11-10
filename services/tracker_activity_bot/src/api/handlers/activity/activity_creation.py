@@ -49,10 +49,6 @@ async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
 
     text = (
         "⏰ Укажи время НАЧАЛА активности\n\n"
-        "Можешь отправить:\n"
-        "• Точное время: 14:30 или 14-30\n"
-        "• Минуты назад: 30м или 30\n"
-        "• Часы назад: 2ч или 2h\n\n"
         "Примеры:\n"
         "14:30 — началось в 14:30\n"
         "90м — началось 90 минут назад\n"
@@ -148,10 +144,10 @@ async def process_start_time(message: types.Message, state: FSMContext):
         text = (
             f"⏰ Укажи время ОКОНЧАНИЯ активности\n\n"
             f"Началось: {start_time_str}\n\n"
-            "Можешь отправить:\n"
-            "• Точное время: 16:00\n"
-            "• Продолжительность: 30м (длилось 30 минут)\n"
-            "• \"Сейчас\" или \"0\" — закончилось только что"
+            "Примеры:\n"
+            "16:00 — закончилось в 16:00\n"
+            "30м — длилось 30 минут\n"
+            "0 — закончилось только что"
         )
 
         await message.answer(text, reply_markup=get_end_time_keyboard())
@@ -203,10 +199,10 @@ async def quick_start_time(callback: types.CallbackQuery, state: FSMContext):
         text = (
             f"⏰ Укажи время ОКОНЧАНИЯ активности\n\n"
             f"Началось: {start_time_str}\n\n"
-            "Можешь отправить:\n"
-            "• Точное время: 16:00\n"
-            "• Продолжительность: 30м\n"
-            "• \"Сейчас\" — закончилось только что"
+            "Примеры:\n"
+            "16:00 — закончилось в 16:00\n"
+            "30м — длилось 30 минут\n"
+            "0 — закончилось только что"
         )
 
         await callback.message.answer(text, reply_markup=get_end_time_keyboard())
@@ -258,9 +254,9 @@ async def quick_end_time(callback: types.CallbackQuery, state: FSMContext, servi
         elif time_key == "3h":
             # "3ч длилось" - duration 3 hours
             end_time = parse_duration("3ч", start_time)
-        elif time_key == "4h":
-            # "4ч длилось" - duration 4 hours
-            end_time = parse_duration("4ч", start_time)
+        elif time_key == "8h":
+            # "8ч длилось" - duration 8 hours
+            end_time = parse_duration("8ч", start_time)
         else:
             await callback.answer("⚠️ Неизвестная команда")
             return
