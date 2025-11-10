@@ -18,6 +18,7 @@ from src.api.states.poll import PollStates
 from src.api.dependencies import ServiceContainer, get_service_container
 from src.api.keyboards.poll import get_poll_reminder_keyboard, get_poll_category_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
+from src.api.messages.activity_messages import get_category_selection_message
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.decorators import with_typing_action
 from src.application.utils.formatters import (
@@ -333,10 +334,7 @@ async def handle_poll_activity_start(
                 callback.bot
             )
 
-        text = (
-            "✏️ Чем ты занимался?\n\n"
-            "Выбери категорию активности:"
-        )
+        text = get_category_selection_message(source="poll")
 
         await callback.message.answer(
             text,

@@ -9,6 +9,7 @@ from apscheduler.triggers.date import DateTrigger
 
 from src.api.dependencies import get_service_container
 from src.api.keyboards.poll import get_poll_response_keyboard
+from src.api.messages.activity_messages import get_category_selection_message
 from src.application.utils.time_helpers import get_poll_interval
 from src.core.constants import POLL_POSTPONE_MINUTES
 
@@ -155,11 +156,8 @@ async def send_category_reminder(bot: Bot, user_id: int) -> None:
             return
 
         # Send category selection message
-        text = (
-            "⏰ Напоминание!\n\n"
-            "✏️ Чем ты занимался?\n\n"
-            "Выбери категорию активности:"
-        )
+        category_text = get_category_selection_message(source="poll")
+        text = f"⏰ Напоминание!\n\n{category_text}"
 
         # Import here to avoid circular dependency
         from src.api.keyboards.poll import get_poll_category_keyboard

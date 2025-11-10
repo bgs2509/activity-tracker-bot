@@ -13,6 +13,7 @@ from src.api.keyboards.time_select import get_period_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.api.keyboards.poll import get_poll_category_keyboard
 from src.api.keyboards.activity import get_recent_activities_keyboard
+from src.api.messages.activity_messages import get_category_selection_message
 from src.application.utils.time_parser import parse_period
 from src.application.utils.formatters import format_time, format_duration, extract_tags
 from src.application.utils.decorators import with_typing_action
@@ -196,10 +197,11 @@ async def quick_period_selection(callback: types.CallbackQuery, state: FSMContex
             duration_minutes = int((end_time - start_time).total_seconds() / 60)
             duration_str = format_duration(duration_minutes)
 
-            text = (
-                f"📂 Выбери категорию\n\n"
-                f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
-                "Или отправь \"0\" чтобы пропустить."
+            text = get_category_selection_message(
+                source="manual",
+                start_time=start_time_str,
+                end_time=end_time_str,
+                duration=duration_str
             )
 
             await callback.message.answer(
@@ -302,10 +304,11 @@ async def process_period_input(message: types.Message, state: FSMContext, servic
             duration_minutes = int((end_time - start_time).total_seconds() / 60)
             duration_str = format_duration(duration_minutes)
 
-            text = (
-                f"📂 Выбери категорию\n\n"
-                f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
-                "Или отправь \"0\" чтобы пропустить."
+            text = get_category_selection_message(
+                source="manual",
+                start_time=start_time_str,
+                end_time=end_time_str,
+                duration=duration_str
             )
 
             await message.answer(
@@ -535,76 +538,13 @@ async def cancel_category_selection(callback: types.CallbackQuery, state: FSMCon
 async def process_category(message: types.Message, state: FSMContext, services: ServiceContainer):
     """Process category selection (text message).
 
-    Fallback text handler - only allows "0" to skip category.
+    Fallback text handler - reminds user to use inline buttons.
     Main selection should be done via inline buttons.
     """
-    text = message.text.strip()
-
-    # Only allow "0" to skip category - main selection via inline buttons
-    if text == "0":
-        data = await state.get_data()
-        user_id = data.get("user_id")
-        start_time_str = data.get("start_time")
-        end_time_str = data.get("end_time")
-
-        if not all([user_id, start_time_str, end_time_str]):
-            await message.answer(
-                "⚠️ Ошибка: недостаточно данных. Попробуй ещё раз.",
-                reply_markup=get_main_menu_keyboard()
-            )
-            await state.clear()
-            return
-
-        # Skip category - proceed to description without category_id
-        await state.update_data(category_id=None)
-        await state.set_state(ActivityStates.waiting_for_description)
-
-        # Schedule FSM timeout
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-                user_id=message.from_user.id,
-                state=ActivityStates.waiting_for_description,
-                bot=message.bot
-            )
-
-        # Get recent activities for suggestions
-        try:
-            response = await services.activity.get_user_activities(
-                user_id=user_id,
-                limit=20
-            )
-            recent_activities = response.get("activities", []) if isinstance(response, dict) else response
-        except Exception as e:
-            logger.error(f"Error fetching recent activities: {e}")
-            recent_activities = []
-
-        start_time = datetime.fromisoformat(start_time_str)
-        end_time = datetime.fromisoformat(end_time_str)
-        start_time_str_fmt = format_time(start_time)
-        end_time_str_fmt = format_time(end_time)
-        duration_minutes = int((end_time - start_time).total_seconds() / 60)
-        duration_str = format_duration(duration_minutes)
-
-        text = (
-            f"✏️ Опиши активность\n\n"
-            f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
-        )
-
-        if recent_activities:
-            text += "Выбери из последних или напиши своё (минимум 3 символа).\nМожешь добавить теги через #хештег"
-            keyboard = get_recent_activities_keyboard(recent_activities)
-        else:
-            text += "Напиши, чем ты занимался (минимум 3 символа).\nМожешь добавить теги через #хештег"
-            keyboard = None
-
-        await message.answer(text, reply_markup=keyboard)
-
-    else:
-        # Ignore other text input - user should use inline buttons
-        await message.answer(
-            "⚠️ Пожалуйста, используй кнопки для выбора категории.\n"
-            "Или отправь \"0\" чтобы пропустить."
-        )
+    # Ignore text input - user should use inline buttons
+    await message.answer(
+        "⚠️ Пожалуйста, используй кнопки для выбора категории."
+    )
 
 
 async def save_activity(
