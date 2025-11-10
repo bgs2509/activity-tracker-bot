@@ -46,329 +46,329 @@ services = get_service_container()
 # ==============================================================================
 # POLL RESPONSE: SKIP
 # ==============================================================================
+# DISABLED: Automatic polls now show categories directly without intermediate options
 
-
-@router.callback_query(F.data == "poll_skip")
-@with_typing_action
-@log_user_action("poll_skip_clicked")
-async def handle_poll_skip(
-    callback: types.CallbackQuery,
-    state: FSMContext
-) -> None:
-    """Handle 'Skip' poll response - user did nothing.
-
-    Schedules next poll and confirms to user that response was recorded.
-
-    Args:
-        callback: Telegram callback query
-        state: FSM context (unused but kept for consistency)
-    """
-    telegram_id = callback.from_user.id
-
-    logger.debug(
-        "User skipped poll",
-        extra={"user_id": telegram_id}
-    )
-
-    try:
-        user, settings = await get_user_and_settings(telegram_id, services)
-        if not user or not settings:
-            await callback.message.answer("⚠️ Ошибка получения настроек.")
-            await callback.answer()
-            return
-
-        # Schedule next poll
-        await _schedule_next_poll(
-            telegram_id=telegram_id,
-            settings=settings,
-            user=user,
-            bot=callback.bot
-        )
-
-        await callback.message.answer(
-            "✅ Понятно, ничего не делал.\n\nСледующий опрос придёт по расписанию.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(
-            "Error in handle_poll_skip",
-            extra={"user_id": telegram_id, "error": str(e)},
-            exc_info=True
-        )
-        await callback.message.answer("⚠️ Произошла ошибка.")
-        await callback.answer()
+# @router.callback_query(F.data == "poll_skip")
+# @with_typing_action
+# @log_user_action("poll_skip_clicked")
+# async def handle_poll_skip(
+#     callback: types.CallbackQuery,
+#     state: FSMContext
+# ) -> None:
+#     """Handle 'Skip' poll response - user did nothing.
+#
+#     Schedules next poll and confirms to user that response was recorded.
+#
+#     Args:
+#         callback: Telegram callback query
+#         state: FSM context (unused but kept for consistency)
+#     """
+#     telegram_id = callback.from_user.id
+#
+#     logger.debug(
+#         "User skipped poll",
+#         extra={"user_id": telegram_id}
+#     )
+#
+#     try:
+#         user, settings = await get_user_and_settings(telegram_id, services)
+#         if not user or not settings:
+#             await callback.message.answer("⚠️ Ошибка получения настроек.")
+#             await callback.answer()
+#             return
+#
+#         # Schedule next poll
+#         await _schedule_next_poll(
+#             telegram_id=telegram_id,
+#             settings=settings,
+#             user=user,
+#             bot=callback.bot
+#         )
+#
+#         await callback.message.answer(
+#             "✅ Понятно, ничего не делал.\n\nСледующий опрос придёт по расписанию.",
+#             reply_markup=get_main_menu_keyboard()
+#         )
+#         await callback.answer()
+#
+#     except Exception as e:
+#         logger.error(
+#             "Error in handle_poll_skip",
+#             extra={"user_id": telegram_id, "error": str(e)},
+#             exc_info=True
+#         )
+#         await callback.message.answer("⚠️ Произошла ошибка.")
+#         await callback.answer()
 
 
 # ==============================================================================
 # POLL RESPONSE: SLEEP
 # ==============================================================================
+# DISABLED: Automatic polls now show categories directly without intermediate options
 
-
-@router.callback_query(F.data == "poll_sleep")
-@with_typing_action
-@log_user_action("poll_sleep_clicked")
-async def handle_poll_sleep(
-    callback: types.CallbackQuery,
-    state: FSMContext
-) -> None:
-    """Handle 'Sleep' poll response - user was sleeping.
-
-    Creates or finds "Сон" category and records sleep activity
-    with automatic duration calculation based on poll interval.
-
-    Args:
-        callback: Telegram callback query
-        state: FSM context (unused but kept for consistency)
-    """
-    telegram_id = callback.from_user.id
-
-    logger.debug(
-        "User selected sleep in poll",
-        extra={"user_id": telegram_id}
-    )
-
-    try:
-        user, settings = await get_user_and_settings(telegram_id, services)
-        if not user or not settings:
-            await callback.message.answer("⚠️ Ошибка получения настроек.")
-            await callback.answer()
-            return
-
-        # Find or create "Сон" category
-        sleep_category = await _get_or_create_sleep_category(user["id"])
-
-        # Calculate sleep duration from last poll time
-        start_time, end_time = await _calculate_sleep_duration(user, settings)
-
-        # Save sleep activity
-        await services.activity.create_activity(
-            user_id=user["id"],
-            category_id=sleep_category["id"],
-            description="Сон",
-            tags=["сон"],
-            start_time=start_time,
-            end_time=end_time
-        )
-
-        # Schedule next poll
-        await _schedule_next_poll(
-            telegram_id=telegram_id,
-            settings=settings,
-            user=user,
-            bot=callback.bot
-        )
-
-        # Format duration for user message
-        duration_hours = (end_time - start_time).total_seconds() / 3600
-
-        await callback.message.answer(
-            f"😴 Сон сохранён!\n\nПродолжительность: {duration_hours:.1f}ч\n\n"
-            f"Следующий опрос придёт по расписанию.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(
-            "Error in handle_poll_sleep",
-            extra={"user_id": telegram_id, "error": str(e)},
-            exc_info=True
-        )
-        await callback.message.answer("⚠️ Произошла ошибка.")
-        await callback.answer()
+# @router.callback_query(F.data == "poll_sleep")
+# @with_typing_action
+# @log_user_action("poll_sleep_clicked")
+# async def handle_poll_sleep(
+#     callback: types.CallbackQuery,
+#     state: FSMContext
+# ) -> None:
+#     """Handle 'Sleep' poll response - user was sleeping.
+#
+#     Creates or finds "Сон" category and records sleep activity
+#     with automatic duration calculation based on poll interval.
+#
+#     Args:
+#         callback: Telegram callback query
+#         state: FSM context (unused but kept for consistency)
+#     """
+#     telegram_id = callback.from_user.id
+#
+#     logger.debug(
+#         "User selected sleep in poll",
+#         extra={"user_id": telegram_id}
+#     )
+#
+#     try:
+#         user, settings = await get_user_and_settings(telegram_id, services)
+#         if not user or not settings:
+#             await callback.message.answer("⚠️ Ошибка получения настроек.")
+#             await callback.answer()
+#             return
+#
+#         # Find or create "Сон" category
+#         sleep_category = await _get_or_create_sleep_category(user["id"])
+#
+#         # Calculate sleep duration from last poll time
+#         start_time, end_time = await _calculate_sleep_duration(user, settings)
+#
+#         # Save sleep activity
+#         await services.activity.create_activity(
+#             user_id=user["id"],
+#             category_id=sleep_category["id"],
+#             description="Сон",
+#             tags=["сон"],
+#             start_time=start_time,
+#             end_time=end_time
+#         )
+#
+#         # Schedule next poll
+#         await _schedule_next_poll(
+#             telegram_id=telegram_id,
+#             settings=settings,
+#             user=user,
+#             bot=callback.bot
+#         )
+#
+#         # Format duration for user message
+#         duration_hours = (end_time - start_time).total_seconds() / 3600
+#
+#         await callback.message.answer(
+#             f"😴 Сон сохранён!\n\nПродолжительность: {duration_hours:.1f}ч\n\n"
+#             f"Следующий опрос придёт по расписанию.",
+#             reply_markup=get_main_menu_keyboard()
+#         )
+#         await callback.answer()
+#
+#     except Exception as e:
+#         logger.error(
+#             "Error in handle_poll_sleep",
+#             extra={"user_id": telegram_id, "error": str(e)},
+#             exc_info=True
+#         )
+#         await callback.message.answer("⚠️ Произошла ошибка.")
+#         await callback.answer()
 
 
 # ==============================================================================
 # POLL RESPONSE: REMIND LATER
 # ==============================================================================
+# DISABLED: Automatic polls now show categories directly without intermediate options
+
+# @router.callback_query(F.data == "poll_remind")
+# @with_typing_action
+# @log_user_action("poll_remind_clicked")
+# async def handle_poll_remind(
+#     callback: types.CallbackQuery,
+#     state: FSMContext
+# ) -> None:
+#     """Handle 'Remind Later' poll response.
+#
+#     Schedules reminder based on user's reminder delay settings.
+#     If reminders are disabled, notifies user to enable them.
+#
+#     Args:
+#         callback: Telegram callback query
+#         state: FSM context (unused but kept for consistency)
+#     """
+#     telegram_id = callback.from_user.id
+#
+#     logger.debug(
+#         "User requested reminder for poll",
+#         extra={"user_id": telegram_id}
+#     )
+#
+#     try:
+#         user, settings = await get_user_and_settings(telegram_id, services)
+#         if not user or not settings:
+#             await callback.message.answer("⚠️ Ошибка получения настроек.")
+#             await callback.answer()
+#             return
+#
+#         # Check if reminders are enabled
+#         if not settings["reminder_enabled"]:
+#             await callback.message.answer(
+#                 "⚠️ Напоминания отключены в настройках.\n\n"
+#                 "Включи их в разделе \"Настройки\" → \"Напоминания\".",
+#                 reply_markup=get_main_menu_keyboard()
+#             )
+#             await callback.answer()
+#             return
+#
+#         # Schedule reminder
+#         delay_minutes = settings["reminder_delay_minutes"]
+#         reminder_time = datetime.now(timezone.utc) + timedelta(
+#             minutes=delay_minutes
+#         )
+#
+#         # AsyncIOExecutor handles async functions directly
+#         services.scheduler.scheduler.add_job(
+#             lambda: send_reminder(callback.bot, telegram_id),
+#             trigger=DateTrigger(run_date=reminder_time),
+#             id=f"reminder_{telegram_id}_{reminder_time.timestamp()}",
+#             replace_existing=True
+#         )
+#
+#         await callback.message.answer(
+#             f"⏸ Хорошо, напомню через {delay_minutes} минут.",
+#             reply_markup=get_poll_reminder_keyboard()
+#         )
+#         await callback.answer()
+#
+#     except Exception as e:
+#         logger.error(
+#             "Error in handle_poll_remind",
+#             extra={"user_id": telegram_id, "error": str(e)},
+#             exc_info=True
+#         )
+#         await callback.message.answer("⚠️ Произошла ошибка.")
+#         await callback.answer()
 
 
-@router.callback_query(F.data == "poll_remind")
-@with_typing_action
-@log_user_action("poll_remind_clicked")
-async def handle_poll_remind(
-    callback: types.CallbackQuery,
-    state: FSMContext
-) -> None:
-    """Handle 'Remind Later' poll response.
-
-    Schedules reminder based on user's reminder delay settings.
-    If reminders are disabled, notifies user to enable them.
-
-    Args:
-        callback: Telegram callback query
-        state: FSM context (unused but kept for consistency)
-    """
-    telegram_id = callback.from_user.id
-
-    logger.debug(
-        "User requested reminder for poll",
-        extra={"user_id": telegram_id}
-    )
-
-    try:
-        user, settings = await get_user_and_settings(telegram_id, services)
-        if not user or not settings:
-            await callback.message.answer("⚠️ Ошибка получения настроек.")
-            await callback.answer()
-            return
-
-        # Check if reminders are enabled
-        if not settings["reminder_enabled"]:
-            await callback.message.answer(
-                "⚠️ Напоминания отключены в настройках.\n\n"
-                "Включи их в разделе \"Настройки\" → \"Напоминания\".",
-                reply_markup=get_main_menu_keyboard()
-            )
-            await callback.answer()
-            return
-
-        # Schedule reminder
-        delay_minutes = settings["reminder_delay_minutes"]
-        reminder_time = datetime.now(timezone.utc) + timedelta(
-            minutes=delay_minutes
-        )
-
-        # AsyncIOExecutor handles async functions directly
-        services.scheduler.scheduler.add_job(
-            lambda: send_reminder(callback.bot, telegram_id),
-            trigger=DateTrigger(run_date=reminder_time),
-            id=f"reminder_{telegram_id}_{reminder_time.timestamp()}",
-            replace_existing=True
-        )
-
-        await callback.message.answer(
-            f"⏸ Хорошо, напомню через {delay_minutes} минут.",
-            reply_markup=get_poll_reminder_keyboard()
-        )
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(
-            "Error in handle_poll_remind",
-            extra={"user_id": telegram_id, "error": str(e)},
-            exc_info=True
-        )
-        await callback.message.answer("⚠️ Произошла ошибка.")
-        await callback.answer()
-
-
-@router.callback_query(F.data == "poll_reminder_ok")
-@with_typing_action
-async def handle_poll_reminder_ok(
-    callback: types.CallbackQuery,
-    services: ServiceContainer
-) -> None:
-    """Handle reminder confirmation.
-
-    Simple acknowledgment handler for when user acknowledges
-    they've seen the reminder notification.
-
-    Args:
-        callback: Telegram callback query
-        services: Service container (unused but kept for consistency)
-    """
-    await callback.message.answer(
-        "👌 Отлично!",
-        reply_markup=get_main_menu_keyboard()
-    )
-    await callback.answer()
+# @router.callback_query(F.data == "poll_reminder_ok")
+# @with_typing_action
+# async def handle_poll_reminder_ok(
+#     callback: types.CallbackQuery,
+#     services: ServiceContainer
+# ) -> None:
+#     """Handle reminder confirmation.
+#
+#     Simple acknowledgment handler for when user acknowledges
+#     they've seen the reminder notification.
+#
+#     Args:
+#         callback: Telegram callback query
+#         services: Service container (unused but kept for consistency)
+#     """
+#     await callback.message.answer(
+#         "👌 Отлично!",
+#         reply_markup=get_main_menu_keyboard()
+#     )
+#     await callback.answer()
 
 
 # ==============================================================================
 # POLL RESPONSE: ACTIVITY (FSM Flow)
 # ==============================================================================
+# DISABLED: Automatic polls now show categories directly without this intermediate step
 
-
-@router.callback_query(F.data == "poll_activity")
-@with_typing_action
-@log_user_action("poll_activity_clicked")
-async def handle_poll_activity_start(
-    callback: types.CallbackQuery,
-    state: FSMContext
-) -> None:
-    """Handle 'I was doing something' poll response.
-
-    Starts activity recording from poll. User will select category,
-    and activity will be created with automatic time calculation.
-
-    Args:
-        callback: Telegram callback query
-        state: FSM context for state management
-    """
-    telegram_id = callback.from_user.id
-
-    logger.debug(
-        "User started activity from poll",
-        extra={"user_id": telegram_id}
-    )
-
-    try:
-        user, settings = await get_user_and_settings(telegram_id, services)
-        if not user:
-            await callback.message.answer("⚠️ Пользователь не найден.")
-            await callback.answer()
-            return
-
-        # Get categories
-        categories = await services.category.get_user_categories(user["id"])
-
-        if not categories:
-            await callback.message.answer(
-                "⚠️ У тебя нет категорий. Сначала создай категорию.",
-                reply_markup=get_main_menu_keyboard()
-            )
-            await callback.answer()
-            return
-
-        # Calculate poll period based on last activity
-        start_time, end_time = await calculate_poll_period(
-            services.activity,
-            user["id"],
-            settings
-        )
-
-        # Format time and duration for display
-        start_time_str = format_time(start_time)
-        end_time_str = format_time(end_time)
-        duration_str = format_duration(start_time, end_time)
-
-        # Store user_id in state for later use
-        await state.update_data(user_id=user["id"])
-        await state.set_state(PollStates.waiting_for_poll_category)
-
-        # Schedule FSM timeout
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-                telegram_id,
-                PollStates.waiting_for_poll_category,
-                callback.bot
-            )
-
-        text = get_category_selection_message(
-            source="poll",
-            start_time=start_time_str,
-            end_time=end_time_str,
-            duration=duration_str,
-            add_motivation=True
-        )
-
-        await callback.message.answer(
-            text,
-            reply_markup=get_poll_category_keyboard(categories)
-        )
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(
-            "Error in handle_poll_activity_start",
-            extra={"user_id": telegram_id, "error": str(e)},
-            exc_info=True
-        )
-        await callback.message.answer("⚠️ Произошла ошибка.")
-        await callback.answer()
+# @router.callback_query(F.data == "poll_activity")
+# @with_typing_action
+# @log_user_action("poll_activity_clicked")
+# async def handle_poll_activity_start(
+#     callback: types.CallbackQuery,
+#     state: FSMContext
+# ) -> None:
+#     """Handle 'I was doing something' poll response.
+#
+#     Starts activity recording from poll. User will select category,
+#     and activity will be created with automatic time calculation.
+#
+#     Args:
+#         callback: Telegram callback query
+#         state: FSM context for state management
+#     """
+#     telegram_id = callback.from_user.id
+#
+#     logger.debug(
+#         "User started activity from poll",
+#         extra={"user_id": telegram_id}
+#     )
+#
+#     try:
+#         user, settings = await get_user_and_settings(telegram_id, services)
+#         if not user:
+#             await callback.message.answer("⚠️ Пользователь не найден.")
+#             await callback.answer()
+#             return
+#
+#         # Get categories
+#         categories = await services.category.get_user_categories(user["id"])
+#
+#         if not categories:
+#             await callback.message.answer(
+#                 "⚠️ У тебя нет категорий. Сначала создай категорию.",
+#                 reply_markup=get_main_menu_keyboard()
+#             )
+#             await callback.answer()
+#             return
+#
+#         # Calculate poll period based on last activity
+#         start_time, end_time = await calculate_poll_period(
+#             services.activity,
+#             user["id"],
+#             settings
+#         )
+#
+#         # Format time and duration for display
+#         start_time_str = format_time(start_time)
+#         end_time_str = format_time(end_time)
+#         duration_str = format_duration(start_time, end_time)
+#
+#         # Store user_id in state for later use
+#         await state.update_data(user_id=user["id"])
+#         await state.set_state(PollStates.waiting_for_poll_category)
+#
+#         # Schedule FSM timeout
+#         if fsm_timeout_module.fsm_timeout_service:
+#             fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+#                 telegram_id,
+#                 PollStates.waiting_for_poll_category,
+#                 callback.bot
+#             )
+#
+#         text = get_category_selection_message(
+#             source="poll",
+#             start_time=start_time_str,
+#             end_time=end_time_str,
+#             duration=duration_str,
+#             add_motivation=True
+#         )
+#
+#         await callback.message.answer(
+#             text,
+#             reply_markup=get_poll_category_keyboard(categories)
+#         )
+#         await callback.answer()
+#
+#     except Exception as e:
+#         logger.error(
+#             "Error in handle_poll_activity_start",
+#             extra={"user_id": telegram_id, "error": str(e)},
+#             exc_info=True
+#         )
+#         await callback.message.answer("⚠️ Произошла ошибка.")
+#         await callback.answer()
 
 
 @router.callback_query(
@@ -413,6 +413,7 @@ async def handle_poll_category_select(
 
         # Save data to state and ask for description
         await state.update_data(
+            user_id=user["id"],
             category_id=category_id,
             start_time=start_time.isoformat(),
             end_time=end_time.isoformat(),
@@ -591,85 +592,86 @@ async def handle_poll_cancel(
     await callback.answer()
 
 
-@router.callback_query(
-    PollStates.waiting_for_poll_category,
-    F.data == "poll_category_remind_later"
-)
-@with_typing_action
-@log_user_action("poll_category_remind_later_clicked")
-async def handle_poll_category_remind_later(
-    callback: types.CallbackQuery,
-    state: FSMContext
-) -> None:
-    """Handle 'Remind Later' in category selection.
-
-    Schedules reminder to return to category selection based on
-    user's reminder delay settings. Clears FSM state.
-
-    Args:
-        callback: Telegram callback query
-        state: FSM context for state clearing
-    """
-    telegram_id = callback.from_user.id
-
-    logger.debug(
-        "User requested reminder for category selection",
-        extra={"user_id": telegram_id}
-    )
-
-    try:
-        user, settings = await get_user_and_settings(telegram_id, services)
-        if not user or not settings:
-            await callback.message.answer("⚠️ Ошибка получения настроек.")
-            await callback.answer()
-            return
-
-        # Check if reminders are enabled
-        if not settings["reminder_enabled"]:
-            await callback.message.answer(
-                "⚠️ Напоминания отключены в настройках.\n\n"
-                "Включи их в разделе \"Настройки\" → \"Напоминания\".",
-                reply_markup=get_main_menu_keyboard()
-            )
-            await callback.answer()
-            await state.clear()
-            if fsm_timeout_module.fsm_timeout_service:
-                fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
-            return
-
-        # Schedule reminder
-        delay_minutes = settings["reminder_delay_minutes"]
-        reminder_time = datetime.now(timezone.utc) + timedelta(
-            minutes=delay_minutes
-        )
-
-        # AsyncIOExecutor handles async functions directly
-        services.scheduler.scheduler.add_job(
-            lambda: send_category_reminder(callback.bot, telegram_id),
-            trigger=DateTrigger(run_date=reminder_time),
-            id=f"category_reminder_{telegram_id}_{reminder_time.timestamp()}",
-            replace_existing=True
-        )
-
-        await callback.message.answer(
-            f"⏸ Хорошо, напомню через {delay_minutes} минут.",
-            reply_markup=get_poll_reminder_keyboard()
-        )
-        await callback.answer()
-
-        # Clear FSM state since user will start fresh when reminder comes
-        await state.clear()
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
-
-    except Exception as e:
-        logger.error(
-            "Error in handle_poll_category_remind_later",
-            extra={"user_id": telegram_id, "error": str(e)},
-            exc_info=True
-        )
-        await callback.message.answer("⚠️ Произошла ошибка.")
-        await callback.answer()
+# DISABLED: "Remind Later" button no longer shown in automatic poll category selection
+# @router.callback_query(
+#     PollStates.waiting_for_poll_category,
+#     F.data == "poll_category_remind_later"
+# )
+# @with_typing_action
+# @log_user_action("poll_category_remind_later_clicked")
+# async def handle_poll_category_remind_later(
+#     callback: types.CallbackQuery,
+#     state: FSMContext
+# ) -> None:
+#     """Handle 'Remind Later' in category selection.
+#
+#     Schedules reminder to return to category selection based on
+#     user's reminder delay settings. Clears FSM state.
+#
+#     Args:
+#         callback: Telegram callback query
+#         state: FSM context for state clearing
+#     """
+#     telegram_id = callback.from_user.id
+#
+#     logger.debug(
+#         "User requested reminder for category selection",
+#         extra={"user_id": telegram_id}
+#     )
+#
+#     try:
+#         user, settings = await get_user_and_settings(telegram_id, services)
+#         if not user or not settings:
+#             await callback.message.answer("⚠️ Ошибка получения настроек.")
+#             await callback.answer()
+#             return
+#
+#         # Check if reminders are enabled
+#         if not settings["reminder_enabled"]:
+#             await callback.message.answer(
+#                 "⚠️ Напоминания отключены в настройках.\n\n"
+#                 "Включи их в разделе \"Настройки\" → \"Напоминания\".",
+#                 reply_markup=get_main_menu_keyboard()
+#             )
+#             await callback.answer()
+#             await state.clear()
+#             if fsm_timeout_module.fsm_timeout_service:
+#                 fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+#             return
+#
+#         # Schedule reminder
+#         delay_minutes = settings["reminder_delay_minutes"]
+#         reminder_time = datetime.now(timezone.utc) + timedelta(
+#             minutes=delay_minutes
+#         )
+#
+#         # AsyncIOExecutor handles async functions directly
+#         services.scheduler.scheduler.add_job(
+#             lambda: send_category_reminder(callback.bot, telegram_id),
+#             trigger=DateTrigger(run_date=reminder_time),
+#             id=f"category_reminder_{telegram_id}_{reminder_time.timestamp()}",
+#             replace_existing=True
+#         )
+#
+#         await callback.message.answer(
+#             f"⏸ Хорошо, напомню через {delay_minutes} минут.",
+#             reply_markup=get_poll_reminder_keyboard()
+#         )
+#         await callback.answer()
+#
+#         # Clear FSM state since user will start fresh when reminder comes
+#         await state.clear()
+#         if fsm_timeout_module.fsm_timeout_service:
+#             fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+#
+#     except Exception as e:
+#         logger.error(
+#             "Error in handle_poll_category_remind_later",
+#             extra={"user_id": telegram_id, "error": str(e)},
+#             exc_info=True
+#         )
+#         await callback.message.answer("⚠️ Произошла ошибка.")
+#         await callback.answer()
 
 
 # ==============================================================================
@@ -748,6 +750,8 @@ async def _calculate_sleep_duration(
 ) -> tuple[datetime, datetime]:
     """Calculate sleep duration based on last poll time or interval.
 
+    Caps duration at 24 hours to comply with API constraints.
+
     Args:
         user: User dict
         settings: User settings dict
@@ -756,6 +760,7 @@ async def _calculate_sleep_duration(
         Tuple of (start_time, end_time) as datetime objects
     """
     end_time = datetime.now(timezone.utc)
+    max_duration = timedelta(hours=24)
 
     last_poll = user.get("last_poll_time")
     if last_poll:
@@ -771,6 +776,19 @@ async def _calculate_sleep_duration(
         logger.debug(
             "Using poll interval for sleep duration",
             extra={"user_id": user.get("telegram_id")}
+        )
+
+    # Cap duration at 24 hours maximum (API constraint)
+    duration = end_time - start_time
+    if duration > max_duration:
+        start_time = end_time - max_duration
+        logger.warning(
+            "Sleep duration capped at 24 hours",
+            extra={
+                "user_id": user.get("telegram_id"),
+                "original_duration_hours": duration.total_seconds() / 3600,
+                "capped_duration_hours": 24
+            }
         )
 
     return start_time, end_time
