@@ -298,12 +298,12 @@ async def test_update_settings_not_found(user_settings_service, mock_repository)
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_settings_poll_interval_validation(user_settings_service, mock_repository, mock_settings):
-    """Test that updating poll interval triggers validation."""
-    update_data = UserSettingsUpdate(poll_interval_weekday=14)  # Too low
-    mock_repository.get_by_user_id = AsyncMock(return_value=mock_settings)
+    """Test that updating poll interval triggers validation at Pydantic schema level."""
+    from pydantic import ValidationError
 
-    with pytest.raises(ValueError, match="Weekday poll interval \\(14m\\) must be at least 15 minutes"):
-        await user_settings_service.update_settings(user_id=1, settings_data=update_data)
+    # Pydantic schema validation should reject 14 minutes before it reaches the service
+    with pytest.raises(ValidationError, match="greater_than_equal"):
+        UserSettingsUpdate(poll_interval_weekday=14)  # Too low - should fail at schema level
 
 
 @pytest.mark.unit
