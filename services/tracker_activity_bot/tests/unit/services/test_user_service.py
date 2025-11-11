@@ -425,7 +425,7 @@ class TestUserServiceUpdateLastPollTime:
 
         GIVEN: User ID and poll time
         WHEN: update_last_poll_time() is called
-        THEN: PATCH request is made to /api/v1/users/{user_id}
+        THEN: PATCH request is made to /api/v1/users/{user_id}/last-poll-time
               AND datetime is converted to ISO format string
               AND updated user data is returned
         """
@@ -444,8 +444,8 @@ class TestUserServiceUpdateLastPollTime:
 
         # Assert: Correct API call
         mock_client.patch.assert_called_once_with(
-            "/api/v1/users/1",
-            json={"last_poll_time": "2025-11-07T14:30:00"}
+            "/api/v1/users/1/last-poll-time",
+            json={"poll_time": "2025-11-07T14:30:00"}
         )
 
         # Updated data returned
@@ -477,7 +477,7 @@ class TestUserServiceUpdateLastPollTime:
 
         # Assert: ISO format used
         call_args = mock_client.patch.call_args
-        assert call_args[1]["json"]["last_poll_time"] == "2025-01-15T09:45:30"
+        assert call_args[1]["json"]["poll_time"] == "2025-01-15T09:45:30"
 
     @pytest.mark.unit
     async def test_update_last_poll_time_with_timezone_aware_datetime(
@@ -508,7 +508,7 @@ class TestUserServiceUpdateLastPollTime:
 
         # Assert: Timezone in ISO format
         call_args = mock_client.patch.call_args
-        iso_time = call_args[1]["json"]["last_poll_time"]
+        iso_time = call_args[1]["json"]["poll_time"]
         assert "+03:00" in iso_time or "03:00" in iso_time, \
             "Should preserve timezone in ISO format"
 
@@ -536,7 +536,7 @@ class TestUserServiceUpdateLastPollTime:
         await user_service.update_last_poll_time(user_id, poll_time)
 
         # Assert: Correct path
-        expected_path = f"/api/v1/users/{user_id}"
+        expected_path = f"/api/v1/users/{user_id}/last-poll-time"
         call_args = mock_client.patch.call_args
         assert call_args[0][0] == expected_path
 
