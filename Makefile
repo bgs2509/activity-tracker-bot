@@ -10,7 +10,7 @@ build: ## Build Docker images
 	docker compose build
 
 up: ## Start all services
-	docker compose up -d
+	docker compose up -d --build
 
 down: ## Stop all services
 	docker compose down
@@ -131,7 +131,7 @@ test-all: test-unit test-integration test-integration-optimized test-smoke ## Ru
 
 test-unit-docker: ## Run unit tests inside Docker containers
 	@echo "Запуск контейнеров для тестирования..."
-	@docker compose --env-file .env.test up -d --wait
+	@docker compose --env-file .env.test up -d --wait --build
 	@echo "\n✓ Контейнеры запущены\n"
 	@echo "Запуск unit-тестов для data_postgres_api внутри контейнера..."
 	@docker compose exec data_postgres_api pytest tests/unit/ -v -m unit || true
@@ -141,7 +141,7 @@ test-unit-docker: ## Run unit tests inside Docker containers
 
 test-imports-docker: ## Run import tests inside Docker containers
 	@echo "Запуск контейнеров для тестирования..."
-	@docker compose --env-file .env.test up -d --wait
+	@docker compose --env-file .env.test up -d --wait --build
 	@echo "\n✓ Контейнеры запущены\n"
 	@echo "Запуск импорт-тестов для data_postgres_api внутри контейнера..."
 	@docker compose exec data_postgres_api pytest tests/unit/test_imports.py -v -m smoke
@@ -150,7 +150,7 @@ test-imports-docker: ## Run import tests inside Docker containers
 
 test-integration-docker: ## Run integration tests with Docker (handler registration, API contracts)
 	@echo "Запуск контейнеров для интеграционных тестов..."
-	@docker compose --env-file .env.test up -d --wait
+	@docker compose --env-file .env.test up -d --wait --build
 	@echo "\n✓ Контейнеры запущены\n"
 	@echo "Запуск integration-тестов..."
 	@echo "  ✓ Проверка регистрации обработчиков кнопок"
@@ -160,7 +160,7 @@ test-integration-docker: ## Run integration tests with Docker (handler registrat
 
 test-coverage-docker: ## Run coverage tests inside Docker containers
 	@echo "Запуск контейнеров для тестирования..."
-	@docker compose --env-file .env.test up -d --wait
+	@docker compose --env-file .env.test up -d --wait --build
 	@echo "\n✓ Контейнеры запущены\n"
 	@echo "Запуск тестов с coverage для data_postgres_api..."
 	@docker compose exec data_postgres_api pytest tests/ -v --cov=src --cov-report=html --cov-report=term
@@ -170,7 +170,7 @@ test-coverage-docker: ## Run coverage tests inside Docker containers
 
 test-integration-optimized-docker: ## Run new integration tests with Docker and parallelization
 	@echo "Запуск контейнеров для новых integration-тестов..."
-	@docker compose --env-file .env.test up -d --wait
+	@docker compose --env-file .env.test up -d --wait --build
 	@echo "\n✓ Контейнеры запущены\n"
 	@echo "Запуск новых integration-тестов с параллелизацией..."
 	@docker run --rm --network=activity-tracker-bot_tracker_network -v $(PWD):/app -w /app python:3.11-slim sh -c "pip install -q -r services/tracker_activity_bot/requirements.txt -r services/data_postgres_api/requirements.txt && pytest tests/integration/ -v -m 'level1 or level2 or level3' -n 4" || true
