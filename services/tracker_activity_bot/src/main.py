@@ -53,15 +53,43 @@ async def main():
     logger.info("Starting tracker_activity_bot")
 
     # Initialize bot and dispatcher
-    bot = Bot(token=settings.telegram_bot_token)
+    try:
+        bot = Bot(token=settings.telegram_bot_token)
+    except Exception as e:
+        logger.critical(
+            "Failed to initialize Telegram bot - invalid token or network issue",
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "service": "tracker_activity_bot",
+                "impact": "service_cannot_start"
+            },
+            exc_info=True
+        )
+        raise
 
     # Redis storage for FSM with automatic state expiration
     # state_ttl protects against stuck FSM states (e.g., user abandoned dialog)
-    storage = RedisStorage.from_url(
-        settings.redis_url,
-        state_ttl=timedelta(minutes=15),  # Auto-expire FSM state after 15 minutes
-        data_ttl=timedelta(minutes=15)    # Auto-expire FSM data after 15 minutes
-    )
+    try:
+        storage = RedisStorage.from_url(
+            settings.redis_url,
+            state_ttl=timedelta(minutes=15),  # Auto-expire FSM state after 15 minutes
+            data_ttl=timedelta(minutes=15)    # Auto-expire FSM data after 15 minutes
+        )
+    except Exception as e:
+        logger.critical(
+            "Failed to connect to Redis storage - service cannot operate",
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "redis_url": settings.redis_url.split('@')[-1] if '@' in settings.redis_url else settings.redis_url,
+                "service": "tracker_activity_bot",
+                "impact": "service_cannot_start"
+            },
+            exc_info=True
+        )
+        raise
+
     dp = Dispatcher(storage=storage)
 
     # Register service injection middleware (must be first to provide dependencies)

@@ -82,8 +82,21 @@ async def lifespan(app: FastAPI):
     # For development/testing with auto-creation, set ENABLE_DB_AUTO_CREATE=true
     if settings.enable_db_auto_create:
         logger.warning("Auto-creating database tables (development mode only!)")
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        except Exception as e:
+            logger.critical(
+                "Failed to create database tables - service cannot start",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "service": "data_postgres_api",
+                    "impact": "service_cannot_start"
+                },
+                exc_info=True
+            )
+            raise
 
     logger.info("Application startup complete")
 
@@ -185,12 +198,15 @@ async def readiness(db: AsyncSession = Depends(get_db)) -> dict[str, str]:
             "database": "connected"
         }
     except Exception as e:
-        logger.error(
-            "Database health check failed",
+        logger.critical(
+            "Database health check failed - service cannot operate",
             extra={
                 "error": str(e),
-                "error_type": type(e).__name__
-            }
+                "error_type": type(e).__name__,
+                "service": "data_postgres_api",
+                "impact": "service_unavailable"
+            },
+            exc_info=True
         )
         raise HTTPException(
             status_code=503,
