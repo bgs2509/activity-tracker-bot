@@ -169,7 +169,7 @@ class TestStartAddActivity:
     @pytest.mark.unit
     async def test_start_shows_period_keyboard_with_auto_option(
         self,
-        mock_callback,
+        mock_message,
         mock_state
     ):
         """
@@ -187,7 +187,7 @@ class TestStartAddActivity:
                 mock_kb.return_value = MagicMock()
 
                 # Act
-                await start_add_activity(mock_callback, mock_state)
+                await start_add_activity(mock_message, mock_state)
 
         # Assert: State set to waiting_for_period
         mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_period)
@@ -197,15 +197,16 @@ class TestStartAddActivity:
         assert mock_state.update_data.call_args.kwargs["trigger_source"] == "manual"
 
         # Assert: Timeout scheduled
-        mock_timeout.assert_called_once()
+        mock_timeout.fsm_timeout_service.schedule_timeout.assert_called_once_with(
+            user_id=123456789,
+            state=ActivityStates.waiting_for_period,
+            bot=mock_message.bot
+        )
 
         # Assert: Message sent with keyboard
-        mock_callback.message.answer.assert_called_once()
-        message_text = mock_callback.message.answer.call_args[0][0]
-        assert "период активности" in message_text.lower()
-
-        # Assert: Callback answered
-        mock_callback.answer.assert_called_once()
+        mock_message.answer.assert_called_once()
+        message_text = mock_message.answer.call_args[0][0]
+        assert "период" in message_text.lower()
 
 
 class TestHandleNoop:
@@ -977,23 +978,28 @@ class TestCreatePollSchedulingCallback:
 
         # Create callback
         callback = _create_poll_scheduling_callback(
+            telegram_id=123456789,
             bot=bot,
-            user=sample_user,
-            settings=sample_settings,
-            services=mock_services,
-            telegram_user_id=123456789
+            services=mock_services
         )
 
-        with patch('src.api.handlers.activity.activity_creation.schedule_next_poll') as mock_schedule:
-            # Act
-            await callback(activity_data)
+        # Arrange: Mock scheduler
+        mock_services.scheduler.schedule_poll = AsyncMock()
 
-        # Assert: schedule_next_poll called
-        mock_schedule.assert_called_once()
-        call_args = mock_schedule.call_args.kwargs
-        assert call_args["bot"] == bot
+        # Act
+        state_data = {
+            "settings": sample_settings,
+            "user_timezone": "Europe/Moscow"
+        }
+        await callback(state_data)
+
+        # Assert: scheduler.schedule_poll called
+        mock_services.scheduler.schedule_poll.assert_called_once()
+        call_args = mock_services.scheduler.schedule_poll.call_args.kwargs
         assert call_args["user_id"] == 123456789
-        assert call_args["services"] == mock_services
+        assert call_args["bot"] == bot
+        assert call_args["settings"] == sample_settings
+        assert call_args["user_timezone"] == "Europe/Moscow"
 
     @pytest.mark.unit
     async def test_callback_handles_scheduling_error_gracefully(
@@ -1014,17 +1020,19 @@ class TestCreatePollSchedulingCallback:
         activity_data = {"id": 1}
 
         callback = _create_poll_scheduling_callback(
+            telegram_id=123456789,
             bot=bot,
-            user=sample_user,
-            settings=sample_settings,
-            services=mock_services,
-            telegram_user_id=123456789
+            services=mock_services
         )
 
-        with patch('src.api.handlers.activity.activity_creation.schedule_next_poll') as mock_schedule:
-            mock_schedule.side_effect = Exception("Scheduler error")
+        # Arrange: Mock scheduler to raise exception
+        mock_services.scheduler.schedule_poll = AsyncMock(side_effect=Exception("Scheduler error"))
 
-            # Act - should not raise
-            await callback(activity_data)
+        # Act - should not raise
+        state_data = {
+            "settings": sample_settings,
+            "user_timezone": "Europe/Moscow"
+        }
+        await callback(state_data)
 
-        # Assert: Exception was caught (no assertion needed - test passes if no exception)
+        # Assert: Exception was caught (test passes if no exception propagated)
