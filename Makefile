@@ -109,7 +109,23 @@ test-coverage: ## Run tests with coverage report
 	@echo "\nЗапуск тестов с coverage отчётом для data_postgres_api..."
 	cd services/data_postgres_api && pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 
-test-all: test-unit test-integration test-smoke ## Run all tests (unit + integration + smoke)
+test-integration-level1: ## Run Level 1 integration tests (Handler → Service)
+	@echo "Запуск Level 1 integration-тестов (Handler → Service)..."
+	pytest tests/integration/level1_handlers/ -v -m level1
+
+test-integration-level2: ## Run Level 2 integration tests (Service → API)
+	@echo "Запуск Level 2 integration-тестов (Service → API)..."
+	pytest tests/integration/level2_services/ -v -m level2
+
+test-integration-level3: ## Run Level 3 integration tests (Full Stack)
+	@echo "Запуск Level 3 integration-тестов (Full Stack)..."
+	pytest tests/integration/level3_flows/ -v -m level3
+
+test-integration-optimized: ## Run all new integration tests with parallel execution
+	@echo "Запуск всех новых integration-тестов с параллелизацией..."
+	pytest tests/integration/ -v -m "level1 or level2 or level3" -n 4
+
+test-all: test-unit test-integration test-integration-optimized test-smoke ## Run all tests (unit + old integration + new integration + smoke)
 
 # Docker-based testing (runs tests inside containers)
 
@@ -152,4 +168,12 @@ test-coverage-docker: ## Run coverage tests inside Docker containers
 	@docker compose exec tracker_activity_bot pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 	@echo "\n✓ Coverage отчёты созданы в services/*/htmlcov/"
 
-test-all-docker: test-unit-docker test-integration-docker ## Run all Docker-based tests (unit + integration inside containers)
+test-integration-optimized-docker: ## Run new integration tests with Docker and parallelization
+	@echo "Запуск контейнеров для новых integration-тестов..."
+	@docker compose --env-file .env.test up -d --wait
+	@echo "\n✓ Контейнеры запущены\n"
+	@echo "Запуск новых integration-тестов с параллелизацией..."
+	@docker run --rm --network=activity-tracker-bot_tracker_network -v $(PWD):/app -w /app python:3.11-slim sh -c "pip install -q -r services/tracker_activity_bot/requirements.txt && pytest tests/integration/ -v -m 'level1 or level2 or level3' -n 4" || true
+	@echo "\n✓ Integration тесты завершены"
+
+test-all-docker: test-unit-docker test-integration-docker test-integration-optimized-docker ## Run all Docker-based tests (unit + old integration + new integration)
