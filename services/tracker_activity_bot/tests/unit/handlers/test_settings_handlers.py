@@ -50,9 +50,12 @@ def mock_callback():
     callback.from_user = MagicMock(spec=types.User)
     callback.from_user.id = 123456789
     callback.message = MagicMock(spec=types.Message)
+    callback.message.chat = MagicMock()
+    callback.message.chat.id = 123456789
     callback.message.answer = AsyncMock()
     callback.answer = AsyncMock()
     callback.bot = MagicMock()
+    callback.bot.send_chat_action = AsyncMock()
     return callback
 
 
