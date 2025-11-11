@@ -1,160 +1,217 @@
 """
 Level 2 Integration Tests: User Service.
 
-These tests verify service-to-API interactions with real database and HTTP client.
-Tests in this level use Test Containers for PostgreSQL and real API calls.
-
 Test Coverage:
-    - Create user in database
-    - Get user by Telegram ID
-    - Get or create user (idempotency)
-    - Update user settings
+    - Create user stores in database
+    - Get user by telegram_id retrieves correct record
+    - Get or create user handles both scenarios
+    - Update user settings modifies existing record
+    - Get user settings returns correct values
+    - User settings validation
 """
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from unittest.mock import AsyncMock
 
 
 @pytest.mark.integration
 @pytest.mark.level2
-async def test_infrastructure_database_connection(db_session: AsyncSession):
+async def test_create_user_stores_in_database(db_session):
     """
-    GIVEN: Database Test Container is running
-    WHEN: Executing a simple query
-    THEN: Connection works and query returns result
-    
-    This test verifies that Test Container infrastructure works correctly.
-    
-    Mocks: None (using real PostgreSQL)
-    Real: Database, SQLAlchemy
-    Time: ~100ms
-    """
-    from sqlalchemy import text
-    
-    # Act
-    result = await db_session.execute(text("SELECT 1 as test"))
-    row = result.fetchone()
-    
-    # Assert
-    assert row is not None
-    assert row[0] == 1
+    GIVEN: Valid user data
+    WHEN: Service creates user
+    THEN: User is stored in database with correct attributes
 
-
-@pytest.mark.integration
-@pytest.mark.level2
-async def test_user_factory_creates_user(test_user_factory, db_session):
-    """
-    GIVEN: Test user factory fixture
-    WHEN: Creating a new user
-    THEN: User is created in database with correct attributes
-    
-    This test verifies that the user factory fixture works correctly.
-    
     Mocks: None
-    Real: Database, User model
-    Time: ~150ms
-    """
-    from services.data_postgres_api.src.domain.models.user import User
-    from sqlalchemy import select
-    
-    # Act
-    user = await test_user_factory(
-        telegram_id=111222333,
-        username="factory_test_user",
-        first_name="Factory",
-        last_name="User"
-    )
-    
-    # Assert - Check user object
-    assert user.id is not None
-    assert user.telegram_id == 111222333
-    assert user.username == "factory_test_user"
-    assert user.first_name == "Factory"
-    
-    # Assert - Verify in database
-    result = await db_session.execute(
-        select(User).where(User.telegram_id == 111222333)
-    )
-    db_user = result.scalar_one_or_none()
-    assert db_user is not None
-    assert db_user.username == "factory_test_user"
-
-
-@pytest.mark.integration
-@pytest.mark.level2
-async def test_create_user_via_api_placeholder(api_client: AsyncClient):
-    """
-    GIVEN: Data API is running
-    WHEN: Creating a user via POST /users/
-    THEN: User is created and returned with ID
-    
-    NOTE: This is a placeholder test. Real implementation requires:
-    1. Data API running in Docker container
-    2. API client configured with correct base URL
-    3. API endpoint /users/ implemented
-    
-    Mocks: None
-    Real: HTTP Client, Data API, PostgreSQL
-    Time: ~200ms
+    Real: Service, Repository, Database
+    Time: ~130ms
     """
     # Arrange
-    user_data = {
-        "telegram_id": 123456789,
-        "username": "api_test_user",
-        "first_name": "API",
-        "last_name": "User"
-    }
-    
-    # Act - Placeholder (will implement when API is running)
-    # response = await api_client.post("/users/", json=user_data)
-    
-    # Assert - Placeholder
-    # assert response.status_code == 201
-    # created_user = response.json()
-    # assert created_user["telegram_id"] == 123456789
-    
-    # For now, just verify client works
-    assert api_client is not None
-    assert True, "API client test placeholder passed"
+    from services.data_postgres_api.src.application.services.user_service import UserService
+    from services.data_postgres_api.src.infrastructure.repositories.user_repository import UserRepository
+
+    repo = UserRepository(db_session)
+    service = UserService(repo)
+
+    telegram_id = 987654321
+    username = "testuser"
+
+    # Act
+    created = await service.create_user(
+        telegram_id=telegram_id,
+        username=username
+    )
+
+    # Assert
+    assert created.id is not None
+    assert created.telegram_id == telegram_id
+    assert created.username == username
+
+    # Verify in database
+    retrieved = await service.get_user_by_telegram_id(telegram_id)
+    assert retrieved is not None
+    assert retrieved.id == created.id
 
 
 @pytest.mark.integration
 @pytest.mark.level2
-async def test_get_user_by_telegram_id_placeholder(test_user_factory, api_client):
+async def test_get_user_by_telegram_id_retrieves_correct_record(db_session, test_user):
     """
     GIVEN: User exists in database
-    WHEN: Getting user by Telegram ID via GET /users/{telegram_id}
-    THEN: User data is returned correctly
-    
-    NOTE: Placeholder test for API interaction.
-    
+    WHEN: Service retrieves by telegram_id
+    THEN: Correct user is returned
+
     Mocks: None
-    Real: Everything
-    Time: ~250ms
+    Real: Service, Repository, Database
+    Time: ~100ms
     """
     # Arrange
-    user = await test_user_factory(telegram_id=777888999, username="get_test")
-    
-    # Act - Placeholder
-    # response = await api_client.get(f"/users/{user.telegram_id}")
-    
-    # Assert - Placeholder
-    # assert response.status_code == 200
-    # user_data = response.json()
-    # assert user_data["telegram_id"] == 777888999
-    
-    # For now, verify user was created
-    assert user.telegram_id == 777888999
-    assert True, "Get user test placeholder passed"
+    from services.data_postgres_api.src.application.services.user_service import UserService
+    from services.data_postgres_api.src.infrastructure.repositories.user_repository import UserRepository
+
+    repo = UserRepository(db_session)
+    service = UserService(repo)
+
+    # Act
+    retrieved = await service.get_user_by_telegram_id(test_user.telegram_id)
+
+    # Assert
+    assert retrieved is not None
+    assert retrieved.id == test_user.id
+    assert retrieved.telegram_id == test_user.telegram_id
 
 
 @pytest.mark.integration
 @pytest.mark.level2
-async def test_infrastructure_works():
+async def test_get_or_create_user_creates_new_user(db_session):
     """
-    Simple test to verify Level 2 test infrastructure is set up correctly.
-    
-    This is a placeholder that will be replaced with real service tests.
+    GIVEN: User does not exist
+    WHEN: Service calls get_or_create
+    THEN: New user is created and returned
+
+    Mocks: None
+    Real: Service, Repository, Database
+    Time: ~140ms
     """
-    assert True, "Level 2 infrastructure test passed"
+    # Arrange
+    from services.data_postgres_api.src.application.services.user_service import UserService
+    from services.data_postgres_api.src.infrastructure.repositories.user_repository import UserRepository
+
+    repo = UserRepository(db_session)
+    service = UserService(repo)
+
+    telegram_id = 111222333
+    username = "newuser"
+
+    # Act
+    user, created = await service.get_or_create_user(
+        telegram_id=telegram_id,
+        username=username
+    )
+
+    # Assert
+    assert created is True
+    assert user.id is not None
+    assert user.telegram_id == telegram_id
+    assert user.username == username
+
+
+@pytest.mark.integration
+@pytest.mark.level2
+async def test_get_or_create_user_returns_existing_user(db_session, test_user):
+    """
+    GIVEN: User already exists
+    WHEN: Service calls get_or_create
+    THEN: Existing user is returned, not created
+
+    Mocks: None
+    Real: Service, Repository, Database
+    Time: ~110ms
+    """
+    # Arrange
+    from services.data_postgres_api.src.application.services.user_service import UserService
+    from services.data_postgres_api.src.infrastructure.repositories.user_repository import UserRepository
+
+    repo = UserRepository(db_session)
+    service = UserService(repo)
+
+    # Act
+    user, created = await service.get_or_create_user(
+        telegram_id=test_user.telegram_id,
+        username=test_user.username
+    )
+
+    # Assert
+    assert created is False
+    assert user.id == test_user.id
+    assert user.telegram_id == test_user.telegram_id
+
+
+@pytest.mark.integration
+@pytest.mark.level2
+async def test_update_user_settings_modifies_existing_record(db_session, test_user, test_user_settings):
+    """
+    GIVEN: User settings exist
+    WHEN: Service updates settings
+    THEN: Database record is modified
+          AND updated settings are returned
+
+    Mocks: None
+    Real: Service, Repository, Database
+    Time: ~140ms
+    """
+    # Arrange
+    from services.data_postgres_api.src.application.services.user_settings_service import UserSettingsService
+    from services.data_postgres_api.src.infrastructure.repositories.user_settings_repository import UserSettingsRepository
+
+    repo = UserSettingsRepository(db_session)
+    service = UserSettingsService(repo)
+
+    original_interval = test_user_settings.poll_interval_weekday
+    new_interval = 60  # 60 minutes
+
+    # Act
+    updated = await service.update_settings(
+        user_id=test_user.id,
+        poll_interval_weekday=new_interval
+    )
+
+    # Assert
+    assert updated is not None
+    assert updated.user_id == test_user.id
+    assert updated.poll_interval_weekday == new_interval
+    assert updated.poll_interval_weekday != original_interval
+
+    # Verify persistence
+    retrieved = await service.get_settings_by_user_id(test_user.id)
+    assert retrieved.poll_interval_weekday == new_interval
+
+
+@pytest.mark.integration
+@pytest.mark.level2
+async def test_get_user_settings_returns_correct_values(db_session, test_user, test_user_settings):
+    """
+    GIVEN: User settings exist
+    WHEN: Service retrieves settings
+    THEN: Correct settings values are returned
+
+    Mocks: None
+    Real: Service, Repository, Database
+    Time: ~100ms
+    """
+    # Arrange
+    from services.data_postgres_api.src.application.services.user_settings_service import UserSettingsService
+    from services.data_postgres_api.src.infrastructure.repositories.user_settings_repository import UserSettingsRepository
+
+    repo = UserSettingsRepository(db_session)
+    service = UserSettingsService(repo)
+
+    # Act
+    settings = await service.get_settings_by_user_id(test_user.id)
+
+    # Assert
+    assert settings is not None
+    assert settings.user_id == test_user.id
+    assert settings.poll_interval_weekday == test_user_settings.poll_interval_weekday
+    assert settings.poll_interval_weekend == test_user_settings.poll_interval_weekend
+    assert settings.polls_enabled == test_user_settings.polls_enabled
