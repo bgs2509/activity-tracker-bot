@@ -49,7 +49,11 @@ def format_date(dt: datetime, timezone: str = "Europe/Moscow") -> str:
     return f"{day} {month} {year}"
 
 
-def format_activity_list(activities: list[dict], timezone: str = "Europe/Moscow") -> str:
+def format_activity_list(
+    activities: list[dict],
+    timezone: str = "Europe/Moscow",
+    reference_time: datetime | None = None
+) -> str:
     """
     Format activities list for display.
 
@@ -60,6 +64,7 @@ def format_activity_list(activities: list[dict], timezone: str = "Europe/Moscow"
     Args:
         activities: List of activity dicts with start_time, end_time, etc.
         timezone: Timezone for display (default: Europe/Moscow)
+        reference_time: Reference time for filtering (default: now). Used for testing.
 
     Returns:
         Formatted activity list as string
@@ -69,7 +74,7 @@ def format_activity_list(activities: list[dict], timezone: str = "Europe/Moscow"
 
     # Get current time in user timezone for 24h filtering
     tz = pytz.timezone(timezone)
-    now = datetime.now(tz)
+    now = reference_time.astimezone(tz) if reference_time else datetime.now(tz)
     cutoff_time = now - timedelta(hours=24)
 
     # Filter activities from last 24 hours

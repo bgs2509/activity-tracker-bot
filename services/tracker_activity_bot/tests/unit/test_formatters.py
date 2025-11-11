@@ -214,7 +214,12 @@ class TestFormatActivityList:
             }
         ]
 
-        result = format_activity_list(activities, timezone="Europe/Moscow")
+        # Use reference time from the same day as the activity
+        from datetime import datetime
+        import pytz
+        reference_time = datetime(2025, 11, 5, 23, 0, 0, tzinfo=pytz.UTC)
+
+        result = format_activity_list(activities, timezone="Europe/Moscow", reference_time=reference_time)
 
         # Should contain header
         assert "📋 Твои последние активности" in result
@@ -241,7 +246,12 @@ class TestFormatActivityList:
             }
         ]
 
-        result = format_activity_list(activities, timezone="Europe/Moscow")
+        # Use reference time from the same day as the activity
+        from datetime import datetime
+        import pytz
+        reference_time = datetime(2025, 11, 5, 23, 0, 0, tzinfo=pytz.UTC)
+
+        result = format_activity_list(activities, timezone="Europe/Moscow", reference_time=reference_time)
 
         # Should contain tags with # prefix
         assert "#важное" in result
@@ -268,7 +278,12 @@ class TestFormatActivityList:
             }
         ]
 
-        result = format_activity_list(activities, timezone="Europe/Moscow")
+        # Use reference time from the same day as the activities
+        from datetime import datetime
+        import pytz
+        reference_time = datetime(2025, 11, 5, 23, 0, 0, tzinfo=pytz.UTC)
+
+        result = format_activity_list(activities, timezone="Europe/Moscow", reference_time=reference_time)
 
         # Should have single date header
         assert result.count("5 ноября 2025") == 1
@@ -296,7 +311,15 @@ class TestFormatActivityList:
             }
         ]
 
-        result = format_activity_list(activities, timezone="Europe/Moscow")
+        # Use reference time so both activities are within 24 hours
+        # Nov 5 11:00 UTC (14:00 MSK) and Nov 6 11:00 UTC (14:00 MSK)
+        # both within 24h of Nov 6 10:00 UTC (13:00 MSK)
+        # Cutoff: Nov 5 13:00 MSK, so both activities at 14:00 MSK are included
+        from datetime import datetime
+        import pytz
+        reference_time = datetime(2025, 11, 6, 10, 0, 0, tzinfo=pytz.UTC)
+
+        result = format_activity_list(activities, timezone="Europe/Moscow", reference_time=reference_time)
 
         # Should have two date headers
         assert "5 ноября 2025" in result
@@ -317,7 +340,12 @@ class TestFormatActivityList:
             }
         ]
 
-        result = format_activity_list(activities, timezone="Europe/Moscow")
+        # Use reference time from the same day as the activity
+        from datetime import datetime
+        import pytz
+        reference_time = datetime(2025, 11, 5, 23, 0, 0, tzinfo=pytz.UTC)
+
+        result = format_activity_list(activities, timezone="Europe/Moscow", reference_time=reference_time)
 
         # Should not crash, should format normally
         assert "Test" in result

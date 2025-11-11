@@ -488,7 +488,7 @@ class TestFormatActivityList:
         # Tags emoji might appear elsewhere, so just check no tags for this activity
 
     @pytest.mark.unit
-    @freeze_time("2025-11-08 20:00:00", tz_offset=0)
+    @freeze_time("2025-11-08 09:00:00", tz_offset=0)
     def test_format_activity_list_groups_activities_by_date(self):
         """
         Test grouping activities by date.
@@ -882,6 +882,7 @@ class TestFormattersEdgeCases:
         assert result == []
 
     @pytest.mark.unit
+    @freeze_time("2025-11-07 20:00:00", tz_offset=0)
     def test_format_activity_list_handles_missing_tags_field(self):
         """
         Test activity without tags field.
