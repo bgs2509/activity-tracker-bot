@@ -19,7 +19,6 @@ from aiogram import Router, F, types, Bot
 from aiogram.fsm.context import FSMContext
 
 from src.api.dependencies import ServiceContainer
-from src.api.keyboards.activity import get_cancel_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.api.keyboards.time_select import (
     get_period_keyboard,
@@ -32,7 +31,7 @@ from src.api.messages.activity_messages import get_category_selection_message
 from src.api.states.activity import ActivityStates
 from src.application.utils.formatters import format_time, format_duration, extract_tags
 from src.application.services import fsm_timeout_service as fsm_timeout_module
-from src.core.middleware.typing import with_typing_action
+from src.application.utils.decorators import with_typing_action
 
 logger = logging.getLogger(__name__)
 

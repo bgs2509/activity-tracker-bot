@@ -2,48 +2,49 @@
 Unit tests for activity creation handlers.
 
 Tests FSM flow for creating new activities including:
-- Start time input (text and quick buttons)
-- End time input (text and quick buttons)
-- Description input with tag extraction
+- Period selection (auto-calculate or quick buttons)
 - Category selection
-- Activity saving
+- Description input with tag extraction
+- Activity saving with callbacks
 
 Test Coverage:
-    - start_add_activity: FSM initiation
-    - process_start_time: Text input parsing and validation
-    - quick_start_time: Quick time button handlers
-    - process_end_time: End time parsing with duration
-    - quick_end_time: Quick duration buttons
-    - process_description: Description validation and tag extraction
-    - process_category_callback: Category selection
-    - cancel_category_selection: Cancel flow
-    - process_category: Skip category with "0"
-    - save_activity: Database save with all validations
+    - start_add_activity: FSM initiation with period keyboard
+    - handle_noop: Visual divider click handler
+    - auto_calculate_period: Auto-calculate period from last activity
+    - quick_period_selection: Quick period button handlers
+    - process_period_input: Manual period text input
+    - process_category_callback: Category selection callback
+    - select_recent_activity: Recent activity quick selection
+    - process_description: Description validation using shared functions
+    - handle_cancel: Cancel flow handler
+    - save_activity: Activity save wrapper
+    - _create_poll_scheduling_callback: Poll scheduling callback factory
 
 Coverage Target: 100% of activity_creation.py
-Execution Time: < 1.0 seconds
+Execution Time: < 2.0 seconds
 
 Author: Testing Team
-Date: 2025-11-07
+Date: 2025-11-11 (Updated for Phase 4-6 refactoring)
 """
 
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 
 from src.api.handlers.activity.activity_creation import (
     start_add_activity,
-    process_start_time,
-    quick_start_time,
-    process_end_time,
-    quick_end_time,
-    process_description,
+    handle_noop,
+    auto_calculate_period,
+    quick_period_selection,
+    process_period_input,
     process_category_callback,
-    cancel_category_selection,
-    process_category,
-    save_activity
+    select_recent_activity,
+    process_description,
+    handle_cancel,
+    save_activity,
+    _create_poll_scheduling_callback
 )
 from src.api.states.activity import ActivityStates
 
@@ -61,6 +62,7 @@ def mock_callback():
     callback.from_user.username = "testuser"
     callback.message = MagicMock(spec=types.Message)
     callback.message.answer = AsyncMock()
+    callback.message.edit_text = AsyncMock()
     callback.answer = AsyncMock()
     callback.bot = MagicMock()
     callback.data = ""
@@ -97,6 +99,9 @@ def mock_services():
     services.user = AsyncMock()
     services.activity = AsyncMock()
     services.category = AsyncMock()
+    services.settings = AsyncMock()
+    services.scheduler = MagicMock()
+    services.scheduler.scheduler = MagicMock()
     return services
 
 
@@ -120,6 +125,34 @@ def sample_categories():
     ]
 
 
+@pytest.fixture
+def sample_settings():
+    """Fixture: Sample user settings."""
+    return {
+        "poll_interval_minutes": 60,
+        "enable_polling": True
+    }
+
+
+@pytest.fixture
+def sample_activities():
+    """Fixture: Sample recent activities."""
+    return [
+        {
+            "id": 1,
+            "description": "Работал над проектом",
+            "start_time": datetime(2025, 11, 11, 10, 0, tzinfo=timezone.utc),
+            "end_time": datetime(2025, 11, 11, 12, 0, tzinfo=timezone.utc),
+        },
+        {
+            "id": 2,
+            "description": "Читал книгу",
+            "start_time": datetime(2025, 11, 11, 8, 0, tzinfo=timezone.utc),
+            "end_time": datetime(2025, 11, 11, 9, 0, tzinfo=timezone.utc),
+        }
+    ]
+
+
 # ============================================================================
 # TEST SUITES
 # ============================================================================
@@ -128,377 +161,319 @@ class TestStartAddActivity:
     """Test suite for start_add_activity handler."""
 
     @pytest.mark.unit
-    async def test_start_add_activity_sets_state_and_shows_instructions(
+    async def test_start_shows_period_keyboard_with_auto_option(
         self,
         mock_callback,
         mock_state
     ):
         """
-        Test activity creation initiation.
+        Test activity creation initiation with auto-calculate option.
 
-        GIVEN: User starts activity creation
+        GIVEN: User starts manual activity creation
         WHEN: start_add_activity is called
-        THEN: FSM state is set to waiting_for_start_time
-              AND instructions are shown
+        THEN: Period keyboard with auto-calculate button is shown
+              AND FSM state is set to waiting_for_period
+              AND timeout is scheduled
         """
         # Arrange
         with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout') as mock_timeout:
-            # Act
-            await start_add_activity(mock_callback, mock_state)
+            with patch('src.api.handlers.activity.activity_creation.get_period_keyboard_with_auto') as mock_kb:
+                mock_kb.return_value = MagicMock()
 
-        # Assert: State set
-        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_start_time)
+                # Act
+                await start_add_activity(mock_callback, mock_state)
+
+        # Assert: State set to waiting_for_period
+        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_period)
+
+        # Assert: Trigger source marked as manual
+        mock_state.update_data.assert_called_once()
+        assert mock_state.update_data.call_args.kwargs["trigger_source"] == "manual"
 
         # Assert: Timeout scheduled
         mock_timeout.assert_called_once()
 
-        # Assert: Instructions shown
+        # Assert: Message sent with keyboard
         mock_callback.message.answer.assert_called_once()
         message_text = mock_callback.message.answer.call_args[0][0]
-        assert "время НАЧАЛА" in message_text
-        assert "14:30" in message_text  # Example format
+        assert "период активности" in message_text.lower()
 
         # Assert: Callback answered
         mock_callback.answer.assert_called_once()
 
 
-class TestProcessStartTime:
-    """Test suite for process_start_time handler."""
+class TestHandleNoop:
+    """Test suite for handle_noop (visual divider) handler."""
 
     @pytest.mark.unit
-    async def test_process_start_time_with_valid_time_saves_to_state(
+    async def test_handle_noop_answers_callback_without_action(
         self,
-        mock_message,
-        mock_state
+        mock_callback
     ):
         """
-        Test valid start time parsing.
+        Test visual divider click handling.
 
-        GIVEN: User inputs valid time "14:30"
-        WHEN: process_start_time is called
-        THEN: Time is parsed and saved to state
-              AND FSM state changes to waiting_for_end_time
+        GIVEN: User clicks on visual divider button
+        WHEN: handle_noop is called
+        THEN: Callback is answered silently
+              AND no state changes occur
         """
-        # Arrange
-        mock_message.text = "14:30"
+        # Act
+        await handle_noop(mock_callback)
 
-        with patch('src.api.handlers.activity.activity_creation.parse_time_input') as mock_parse:
-            parsed_time = datetime(2025, 11, 7, 14, 30, tzinfo=timezone.utc)
-            mock_parse.return_value = parsed_time
+        # Assert: Callback answered
+        mock_callback.answer.assert_called_once()
 
-            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
-                with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format:
-                    mock_format.return_value = "14:30"
+        # Assert: No message sent
+        mock_callback.message.answer.assert_not_called()
 
-                    # Act
-                    await process_start_time(mock_message, mock_state)
 
-        # Assert: Time saved
-        mock_state.update_data.assert_called_once()
-        assert "start_time" in mock_state.update_data.call_args.kwargs
-
-        # Assert: State changed
-        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_end_time)
-
-        # Assert: End time prompt shown
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "ОКОНЧАНИЯ" in message_text
+class TestAutoCalculatePeriod:
+    """Test suite for auto_calculate_period handler."""
 
     @pytest.mark.unit
-    async def test_process_start_time_with_future_time_shows_error(
-        self,
-        mock_message,
-        mock_state
-    ):
-        """
-        Test future time validation.
-
-        GIVEN: User inputs future time
-        WHEN: process_start_time is called
-        THEN: Error is shown
-              AND state is not changed
-        """
-        # Arrange
-        mock_message.text = "25:00"  # Future time
-
-        with patch('src.api.handlers.activity.activity_creation.parse_time_input') as mock_parse:
-            # Return future time
-            future_time = datetime.now(timezone.utc).replace(hour=23, minute=59) + \
-                         __import__('datetime').timedelta(days=1)
-            mock_parse.return_value = future_time
-
-            # Act
-            await process_start_time(mock_message, mock_state)
-
-        # Assert: Error shown
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "не может быть в будущем" in message_text
-
-        # Assert: State not changed
-        mock_state.set_state.assert_not_called()
-
-    @pytest.mark.unit
-    async def test_process_start_time_with_invalid_format_shows_error(
-        self,
-        mock_message,
-        mock_state
-    ):
-        """
-        Test invalid time format handling.
-
-        GIVEN: User inputs invalid time format
-        WHEN: process_start_time is called
-        THEN: Parsing error is shown
-        """
-        # Arrange
-        mock_message.text = "invalid"
-
-        with patch('src.api.handlers.activity.activity_creation.parse_time_input') as mock_parse:
-            mock_parse.side_effect = ValueError("Invalid time format")
-
-            # Act
-            await process_start_time(mock_message, mock_state)
-
-        # Assert: Error shown
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "Не могу распознать время" in message_text
-
-
-class TestQuickStartTime:
-    """Test suite for quick_start_time handler."""
-
-    @pytest.mark.unit
-    async def test_quick_start_time_with_30m_button_sets_time(
+    async def test_auto_calculate_with_last_activity_calculates_period(
         self,
         mock_callback,
-        mock_state
+        mock_state,
+        mock_services,
+        sample_user,
+        sample_settings,
+        sample_categories
     ):
         """
-        Test quick time button "30м".
+        Test auto-calculate period from last activity.
 
-        GIVEN: User clicks "30м" button
-        WHEN: quick_start_time is called
-        THEN: Start time is calculated as 30 minutes ago
-              AND state changes to waiting_for_end_time
+        GIVEN: User has last activity and settings
+        WHEN: auto_calculate_period is called
+        THEN: Period is calculated from last activity end time
+              AND state changes to waiting_for_category
+              AND category keyboard is shown
         """
         # Arrange
-        mock_callback.data = "time_start_30m"
+        mock_services.user.get_by_telegram_id.return_value = sample_user
+        mock_services.settings.get_settings.return_value = sample_settings
+        mock_services.category.get_user_categories.return_value = sample_categories
 
-        with patch('src.api.handlers.activity.activity_creation.parse_time_input') as mock_parse:
-            parsed_time = datetime(2025, 11, 7, 14, 0, tzinfo=timezone.utc)
-            mock_parse.return_value = parsed_time
+        with patch('src.api.handlers.activity.activity_creation.calculate_poll_period') as mock_calc:
+            start_time = datetime(2025, 11, 11, 10, 0, tzinfo=timezone.utc)
+            end_time = datetime(2025, 11, 11, 11, 0, tzinfo=timezone.utc)
+            mock_calc.return_value = (start_time, end_time)
 
-            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
-                with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format:
-                    mock_format.return_value = "14:00"
-
-                    # Act
-                    await quick_start_time(mock_callback, mock_state)
-
-        # Assert: parse_time_input called with "30м"
-        mock_parse.assert_called_once_with("30м")
-
-        # Assert: Time saved to state
-        mock_state.update_data.assert_called_once()
-
-        # Assert: State changed
-        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_end_time)
-
-        # Assert: Callback answered
-        mock_callback.answer.assert_called_once()
-
-
-class TestProcessEndTime:
-    """Test suite for process_end_time handler."""
-
-    @pytest.mark.unit
-    async def test_process_end_time_with_valid_duration_calculates_end(
-        self,
-        mock_message,
-        mock_state
-    ):
-        """
-        Test end time calculation from duration.
-
-        GIVEN: Start time in state, user inputs "30м"
-        WHEN: process_end_time is called
-        THEN: End time is calculated as start_time + 30 minutes
-        """
-        # Arrange
-        mock_message.text = "30м"
-        start_time = datetime(2025, 11, 7, 14, 0, tzinfo=timezone.utc)
-        mock_state.get_data.return_value = {"start_time": start_time.isoformat()}
-
-        with patch('src.api.handlers.activity.activity_creation.parse_duration') as mock_parse:
-            end_time = datetime(2025, 11, 7, 14, 30, tzinfo=timezone.utc)
-            mock_parse.return_value = end_time
-
-            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
+            with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
                 with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format_time:
-                    mock_format_time.return_value = "14:30"
+                    mock_format_time.side_effect = ["10:00", "11:00"]
                     with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format_dur:
-                        mock_format_dur.return_value = "30 минут"
+                        mock_format_dur.return_value = "1 час"
 
                         # Act
-                        await process_end_time(mock_message, mock_state)
+                        await auto_calculate_period(mock_callback, mock_state, mock_services)
 
-        # Assert: Duration parsed
-        mock_parse.assert_called_once_with("30м", start_time)
+        # Assert: calculate_poll_period called
+        mock_calc.assert_called_once()
 
-        # Assert: End time saved
-        mock_state.update_data.assert_called_once()
+        # Assert: Period saved to state
+        mock_state.update_data.assert_called()
+        call_kwargs = mock_state.update_data.call_args.kwargs
+        assert "start_time" in call_kwargs
+        assert "end_time" in call_kwargs
 
-        # Assert: State changed to description
+        # Assert: State changed to waiting_for_category
+        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_category)
+
+        # Assert: Category keyboard shown
+        mock_callback.message.edit_text.assert_called_once()
+
+    @pytest.mark.unit
+    async def test_auto_calculate_without_categories_saves_without_category(
+        self,
+        mock_callback,
+        mock_state,
+        mock_services,
+        sample_user,
+        sample_settings
+    ):
+        """
+        Test auto-calculate when user has no categories.
+
+        GIVEN: User has no categories
+        WHEN: auto_calculate_period is called
+        THEN: Activity is saved without category selection
+        """
+        # Arrange
+        mock_services.user.get_by_telegram_id.return_value = sample_user
+        mock_services.settings.get_settings.return_value = sample_settings
+        mock_services.category.get_user_categories.return_value = []
+
+        with patch('src.api.handlers.activity.activity_creation.calculate_poll_period') as mock_calc:
+            start_time = datetime(2025, 11, 11, 10, 0, tzinfo=timezone.utc)
+            end_time = datetime(2025, 11, 11, 11, 0, tzinfo=timezone.utc)
+            mock_calc.return_value = (start_time, end_time)
+
+            with patch('src.api.handlers.activity.activity_creation.fetch_and_build_description_prompt') as mock_fetch:
+                mock_fetch.return_value = ("Test prompt", None)
+
+                with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+                    # Act
+                    await auto_calculate_period(mock_callback, mock_state, mock_services)
+
+        # Assert: State changed to waiting_for_description
         mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_description)
 
-    @pytest.mark.unit
-    async def test_process_end_time_with_end_before_start_shows_error(
-        self,
-        mock_message,
-        mock_state
-    ):
-        """
-        Test end time validation.
-
-        GIVEN: Start time in state, end time before start
-        WHEN: process_end_time is called
-        THEN: Validation error is shown
-        """
-        # Arrange
-        mock_message.text = "13:00"
-        start_time = datetime(2025, 11, 7, 14, 0, tzinfo=timezone.utc)
-        end_time = datetime(2025, 11, 7, 13, 0, tzinfo=timezone.utc)  # Before start
-        mock_state.get_data.return_value = {"start_time": start_time.isoformat()}
-
-        with patch('src.api.handlers.activity.activity_creation.parse_duration') as mock_parse:
-            mock_parse.return_value = end_time
-
-            # Act
-            await process_end_time(mock_message, mock_state)
-
-        # Assert: Error shown
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "должно быть позже" in message_text
-
-        # Assert: State not changed
-        mock_state.set_state.assert_not_called()
+        # Assert: Description prompt shown
+        mock_callback.message.edit_text.assert_called_once()
 
     @pytest.mark.unit
-    async def test_process_end_time_without_start_time_clears_state(
+    async def test_auto_calculate_handles_service_error_gracefully(
         self,
-        mock_message,
-        mock_state
+        mock_callback,
+        mock_state,
+        mock_services
     ):
         """
-        Test missing start time handling.
+        Test error handling in auto-calculate.
 
-        GIVEN: No start time in state
-        WHEN: process_end_time is called
-        THEN: Error is shown and state is cleared
+        GIVEN: Service raises exception
+        WHEN: auto_calculate_period is called
+        THEN: Error is caught and error message shown
+              AND state is cleared
         """
         # Arrange
-        mock_message.text = "16:00"
-        mock_state.get_data.return_value = {}  # No start_time
+        mock_services.user.get_by_telegram_id.side_effect = Exception("Database error")
 
-        with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
+        with patch('src.api.handlers.activity.activity_creation.cancel_fsm_timeout'):
             # Act
-            await process_end_time(mock_message, mock_state)
+            await auto_calculate_period(mock_callback, mock_state, mock_services)
 
-        # Assert: Error shown
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "не найдено" in message_text
+        # Assert: Error message shown
+        mock_callback.message.edit_text.assert_called_once()
+        message_text = mock_callback.message.edit_text.call_args[0][0]
+        assert "Ошибка" in message_text
 
         # Assert: State cleared
         mock_state.clear.assert_called_once()
 
 
-class TestQuickEndTime:
-    """Test suite for quick_end_time handler."""
+class TestQuickPeriodSelection:
+    """Test suite for quick_period_selection handler."""
 
     @pytest.mark.unit
-    async def test_quick_end_time_with_now_button_uses_current_time(
+    async def test_quick_period_15m_sets_15_minute_period(
         self,
         mock_callback,
-        mock_state
+        mock_state,
+        mock_services,
+        sample_user,
+        sample_categories
     ):
         """
-        Test "Сейчас" quick button.
+        Test 15-minute quick period button.
 
-        GIVEN: User clicks "Сейчас" button
-        WHEN: quick_end_time is called
-        THEN: End time is set to current time
+        GIVEN: User clicks "15 минут" button
+        WHEN: quick_period_selection is called
+        THEN: Period of 15 minutes ending now is set
+              AND state changes to waiting_for_category
         """
         # Arrange
-        mock_callback.data = "time_end_now"
-        start_time = datetime(2025, 11, 7, 14, 0, tzinfo=timezone.utc)
-        mock_state.get_data.return_value = {"start_time": start_time.isoformat()}
+        mock_callback.data = "period_15m"
+        mock_services.user.get_by_telegram_id.return_value = sample_user
+        mock_services.category.get_user_categories.return_value = sample_categories
 
         with patch('src.api.handlers.activity.activity_creation.datetime') as mock_dt:
-            now = datetime(2025, 11, 7, 15, 0, tzinfo=timezone.utc)
+            now = datetime(2025, 11, 11, 12, 0, tzinfo=timezone.utc)
             mock_dt.now.return_value = now
-            mock_dt.fromisoformat = datetime.fromisoformat
-            mock_dt.timezone = timezone
+            mock_dt.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
-            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
+            with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
                 with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format_time:
-                    mock_format_time.return_value = "15:00"
+                    mock_format_time.side_effect = ["11:45", "12:00"]
                     with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format_dur:
-                        mock_format_dur.return_value = "1 час"
+                        mock_format_dur.return_value = "15 минут"
 
                         # Act
-                        await quick_end_time(mock_callback, mock_state)
+                        await quick_period_selection(mock_callback, mock_state, mock_services)
 
-        # Assert: Current time used
-        mock_state.update_data.assert_called_once()
+        # Assert: Period saved
+        mock_state.update_data.assert_called()
+        call_kwargs = mock_state.update_data.call_args.kwargs
+        assert "start_time" in call_kwargs
+        assert "end_time" in call_kwargs
 
-        # Assert: State changed
-        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_description)
+        # Assert: State changed to waiting_for_category
+        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_category)
 
     @pytest.mark.unit
-    async def test_quick_end_time_with_1h_button_calculates_duration(
+    async def test_quick_period_3h_sets_3_hour_period(
         self,
         mock_callback,
-        mock_state
+        mock_state,
+        mock_services,
+        sample_user,
+        sample_categories
     ):
         """
-        Test "1ч" duration button.
+        Test 3-hour quick period button.
 
-        GIVEN: User clicks "1ч длилось" button
-        WHEN: quick_end_time is called
-        THEN: End time is start_time + 1 hour
+        GIVEN: User clicks "3 часа" button
+        WHEN: quick_period_selection is called
+        THEN: Period of 3 hours ending now is set
         """
         # Arrange
-        mock_callback.data = "time_end_1h"
-        start_time = datetime(2025, 11, 7, 14, 0, tzinfo=timezone.utc)
-        mock_state.get_data.return_value = {"start_time": start_time.isoformat()}
+        mock_callback.data = "period_3h"
+        mock_services.user.get_by_telegram_id.return_value = sample_user
+        mock_services.category.get_user_categories.return_value = sample_categories
 
-        with patch('src.api.handlers.activity.activity_creation.parse_duration') as mock_parse:
-            end_time = datetime(2025, 11, 7, 15, 0, tzinfo=timezone.utc)
-            mock_parse.return_value = end_time
+        with patch('src.api.handlers.activity.activity_creation.datetime') as mock_dt:
+            now = datetime(2025, 11, 11, 15, 0, tzinfo=timezone.utc)
+            mock_dt.now.return_value = now
+            mock_dt.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
-            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
+            with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
                 with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format_time:
-                    mock_format_time.return_value = "15:00"
+                    mock_format_time.side_effect = ["12:00", "15:00"]
                     with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format_dur:
-                        mock_format_dur.return_value = "1 час"
+                        mock_format_dur.return_value = "3 часа"
 
                         # Act
-                        await quick_end_time(mock_callback, mock_state)
+                        await quick_period_selection(mock_callback, mock_state, mock_services)
 
-        # Assert: Duration parsed with "1ч"
-        mock_parse.assert_called_once()
-
-
-class TestProcessDescription:
-    """Test suite for process_description handler."""
+        # Assert: State changed to waiting_for_category
+        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_category)
 
     @pytest.mark.unit
-    async def test_process_description_with_valid_text_extracts_tags(
+    async def test_quick_period_validates_trigger_source_is_manual(
+        self,
+        mock_callback,
+        mock_state,
+        mock_services
+    ):
+        """
+        Test trigger_source validation.
+
+        GIVEN: State has trigger_source != "manual"
+        WHEN: quick_period_selection is called
+        THEN: Error is shown and operation rejected
+        """
+        # Arrange
+        mock_callback.data = "period_1h"
+        mock_state.get_data.return_value = {"trigger_source": "automatic"}
+
+        # Act
+        await quick_period_selection(mock_callback, mock_state, mock_services)
+
+        # Assert: Error message
+        mock_callback.answer.assert_called_once()
+        assert "доступно только в ручном режиме" in mock_callback.answer.call_args.kwargs.get("text", "")
+
+        # Assert: State not changed
+        mock_state.set_state.assert_not_called()
+
+
+class TestProcessPeriodInput:
+    """Test suite for process_period_input handler (manual text input)."""
+
+    @pytest.mark.unit
+    async def test_process_period_input_parses_custom_duration(
         self,
         mock_message,
         mock_state,
@@ -507,100 +482,76 @@ class TestProcessDescription:
         sample_categories
     ):
         """
-        Test description processing with tags.
+        Test custom period text input.
 
-        GIVEN: User inputs description with #tags
-        WHEN: process_description is called
-        THEN: Tags are extracted
-              AND state changes to waiting_for_category
+        GIVEN: User enters custom duration like "45m"
+        WHEN: process_period_input is called
+        THEN: Duration is parsed and period is set
         """
         # Arrange
-        mock_message.text = "Working on project #work #coding"
+        mock_message.text = "45м"
         mock_services.user.get_by_telegram_id.return_value = sample_user
         mock_services.category.get_user_categories.return_value = sample_categories
 
-        with patch('src.api.handlers.activity.activity_creation.extract_tags') as mock_extract:
-            mock_extract.return_value = ["work", "coding"]
+        with patch('src.api.handlers.activity.activity_creation.parse_duration') as mock_parse:
+            start_time = datetime(2025, 11, 11, 10, 15, tzinfo=timezone.utc)
+            end_time = datetime(2025, 11, 11, 11, 0, tzinfo=timezone.utc)
+            mock_parse.return_value = start_time  # parse_duration returns start_time when given duration from now
 
-            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
-                # Act
-                await process_description(mock_message, mock_state, mock_services)
+            with patch('src.api.handlers.activity.activity_creation.datetime') as mock_dt:
+                now = datetime(2025, 11, 11, 11, 0, tzinfo=timezone.utc)
+                mock_dt.now.return_value = now
+                mock_dt.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
-        # Assert: Tags extracted
-        mock_extract.assert_called_once_with("Working on project #work #coding")
+                with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+                    with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format_time:
+                        mock_format_time.side_effect = ["10:15", "11:00"]
+                        with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format_dur:
+                            mock_format_dur.return_value = "45 минут"
 
-        # Assert: Data saved to state
-        mock_state.update_data.assert_called()
-        call_kwargs = mock_state.update_data.call_args.kwargs
-        assert call_kwargs["description"] == "Working on project #work #coding"
-        assert call_kwargs["tags"] == ["work", "coding"]
+                            # Act
+                            await process_period_input(mock_message, mock_state, mock_services)
 
-        # Assert: State changed
+        # Assert: Duration parsed
+        mock_parse.assert_called_once()
+
+        # Assert: State changed to waiting_for_category
         mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_category)
 
     @pytest.mark.unit
-    async def test_process_description_with_short_text_shows_error(
+    async def test_process_period_input_with_invalid_format_shows_error(
         self,
         mock_message,
         mock_state,
         mock_services
     ):
         """
-        Test description length validation.
+        Test invalid duration format handling.
 
-        GIVEN: User inputs description < 3 chars
-        WHEN: process_description is called
-        THEN: Validation error is shown
+        GIVEN: User enters unparseable text
+        WHEN: process_period_input is called
+        THEN: Parse error is shown
         """
         # Arrange
-        mock_message.text = "ab"  # Too short
+        mock_message.text = "invalid"
 
-        # Act
-        await process_description(mock_message, mock_state, mock_services)
+        with patch('src.api.handlers.activity.activity_creation.parse_duration') as mock_parse:
+            mock_parse.side_effect = ValueError("Cannot parse duration")
 
-        # Assert: Error shown
+            # Act
+            await process_period_input(mock_message, mock_state, mock_services)
+
+        # Assert: Error message shown
         mock_message.answer.assert_called_once()
         message_text = mock_message.answer.call_args[0][0]
-        assert "минимум 3 символа" in message_text
-
-        # Assert: State not changed
-        mock_state.set_state.assert_not_called()
-
-    @pytest.mark.unit
-    async def test_process_description_with_no_categories_saves_without_category(
-        self,
-        mock_message,
-        mock_state,
-        mock_services,
-        sample_user
-    ):
-        """
-        Test automatic save when no categories exist.
-
-        GIVEN: User has no categories
-        WHEN: process_description is called
-        THEN: Activity is saved without category
-        """
-        # Arrange
-        mock_message.text = "Test activity"
-        mock_services.user.get_by_telegram_id.return_value = sample_user
-        mock_services.category.get_user_categories.return_value = []  # No categories
-
-        with patch('src.api.handlers.activity.activity_creation.extract_tags', return_value=[]):
-            with patch('src.api.handlers.activity.activity_creation.save_activity') as mock_save:
-                # Act
-                await process_description(mock_message, mock_state, mock_services)
-
-        # Assert: save_activity called with category_id=None
-        mock_save.assert_called_once()
-        assert mock_save.call_args[0][3] is None  # category_id is None
+        assert "Не могу распознать" in message_text
 
 
 class TestProcessCategoryCallback:
     """Test suite for process_category_callback handler."""
 
     @pytest.mark.unit
-    async def test_process_category_callback_with_valid_category_saves_activity(
+    async def test_category_callback_uses_shared_save_function(
         self,
         mock_callback,
         mock_state,
@@ -608,237 +559,376 @@ class TestProcessCategoryCallback:
         sample_categories
     ):
         """
-        Test category selection via button.
+        Test category selection saves activity using shared function.
 
-        GIVEN: User selects category from buttons
+        GIVEN: User selects category
         WHEN: process_category_callback is called
-        THEN: Activity is saved with selected category
+        THEN: create_and_save_activity from shared module is called
+              AND post_save_callback is used for automatic flow
         """
         # Arrange
         mock_callback.data = "poll_category_1"
         mock_state.get_data.return_value = {
+            "trigger_source": "automatic",
             "categories": sample_categories,
-            "user_id": 1
+            "user_id": 1,
+            "start_time": "2025-11-11T10:00:00+00:00",
+            "end_time": "2025-11-11T11:00:00+00:00"
         }
 
-        with patch('src.api.handlers.activity.activity_creation.save_activity') as mock_save:
+        with patch('src.api.handlers.activity.activity_creation.create_and_save_activity') as mock_create:
+            mock_create.return_value = True
+
             # Act
             await process_category_callback(mock_callback, mock_state, mock_services)
 
-        # Assert: save_activity called with category_id=1
-        mock_save.assert_called_once()
-        assert mock_save.call_args[0][3] == 1  # category_id
+        # Assert: create_and_save_activity called
+        mock_create.assert_called_once()
+        call_args = mock_create.call_args
 
-        # Assert: Callback answered
-        mock_callback.answer.assert_called_once()
+        # Assert: category_id set correctly
+        assert call_args.kwargs["category_id"] == 1
 
-
-class TestCancelCategorySelection:
-    """Test suite for cancel_category_selection handler."""
+        # Assert: post_save_callback provided for automatic flow
+        assert call_args.kwargs.get("post_save_callback") is not None
 
     @pytest.mark.unit
-    async def test_cancel_category_selection_clears_state(
+    async def test_category_callback_skip_option_sets_none(
+        self,
+        mock_callback,
+        mock_state,
+        mock_services
+    ):
+        """
+        Test skip category option.
+
+        GIVEN: User clicks "Пропустить" button
+        WHEN: process_category_callback is called
+        THEN: Activity is saved with category_id=None
+        """
+        # Arrange
+        mock_callback.data = "poll_category_skip"
+        mock_state.get_data.return_value = {
+            "trigger_source": "manual",
+            "user_id": 1,
+            "start_time": "2025-11-11T10:00:00+00:00",
+            "end_time": "2025-11-11T11:00:00+00:00"
+        }
+
+        with patch('src.api.handlers.activity.activity_creation.create_and_save_activity') as mock_create:
+            mock_create.return_value = True
+
+            # Act
+            await process_category_callback(mock_callback, mock_state, mock_services)
+
+        # Assert: category_id is None
+        assert mock_create.call_args.kwargs["category_id"] is None
+
+    @pytest.mark.unit
+    async def test_category_callback_transitions_to_description_on_failure(
+        self,
+        mock_callback,
+        mock_state,
+        mock_services
+    ):
+        """
+        Test transition to description state when save fails.
+
+        GIVEN: create_and_save_activity returns False
+        WHEN: process_category_callback is called
+        THEN: State transitions to waiting_for_description
+        """
+        # Arrange
+        mock_callback.data = "poll_category_1"
+        mock_state.get_data.return_value = {
+            "trigger_source": "manual",
+            "user_id": 1,
+            "start_time": "2025-11-11T10:00:00+00:00",
+            "end_time": "2025-11-11T11:00:00+00:00"
+        }
+
+        with patch('src.api.handlers.activity.activity_creation.create_and_save_activity') as mock_create:
+            mock_create.return_value = False  # Save failed (missing description)
+
+            with patch('src.api.handlers.activity.activity_creation.fetch_and_build_description_prompt') as mock_fetch:
+                mock_fetch.return_value = ("Enter description", None)
+
+                with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+                    # Act
+                    await process_category_callback(mock_callback, mock_state, mock_services)
+
+        # Assert: State changed to waiting_for_description
+        mock_state.set_state.assert_called_once_with(ActivityStates.waiting_for_description)
+
+
+class TestSelectRecentActivity:
+    """Test suite for select_recent_activity handler."""
+
+    @pytest.mark.unit
+    async def test_select_recent_activity_uses_shared_save_function(
+        self,
+        mock_callback,
+        mock_state,
+        mock_services,
+        sample_activities
+    ):
+        """
+        Test recent activity selection uses shared save function.
+
+        GIVEN: User selects recent activity
+        WHEN: select_recent_activity is called
+        THEN: Description is populated from selected activity
+              AND create_and_save_activity is called
+        """
+        # Arrange
+        mock_callback.data = "recent_activity_1"
+        mock_state.get_data.return_value = {
+            "trigger_source": "manual",
+            "user_id": 1,
+            "recent_activities": sample_activities,
+            "start_time": "2025-11-11T13:00:00+00:00",
+            "end_time": "2025-11-11T14:00:00+00:00"
+        }
+
+        with patch('src.api.handlers.activity.activity_creation.create_and_save_activity') as mock_create:
+            mock_create.return_value = True
+
+            # Act
+            await select_recent_activity(mock_callback, mock_state, mock_services)
+
+        # Assert: Description set from activity
+        mock_state.update_data.assert_called()
+        assert "description" in mock_state.update_data.call_args.kwargs
+        assert mock_state.update_data.call_args.kwargs["description"] == "Работал над проектом"
+
+        # Assert: create_and_save_activity called
+        mock_create.assert_called_once()
+
+    @pytest.mark.unit
+    async def test_select_recent_activity_with_invalid_index_shows_error(
+        self,
+        mock_callback,
+        mock_state,
+        mock_services
+    ):
+        """
+        Test invalid activity index handling.
+
+        GIVEN: Callback data has out-of-range index
+        WHEN: select_recent_activity is called
+        THEN: Error is shown
+        """
+        # Arrange
+        mock_callback.data = "recent_activity_999"
+        mock_state.get_data.return_value = {
+            "trigger_source": "manual",
+            "user_id": 1,
+            "recent_activities": [],
+            "start_time": "2025-11-11T13:00:00+00:00",
+            "end_time": "2025-11-11T14:00:00+00:00"
+        }
+
+        with patch('src.api.handlers.activity.activity_creation.cancel_fsm_timeout'):
+            # Act
+            await select_recent_activity(mock_callback, mock_state, mock_services)
+
+        # Assert: Error message
+        mock_callback.message.answer.assert_called_once()
+        message_text = mock_callback.message.answer.call_args[0][0]
+        assert "Ошибка" in message_text
+
+
+class TestProcessDescription:
+    """Test suite for process_description handler."""
+
+    @pytest.mark.unit
+    async def test_process_description_uses_shared_validation(
+        self,
+        mock_message,
+        mock_state,
+        mock_services
+    ):
+        """
+        Test description processing uses shared validation.
+
+        GIVEN: User enters valid description
+        WHEN: process_description is called
+        THEN: validate_description from shared module is used
+              AND create_and_save_activity is called
+        """
+        # Arrange
+        mock_message.text = "Test activity description"
+        mock_state.get_data.return_value = {
+            "trigger_source": "manual",
+            "user_id": 1,
+            "category_id": 1,
+            "start_time": "2025-11-11T10:00:00+00:00",
+            "end_time": "2025-11-11T11:00:00+00:00"
+        }
+
+        with patch('src.api.handlers.activity.activity_creation.validate_description') as mock_validate:
+            mock_validate.return_value = (True, None)
+
+            with patch('src.api.handlers.activity.activity_creation.extract_tags') as mock_extract:
+                mock_extract.return_value = []
+
+                with patch('src.api.handlers.activity.activity_creation.create_and_save_activity') as mock_create:
+                    mock_create.return_value = True
+
+                    # Act
+                    await process_description(mock_message, mock_state, mock_services)
+
+        # Assert: validate_description called
+        mock_validate.assert_called_once_with("Test activity description")
+
+        # Assert: Tags extracted
+        mock_extract.assert_called_once()
+
+        # Assert: Description saved
+        mock_state.update_data.assert_called()
+
+        # Assert: Activity saved
+        mock_create.assert_called_once()
+
+    @pytest.mark.unit
+    async def test_process_description_with_invalid_shows_error(
+        self,
+        mock_message,
+        mock_state,
+        mock_services
+    ):
+        """
+        Test invalid description handling.
+
+        GIVEN: Description fails validation
+        WHEN: process_description is called
+        THEN: Validation error is shown
+        """
+        # Arrange
+        mock_message.text = "ab"  # Too short
+
+        with patch('src.api.handlers.activity.activity_creation.validate_description') as mock_validate:
+            mock_validate.return_value = (False, "Описание должно содержать минимум 3 символа")
+
+            # Act
+            await process_description(mock_message, mock_state, mock_services)
+
+        # Assert: Error shown
+        mock_message.answer.assert_called_once()
+        message_text = mock_message.answer.call_args[0][0]
+        assert "минимум 3 символа" in message_text
+
+    @pytest.mark.unit
+    async def test_process_description_extracts_tags(
+        self,
+        mock_message,
+        mock_state,
+        mock_services
+    ):
+        """
+        Test tag extraction from description.
+
+        GIVEN: Description contains #tags
+        WHEN: process_description is called
+        THEN: Tags are extracted and saved
+        """
+        # Arrange
+        mock_message.text = "Working on project #work #coding"
+        mock_state.get_data.return_value = {
+            "trigger_source": "manual",
+            "user_id": 1,
+            "category_id": 1,
+            "start_time": "2025-11-11T10:00:00+00:00",
+            "end_time": "2025-11-11T11:00:00+00:00"
+        }
+
+        with patch('src.api.handlers.activity.activity_creation.validate_description') as mock_validate:
+            mock_validate.return_value = (True, None)
+
+            with patch('src.api.handlers.activity.activity_creation.extract_tags') as mock_extract:
+                mock_extract.return_value = ["work", "coding"]
+
+                with patch('src.api.handlers.activity.activity_creation.create_and_save_activity') as mock_create:
+                    mock_create.return_value = True
+
+                    # Act
+                    await process_description(mock_message, mock_state, mock_services)
+
+        # Assert: Tags extracted
+        mock_extract.assert_called_once_with("Working on project #work #coding")
+
+        # Assert: Tags saved
+        call_kwargs = mock_state.update_data.call_args.kwargs
+        assert call_kwargs["tags"] == ["work", "coding"]
+
+
+class TestHandleCancel:
+    """Test suite for handle_cancel handler."""
+
+    @pytest.mark.unit
+    async def test_handle_cancel_clears_state_and_shows_message(
         self,
         mock_callback,
         mock_state
     ):
         """
-        Test cancellation of category selection.
+        Test cancel operation.
 
         GIVEN: User clicks cancel button
-        WHEN: cancel_category_selection is called
-        THEN: State is cleared and message shown
+        WHEN: handle_cancel is called
+        THEN: FSM state is cleared
+              AND timeout is cancelled
+              AND confirmation message shown
         """
-        # Act
-        await cancel_category_selection(mock_callback, mock_state)
+        # Arrange
+        with patch('src.api.handlers.activity.activity_creation.cancel_fsm_timeout') as mock_cancel_timeout:
+            # Act
+            await handle_cancel(mock_callback, mock_state)
 
         # Assert: State cleared
         mock_state.clear.assert_called_once()
 
-        # Assert: Cancellation message
+        # Assert: Timeout cancelled
+        mock_cancel_timeout.assert_called_once()
+
+        # Assert: Confirmation message
         mock_callback.message.answer.assert_called_once()
         message_text = mock_callback.message.answer.call_args[0][0]
-        assert "отменена" in message_text
+        assert "отменена" in message_text.lower()
 
-
-class TestProcessCategory:
-    """Test suite for process_category (text input) handler."""
-
-    @pytest.mark.unit
-    async def test_process_category_with_zero_skips_category(
-        self,
-        mock_message,
-        mock_state,
-        mock_services,
-        sample_user
-    ):
-        """
-        Test skipping category with "0".
-
-        GIVEN: User sends "0" to skip category
-        WHEN: process_category is called
-        THEN: Activity is saved without category
-        """
-        # Arrange
-        mock_message.text = "0"
-        mock_services.user.get_by_telegram_id.return_value = sample_user
-
-        with patch('src.api.handlers.activity.activity_creation.save_activity') as mock_save:
-            # Act
-            await process_category(mock_message, mock_state, mock_services)
-
-        # Assert: save_activity called with category_id=None
-        mock_save.assert_called_once()
-        assert mock_save.call_args[0][3] is None
-
-    @pytest.mark.unit
-    async def test_process_category_with_other_text_shows_button_reminder(
-        self,
-        mock_message,
-        mock_state,
-        mock_services
-    ):
-        """
-        Test non-zero text input handling.
-
-        GIVEN: User sends text other than "0"
-        WHEN: process_category is called
-        THEN: Reminder to use buttons is shown
-        """
-        # Arrange
-        mock_message.text = "Work"  # Should use buttons instead
-
-        # Act
-        await process_category(mock_message, mock_state, mock_services)
-
-        # Assert: Reminder message
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "используй кнопки" in message_text
+        # Assert: Callback answered
+        mock_callback.answer.assert_called_once()
 
 
 class TestSaveActivity:
-    """Test suite for save_activity helper function."""
+    """Test suite for save_activity wrapper function."""
 
     @pytest.mark.unit
-    async def test_save_activity_with_all_data_creates_activity(
+    async def test_save_activity_delegates_to_shared_function(
         self,
         mock_message,
         mock_state,
         mock_services
     ):
         """
-        Test successful activity save.
+        Test save_activity delegates to shared create_and_save_activity.
 
-        GIVEN: All required data in state
+        GIVEN: Valid state data
         WHEN: save_activity is called
-        THEN: Activity is created in database
-              AND success message shown
-        """
-        # Arrange
-        start_time = datetime(2025, 11, 7, 14, 0, tzinfo=timezone.utc)
-        end_time = datetime(2025, 11, 7, 15, 30, tzinfo=timezone.utc)
-        mock_state.get_data.return_value = {
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "description": "Working on project",
-            "tags": ["work", "coding"]
-        }
-
-        with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
-            with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format:
-                mock_format.return_value = "1 час 30 минут"
-
-                # Act
-                await save_activity(
-                    mock_message,
-                    mock_state,
-                    user_id=1,
-                    category_id=1,
-                    telegram_user_id=123456789,
-                    services=mock_services
-                )
-
-        # Assert: Activity created
-        mock_services.activity.create_activity.assert_called_once()
-        call_kwargs = mock_services.activity.create_activity.call_args.kwargs
-        assert call_kwargs["user_id"] == 1
-        assert call_kwargs["category_id"] == 1
-        assert call_kwargs["description"] == "Working on project"
-        assert call_kwargs["tags"] == ["work", "coding"]
-
-        # Assert: Success message
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "сохранена" in message_text
-
-        # Assert: State cleared
-        mock_state.clear.assert_called_once()
-
-    @pytest.mark.unit
-    async def test_save_activity_with_missing_data_shows_error(
-        self,
-        mock_message,
-        mock_state,
-        mock_services
-    ):
-        """
-        Test save with incomplete data.
-
-        GIVEN: Missing required fields in state
-        WHEN: save_activity is called
-        THEN: Error is shown and state is cleared
+        THEN: create_and_save_activity from shared module is called
         """
         # Arrange
         mock_state.get_data.return_value = {
-            "start_time": "2025-11-07T14:00:00+00:00"
-            # Missing end_time and description
+            "user_id": 1,
+            "category_id": 1,
+            "start_time": "2025-11-11T10:00:00+00:00",
+            "end_time": "2025-11-11T11:00:00+00:00",
+            "description": "Test activity"
         }
 
-        # Act
-        await save_activity(
-            mock_message,
-            mock_state,
-            user_id=1,
-            category_id=1,
-            telegram_user_id=123456789,
-            services=mock_services
-        )
+        with patch('src.api.handlers.activity.activity_creation.create_and_save_activity') as mock_create:
+            mock_create.return_value = True
 
-        # Assert: Error shown
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "Недостаточно данных" in message_text
-
-        # Assert: Activity not created
-        mock_services.activity.create_activity.assert_not_called()
-
-    @pytest.mark.unit
-    async def test_save_activity_with_service_error_handles_gracefully(
-        self,
-        mock_message,
-        mock_state,
-        mock_services
-    ):
-        """
-        Test error handling during save.
-
-        GIVEN: Service raises exception
-        WHEN: save_activity is called
-        THEN: Error is caught and error message shown
-        """
-        # Arrange
-        start_time = datetime(2025, 11, 7, 14, 0, tzinfo=timezone.utc)
-        end_time = datetime(2025, 11, 7, 15, 0, tzinfo=timezone.utc)
-        mock_state.get_data.return_value = {
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "description": "Test",
-            "tags": []
-        }
-        mock_services.activity.create_activity.side_effect = Exception("Database error")
-
-        with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
             # Act
             await save_activity(
                 mock_message,
@@ -849,10 +939,86 @@ class TestSaveActivity:
                 services=mock_services
             )
 
-        # Assert: Error message shown
-        mock_message.answer.assert_called()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "Ошибка при сохранении" in message_text
+        # Assert: Shared function called
+        mock_create.assert_called_once()
 
-        # Assert: State cleared
-        mock_state.clear.assert_called_once()
+        # Assert: Correct parameters passed
+        call_kwargs = mock_create.call_args.kwargs
+        assert call_kwargs["user_id"] == 1
+        assert call_kwargs["category_id"] == 1
+
+
+class TestCreatePollSchedulingCallback:
+    """Test suite for _create_poll_scheduling_callback helper."""
+
+    @pytest.mark.unit
+    async def test_callback_schedules_next_poll(
+        self,
+        mock_services,
+        sample_user,
+        sample_settings
+    ):
+        """
+        Test poll scheduling callback creation.
+
+        GIVEN: User, settings, and bot instance
+        WHEN: Callback is executed
+        THEN: Next poll is scheduled via scheduler service
+        """
+        # Arrange
+        bot = MagicMock()
+        activity_data = {"id": 1}
+
+        # Create callback
+        callback = _create_poll_scheduling_callback(
+            bot=bot,
+            user=sample_user,
+            settings=sample_settings,
+            services=mock_services,
+            telegram_user_id=123456789
+        )
+
+        with patch('src.api.handlers.activity.activity_creation.schedule_next_poll') as mock_schedule:
+            # Act
+            await callback(activity_data)
+
+        # Assert: schedule_next_poll called
+        mock_schedule.assert_called_once()
+        call_args = mock_schedule.call_args.kwargs
+        assert call_args["bot"] == bot
+        assert call_args["user_id"] == 123456789
+        assert call_args["services"] == mock_services
+
+    @pytest.mark.unit
+    async def test_callback_handles_scheduling_error_gracefully(
+        self,
+        mock_services,
+        sample_user,
+        sample_settings
+    ):
+        """
+        Test error handling in callback.
+
+        GIVEN: schedule_next_poll raises exception
+        WHEN: Callback is executed
+        THEN: Error is caught and logged (doesn't propagate)
+        """
+        # Arrange
+        bot = MagicMock()
+        activity_data = {"id": 1}
+
+        callback = _create_poll_scheduling_callback(
+            bot=bot,
+            user=sample_user,
+            settings=sample_settings,
+            services=mock_services,
+            telegram_user_id=123456789
+        )
+
+        with patch('src.api.handlers.activity.activity_creation.schedule_next_poll') as mock_schedule:
+            mock_schedule.side_effect = Exception("Scheduler error")
+
+            # Act - should not raise
+            await callback(activity_data)
+
+        # Assert: Exception was caught (no assertion needed - test passes if no exception)
