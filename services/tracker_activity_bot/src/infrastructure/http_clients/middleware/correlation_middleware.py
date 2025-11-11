@@ -10,7 +10,7 @@ from typing import Optional
 import httpx
 
 from src.infrastructure.context import get_correlation_id
-from src.infrastructure.http_clients.middleware.base import RequestMiddleware
+from src.infrastructure.http_clients.middleware.protocols import RequestMiddleware
 
 logger = logging.getLogger(__name__)
 
