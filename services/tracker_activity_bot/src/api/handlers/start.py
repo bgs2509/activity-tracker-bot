@@ -4,6 +4,7 @@ from aiogram import Router, types
 from aiogram.filters import Command
 
 from src.api.dependencies import ServiceContainer
+from src.api.handlers.poll import send_automatic_poll
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 
 router = Router()
@@ -47,7 +48,6 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
 
         # Schedule first automatic poll
         user_timezone = user.get("timezone", "Europe/Moscow")
-        from src.api.handlers.poll import send_automatic_poll
         await services.scheduler.schedule_poll(
             user_id=telegram_id,
             settings=settings,
@@ -80,7 +80,6 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
 
             # Schedule poll for existing user who didn't have settings
             user_timezone = user.get("timezone", "Europe/Moscow")
-            from src.api.handlers.poll import send_automatic_poll
             await services.scheduler.schedule_poll(
                 user_id=telegram_id,
                 settings=settings,
