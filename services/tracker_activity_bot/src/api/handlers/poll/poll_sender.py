@@ -8,9 +8,10 @@ from aiogram.fsm.storage.base import StorageKey
 from apscheduler.triggers.date import DateTrigger
 
 from src.api.dependencies import get_service_container
-from src.api.keyboards.poll import get_poll_response_keyboard, get_poll_initial_category_keyboard
+from src.api.keyboards.poll import get_poll_response_keyboard, get_poll_initial_category_keyboard, get_poll_category_keyboard
 from src.api.messages.activity_messages import get_category_selection_message
 from src.api.states.activity import ActivityStates
+from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.formatters import format_time, format_duration
 from src.application.utils.time_helpers import get_poll_interval, calculate_poll_period
 from src.core.constants import POLL_POSTPONE_MINUTES
@@ -84,8 +85,6 @@ async def send_automatic_poll(bot: Bot, user_id: int) -> None:
             return
 
         # Auto-calculate period from last activity
-        from src.application.utils.time_helpers import calculate_poll_period
-
         start_time, end_time = await calculate_poll_period(
             services.activity,
             user["id"],
@@ -119,7 +118,6 @@ async def send_automatic_poll(bot: Bot, user_id: int) -> None:
         })
 
         # Schedule FSM timeout
-        from src.application.services import fsm_timeout_service as fsm_timeout_module
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.schedule_timeout(
                 user_id=user_id,
@@ -134,8 +132,6 @@ async def send_automatic_poll(bot: Bot, user_id: int) -> None:
         duration_str = format_duration(duration_minutes)
 
         # Build category selection message
-        from src.api.messages.activity_messages import get_category_selection_message
-
         text = get_category_selection_message(
             source="poll",
             start_time=start_str,
@@ -145,8 +141,6 @@ async def send_automatic_poll(bot: Bot, user_id: int) -> None:
         )
 
         # Send message with categories (use poll-specific keyboard)
-        from src.api.keyboards.poll import get_poll_category_keyboard
-
         await bot.send_message(
             chat_id=user_id,
             text=text,
@@ -240,7 +234,7 @@ async def send_category_reminder(bot: Bot, user_id: int) -> None:
             return
 
         # Get settings
-        settings = await services.user_settings.get_by_user_id(user["id"])
+        settings = await services.settings.get_settings(user["id"])
 
         # Get categories
         categories = await services.category.get_user_categories(user["id"])
@@ -279,9 +273,6 @@ async def send_category_reminder(bot: Bot, user_id: int) -> None:
             add_motivation=True
         )
         text = f"⏰ Напоминание!\n\n{category_text}"
-
-        # Import here to avoid circular dependency
-        from src.api.keyboards.poll import get_poll_category_keyboard
 
         await bot.send_message(
             chat_id=user_id,

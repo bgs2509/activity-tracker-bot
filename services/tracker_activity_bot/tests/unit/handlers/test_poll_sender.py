@@ -202,7 +202,8 @@ class TestSendAutomaticPoll:
 
         # Assert: Period saved to FSM data
         mock_storage.update_data.assert_called_once()
-        data_kwargs = mock_storage.update_data.call_args.kwargs
+        # Data is passed as second positional argument (after key)
+        data_kwargs = mock_storage.update_data.call_args.args[1]
         assert "start_time" in data_kwargs
         assert "end_time" in data_kwargs
         assert data_kwargs["trigger_source"] == "automatic"
@@ -348,7 +349,8 @@ class TestSendAutomaticPoll:
                             await send_automatic_poll(mock_bot, 123456789)
 
         # Assert: Settings stored
-        data_kwargs = mock_storage.update_data.call_args.kwargs
+        # Data is passed as second positional argument (after key)
+        data_kwargs = mock_storage.update_data.call_args.args[1]
         assert "settings" in data_kwargs
         assert data_kwargs["settings"] == sample_settings
         assert data_kwargs["user_timezone"] == "Europe/Moscow"
