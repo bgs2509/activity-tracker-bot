@@ -49,6 +49,8 @@ def mock_callback():
     callback = MagicMock(spec=types.CallbackQuery)
     callback.from_user = MagicMock(spec=types.User)
     callback.from_user.id = 123456789
+    callback.from_user.username = "testuser"
+    callback.data = "settings"
     callback.message = MagicMock(spec=types.Message)
     callback.message.chat = MagicMock()
     callback.message.chat.id = 123456789
@@ -65,6 +67,7 @@ def mock_message():
     message = MagicMock(spec=types.Message)
     message.from_user = MagicMock(spec=types.User)
     message.from_user.id = 123456789
+    message.from_user.username = "testuser"
     message.answer = AsyncMock()
     return message
 
@@ -447,8 +450,8 @@ class TestFormatNextPollTime:
         # Act
         result = _format_next_poll_time(123456789, mock_services)
 
-        # Assert: Formatted time returned
-        assert "45 минут" in result
+        # Assert: Formatted time returned (44-45 minutes due to execution delay)
+        assert ("44 минут" in result or "45 минут" in result)
 
     @pytest.mark.unit
     def test_format_next_poll_time_with_no_job_returns_empty_string(
