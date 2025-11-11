@@ -372,357 +372,11 @@ services = get_service_container()
 #         await callback.answer()
 
 
-@router.callback_query(
-    ActivityStates.waiting_for_category,
-    F.data.startswith("poll_category_")
-)
-@with_typing_action
-async def handle_poll_category_select(
-    callback: types.CallbackQuery,
-    state: FSMContext
-) -> None:
-    """Handle category selection in poll activity recording.
-
-    After category is selected, asks user for activity description
-    with time range information.
-
-    Args:
-        callback: Telegram callback query with category data
-        state: FSM context for state management
-    """
-    category_id = int(callback.data.split("_")[-1])
-    telegram_id = callback.from_user.id
-
-    try:
-        user, settings = await get_user_and_settings(telegram_id, services)
-        if not user or not settings:
-            await _cancel_poll_activity(
-                callback.message,
-                callback,
-                state,
-                telegram_id,
-                "⚠️ Ошибка получения настроек."
-            )
-            return
-
-        # Calculate time range based on last activity (same as shown in category window)
-        start_time, end_time = await calculate_poll_period(
-            services.activity,
-            user["id"],
-            settings
-        )
-
-        # Save data to state and ask for description
-        await state.update_data(
-            user_id=user["id"],
-            category_id=category_id,
-            start_time=start_time.isoformat(),
-            end_time=end_time.isoformat(),
-            settings=settings,
-            user_timezone=user.get("timezone", "Europe/Moscow")
-        )
-        await state.set_state(ActivityStates.waiting_for_description)
-
-        # Schedule FSM timeout
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-                user_id=telegram_id,
-                state=ActivityStates.waiting_for_description,
-                bot=callback.bot
-            )
-
-        # Format time and duration for display
-        start_time_str = format_time(start_time)
-        end_time_str = format_time(end_time)
-        duration_minutes = int((end_time - start_time).total_seconds() / 60)
-        duration_str = format_duration(duration_minutes)
-
-        # Get recent activities filtered by selected category
-        try:
-            response = await services.activity.get_user_activities_by_category(
-                user_id=user["id"],
-                category_id=category_id,
-                limit=20
-            )
-            recent_activities = response.get("activities", []) if isinstance(response, dict) else response
-
-            text = (
-                f"✏️ Опиши активность\n\n"
-                f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
-            )
-
-            if recent_activities:
-                text += "Выбери из последних или напиши своё (минимум 3 символа).\nМожешь добавить теги через #хештег"
-                keyboard = get_recent_activities_keyboard(recent_activities)
-            else:
-                text += "Напиши, чем ты занимался (минимум 3 символа).\nМожешь добавить теги через #хештег"
-                keyboard = get_main_menu_keyboard()
-
-            await callback.message.answer(text, reply_markup=keyboard)
-            await callback.answer()
-
-        except Exception as e:
-            logger.error(
-                "Error fetching recent activities in poll",
-                extra={"user_id": telegram_id, "error": str(e)},
-                exc_info=True
-            )
-            # Fallback: just ask for description without suggestions
-            text = (
-                f"✏️ Опиши активность\n\n"
-                f"⏰ {start_time_str} — {end_time_str} ({duration_str})\n\n"
-                f"Напиши, чем ты занимался (минимум 3 символа).\n"
-                f"Можешь добавить теги через #хештег"
-            )
-            await callback.message.answer(text, reply_markup=get_main_menu_keyboard())
-            await callback.answer()
-
-    except Exception as e:
-        logger.error(
-            "Error in handle_poll_category_select",
-            extra={"user_id": telegram_id, "error": str(e)},
-            exc_info=True
-        )
-        await _cancel_poll_activity(
-            callback.message,
-            callback,
-            state,
-            telegram_id,
-            "⚠️ Произошла ошибка."
-        )
-
-
-@router.callback_query(ActivityStates.waiting_for_description, F.data.startswith("activity_desc_"))
-@with_typing_action
-async def handle_poll_recent_activity_select(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    services: ServiceContainer
-) -> None:
-    """Handle selection of recent activity from inline buttons in poll flow.
-
-    User clicked on one of the recent activity buttons - use that description
-    to save the activity and schedule next poll.
-
-    Args:
-        callback: Telegram callback query with activity data
-        state: FSM context with activity data
-        services: Service container with data access
-    """
-    # Extract activity_id from callback data
-    activity_id_str = callback.data.replace("activity_desc_", "")
-
-    try:
-        activity_id = int(activity_id_str)
-    except ValueError:
-        await callback.message.answer("⚠️ Ошибка при обработке выбора.")
-        await callback.answer()
-        return
-
-    # Get all data from state
-    data = await state.get_data()
-    user_id = data.get("user_id")
-    category_id = data.get("category_id")
-    start_time_str = data.get("start_time")
-    end_time_str = data.get("end_time")
-    settings = data.get("settings")
-    user_timezone = data.get("user_timezone")
-    telegram_id = callback.from_user.id
-
-    if not all([user_id, category_id, start_time_str, end_time_str]):
-        await _cancel_poll_activity(
-            callback.message,
-            callback,
-            state,
-            telegram_id,
-            "⚠️ Недостаточно данных для сохранения."
-        )
-        return
-
-    # Fetch the selected activity to get its description
-    try:
-        response = await services.activity.get_user_activities_by_category(
-            user_id=user_id,
-            category_id=category_id,
-            limit=20
-        )
-        recent_activities = response.get("activities", []) if isinstance(response, dict) else response
-
-        # Find the activity with matching ID
-        selected_activity = next(
-            (act for act in recent_activities if act.get("id") == activity_id),
-            None
-        )
-
-        if not selected_activity:
-            await _cancel_poll_activity(
-                callback.message,
-                callback,
-                state,
-                telegram_id,
-                "⚠️ Активность не найдена."
-            )
-            return
-
-        description = selected_activity.get("description", "")
-        tags = extract_tags(description)
-
-        # Parse times
-        start_time = datetime.fromisoformat(start_time_str)
-        end_time = datetime.fromisoformat(end_time_str)
-
-        # Create activity
-        await services.activity.create_activity(
-            user_id=user_id,
-            category_id=category_id,
-            description=description,
-            tags=tags,
-            start_time=start_time,
-            end_time=end_time
-        )
-
-        # Schedule next poll
-        await services.scheduler.schedule_poll(
-            user_id=telegram_id,
-            settings=settings,
-            user_timezone=user_timezone,
-            send_poll_callback=send_automatic_poll,
-            bot=callback.bot
-        )
-
-        # Format duration for success message
-        duration_minutes = int((end_time - start_time).total_seconds() / 60)
-        duration_str = format_duration(duration_minutes)
-
-        await callback.message.answer(
-            f"✅ Активность сохранена!\n\n"
-            f"{description}\n"
-            f"Продолжительность: {duration_str}\n\n"
-            f"Следующий опрос придёт по расписанию.",
-            reply_markup=get_main_menu_keyboard()
-        )
-
-        await state.clear()
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
-
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(
-            "Error selecting recent activity in poll",
-            extra={"user_id": telegram_id, "error": str(e)},
-            exc_info=True
-        )
-        await _cancel_poll_activity(
-            callback.message,
-            callback,
-            state,
-            telegram_id,
-            "⚠️ Ошибка при сохранении активности."
-        )
-
-
-@router.message(ActivityStates.waiting_for_description)
-async def handle_poll_description(
-    message: types.Message,
-    state: FSMContext,
-    services: ServiceContainer
-) -> None:
-    """Handle description input for poll activity recording.
-
-    After user provides description, creates activity with all collected data
-    and schedules next poll.
-
-    Args:
-        message: Telegram message with description text
-        state: FSM context with activity data
-        services: Service container with data access
-    """
-    description = message.text.strip()
-
-    # Validate description length
-    if not description or len(description) < 3:
-        await message.answer(
-            "⚠️ Описание должно содержать минимум 3 символа. Попробуй ещё раз."
-        )
-        return
-
-    # Extract tags from description
-    tags = extract_tags(description)
-
-    # Get data from state
-    data = await state.get_data()
-    category_id = data.get("category_id")
-    start_time_str = data.get("start_time")
-    end_time_str = data.get("end_time")
-    settings = data.get("settings")
-    user_timezone = data.get("user_timezone")
-    user_id = data.get("user_id")
-
-    if not all([category_id, start_time_str, end_time_str, user_id]):
-        await _cancel_poll_activity_message(
-            message,
-            state,
-            message.from_user.id,
-            "⚠️ Недостаточно данных для сохранения."
-        )
-        return
-
-    telegram_id = message.from_user.id
-
-    try:
-        # Parse times
-        start_time = datetime.fromisoformat(start_time_str)
-        end_time = datetime.fromisoformat(end_time_str)
-
-        # Create activity
-        await services.activity.create_activity(
-            user_id=user_id,
-            category_id=category_id,
-            description=description,
-            tags=tags,
-            start_time=start_time,
-            end_time=end_time
-        )
-
-        # Schedule next poll
-        await services.scheduler.schedule_poll(
-            user_id=telegram_id,
-            settings=settings,
-            user_timezone=user_timezone,
-            send_poll_callback=send_automatic_poll,
-            bot=message.bot
-        )
-
-        # Format duration for success message
-        duration_minutes = int((end_time - start_time).total_seconds() / 60)
-        duration_str = format_duration(duration_minutes)
-
-        await message.answer(
-            f"✅ Активность сохранена!\n\n"
-            f"{description}\n"
-            f"Продолжительность: {duration_str}\n\n"
-            f"Следующий опрос придёт по расписанию.",
-            reply_markup=get_main_menu_keyboard()
-        )
-
-        await state.clear()
-        if fsm_timeout_module.fsm_timeout_service:
-            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
-
-    except Exception as e:
-        logger.error(
-            "Error in handle_poll_description",
-            extra={"user_id": telegram_id, "error": str(e)},
-            exc_info=True
-        )
-        await _cancel_poll_activity_message(
-            message,
-            state,
-            telegram_id,
-            "⚠️ Произошла ошибка при сохранении активности."
-        )
+# NOTE: Duplicate handlers removed (Phase 5.2)
+# The following handlers are now shared with manual flow in activity_creation.py:
+# - handle_poll_category_select -> process_category_callback
+# - handle_poll_recent_activity_select -> select_recent_activity
+# - handle_poll_description -> process_description
 
 
 @router.callback_query(
@@ -734,25 +388,53 @@ async def handle_poll_cancel(
     callback: types.CallbackQuery,
     state: FSMContext
 ) -> None:
-    """Handle cancellation of poll activity recording.
+    """Handle poll cancellation - specific to automatic polls.
 
-    Clears FSM state and returns user to main menu.
+    Only processes cancellation if this is actually an automatic poll
+    (verified via trigger_source). Manual flow uses different cancel callback.
 
     Args:
         callback: Telegram callback query
         state: FSM context for state clearing
     """
-    await state.clear()
-    if fsm_timeout_module.fsm_timeout_service:
-        fsm_timeout_module.fsm_timeout_service.cancel_timeout(
-            callback.from_user.id
-        )
+    telegram_id = callback.from_user.id
 
+    # Get state data
+    data = await state.get_data()
+    trigger_source = data.get("trigger_source", "manual")
+
+    # Only handle if this is actually an automatic poll
+    if trigger_source != "automatic":
+        logger.warning(
+            "poll_cancel called but not in automatic flow",
+            extra={
+                "telegram_id": telegram_id,
+                "trigger_source": trigger_source
+            }
+        )
+        await callback.answer("⚠️ Используй другую кнопку отмены")
+        return
+
+    # Clear FSM state
+    await state.clear()
+
+    # Cancel FSM timeout
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
+    # Send cancellation message
     await callback.message.answer(
-        "❌ Запись активности отменена.",
+        "❌ Опрос отменён.\n\n"
+        "Следующий опрос придёт по расписанию.",
         reply_markup=get_main_menu_keyboard()
     )
+
     await callback.answer()
+
+    logger.info(
+        "Automatic poll cancelled by user",
+        extra={"telegram_id": telegram_id}
+    )
 
 
 # DISABLED: "Remind Later" button no longer shown in automatic poll category selection

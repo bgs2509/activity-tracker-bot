@@ -21,18 +21,27 @@ logger = logging.getLogger(__name__)
 
 
 async def send_automatic_poll(bot: Bot, user_id: int) -> None:
-    """
-    Send automatic poll to user.
+    """Send automatic poll - SKIPS period selection, goes directly to category.
 
-    This function is called by the scheduler to send periodic polls.
-    It checks for FSM conflicts and postpones if user is in active dialog.
+    This is the entry point for automatic polls triggered by the scheduler.
+    It calculates the activity period automatically (from last activity end time)
+    and presents the user with category selection immediately, skipping the
+    period selection screen entirely.
 
     Args:
-        bot: Bot instance
-        user_id: Telegram user ID
+        bot: Telegram Bot instance
+        user_id: Telegram user ID (not internal user ID)
 
-    Raises:
-        Does not raise exceptions - logs errors internally
+    Flow:
+        1. Get user, settings, categories
+        2. Check for FSM conflicts (user might be in another flow)
+        3. Auto-calculate period from last activity
+        4. Set FSM state directly to waiting_for_category (SKIP period step)
+        5. Store period and context in FSM data
+        6. Send category selection message
+
+    Note:
+        If user is already in another FSM state, poll is postponed.
     """
     services = get_service_container()
 
@@ -42,55 +51,129 @@ async def send_automatic_poll(bot: Bot, user_id: int) -> None:
         if not user:
             logger.error(
                 "User not found for automatic poll",
-                extra={"user_id": user_id}
+                extra={"telegram_user_id": user_id}
             )
             return
 
         # Get settings
         settings = await services.settings.get_settings(user["id"])
         if not settings:
-            logger.error(
-                "Settings not found for user",
-                extra={"user_id": user_id}
+            logger.warning(
+                "Settings not found for user, using defaults",
+                extra={"user_id": user["id"]}
             )
-            return
+            settings = {}  # Will use default values
 
         # Get categories
         categories = await services.category.get_user_categories(user["id"])
         if not categories:
             logger.warning(
-                "User has no categories, cannot send poll",
-                extra={"user_id": user_id}
+                "No categories for user, skipping poll",
+                extra={"user_id": user["id"]}
             )
-            # Reschedule next poll anyway
-            await _update_last_poll_time(services, user, user_id)
+            # Don't send poll if no categories - nothing to select
             return
 
-        # Check if user is in active FSM state (conflict resolution)
+        # Check for FSM conflicts (user might be in manual recording flow)
         if await _should_postpone_poll(bot, user_id):
+            logger.info(
+                "Postponing poll due to FSM conflict",
+                extra={"user_id": user_id}
+            )
             await _postpone_poll(bot, user_id, services)
             return
 
-        # Set FSM state to waiting for category selection
-        await _set_poll_category_state(bot, user_id)
+        # Auto-calculate period from last activity
+        from src.application.utils.time_helpers import calculate_poll_period
 
-        # Send poll message with categories
-        await _send_poll_message(bot, user_id, settings, categories)
+        start_time, end_time = await calculate_poll_period(
+            services.activity,
+            user["id"],
+            settings
+        )
 
-        # Update last poll time for accurate sleep duration calculation
+        logger.info(
+            "Auto-calculated period for automatic poll",
+            extra={
+                "user_id": user["id"],
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration_minutes": int((end_time - start_time).total_seconds() / 60)
+            }
+        )
+
+        # Set FSM state DIRECTLY to category selection (SKIP period step)
+        storage = get_fsm_storage()
+        key = StorageKey(bot_id=bot.id, chat_id=user_id, user_id=user_id)
+
+        await storage.set_state(key, ActivityStates.waiting_for_category)
+
+        # Store period and context in FSM data
+        await storage.update_data(key, {
+            "trigger_source": "automatic",  # Mark as automatic flow
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "user_id": user["id"],
+            "settings": settings,  # Needed for scheduling next poll
+            "user_timezone": user.get("timezone", "Europe/Moscow")  # Needed for scheduling
+        })
+
+        # Schedule FSM timeout
+        from src.application.services import fsm_timeout_service as fsm_timeout_module
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+                user_id=user_id,
+                state=ActivityStates.waiting_for_category,
+                bot=bot
+            )
+
+        # Format time for display
+        start_str = format_time(start_time)
+        end_str = format_time(end_time)
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        duration_str = format_duration(duration_minutes)
+
+        # Build category selection message
+        from src.api.messages.activity_messages import get_category_selection_message
+
+        text = get_category_selection_message(
+            source="poll",
+            start_time=start_str,
+            end_time=end_str,
+            duration=duration_str,
+            add_motivation=True
+        )
+
+        # Send message with categories (use poll-specific keyboard)
+        from src.api.keyboards.poll import get_poll_category_keyboard
+
+        await bot.send_message(
+            chat_id=user_id,
+            text=text,
+            reply_markup=get_poll_category_keyboard(categories)
+        )
+
+        # Update last poll time
         await _update_last_poll_time(services, user, user_id)
 
         logger.info(
-            "Sent automatic poll to user",
-            extra={"user_id": user_id}
+            "Sent automatic poll successfully",
+            extra={
+                "user_id": user_id,
+                "categories_count": len(categories)
+            }
         )
 
     except Exception as e:
         logger.error(
             "Error sending automatic poll",
-            extra={"user_id": user_id, "error": str(e)},
+            extra={
+                "user_id": user_id,
+                "error": str(e)
+            },
             exc_info=True
         )
+        # Don't propagate exception - scheduler should continue
 
 
 async def send_reminder(bot: Bot, user_id: int) -> None:

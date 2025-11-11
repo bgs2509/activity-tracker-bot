@@ -69,6 +69,53 @@ def get_start_time_keyboard() -> InlineKeyboardMarkup:
     return keyboard
 
 
+def get_period_keyboard_with_auto() -> InlineKeyboardMarkup:
+    """Period keyboard with 'Auto Calculate' button for manual flow.
+
+    Provides quick-select period buttons plus an option to automatically
+    calculate period from last activity (similar to automatic poll behavior).
+
+    Returns:
+        InlineKeyboardMarkup with auto-calculate option and period buttons
+
+    Layout:
+        [⚡️ Авто (от последней активности)]
+        [───── или выбери вручную ──────]
+        [15 минут] [30 минут]
+        [1 час]    [3 часа]
+        [8 часов]  [12 часов]
+        [❌ Отменить]
+    """
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        # Auto-calculate option (prominent at top)
+        [InlineKeyboardButton(
+            text="⚡️ Авто (от последней активности)",
+            callback_data="period_auto"
+        )],
+        # Visual divider (non-clickable)
+        [InlineKeyboardButton(
+            text="───── или выбери вручную ──────",
+            callback_data="noop"
+        )],
+        # Quick period selection buttons (2x3 grid)
+        [
+            InlineKeyboardButton(text="15 минут", callback_data="period_15m"),
+            InlineKeyboardButton(text="30 минут", callback_data="period_30m"),
+        ],
+        [
+            InlineKeyboardButton(text="1 час", callback_data="period_1h"),
+            InlineKeyboardButton(text="3 часа", callback_data="period_3h"),
+        ],
+        [
+            InlineKeyboardButton(text="8 часов", callback_data="period_8h"),
+            InlineKeyboardButton(text="12 часов", callback_data="period_12h"),
+        ],
+        # Cancel button
+        [InlineKeyboardButton(text="❌ Отменить", callback_data="cancel")],
+    ])
+    return keyboard
+
+
 def get_end_time_keyboard() -> InlineKeyboardMarkup:
     """Get keyboard for end time quick selection.
 

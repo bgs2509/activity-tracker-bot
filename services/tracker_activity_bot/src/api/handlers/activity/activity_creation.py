@@ -1,346 +1,475 @@
-"""Activity creation handlers for recording new activities."""
+"""Activity creation and recording handlers.
+
+This module handles all activity recording functionality including:
+- Manual activity recording (user-initiated)
+- Time period selection
+- Category selection
+- Activity description input
+- Activity saving
+
+State machine flow:
+    waiting_for_period -> waiting_for_category -> waiting_for_description
+"""
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Callable, Awaitable
 
-from aiogram import Router, types, F
-from aiogram.filters import StateFilter
+from aiogram import Router, F, types, Bot
 from aiogram.fsm.context import FSMContext
 
-from src.api.states.activity import ActivityStates
 from src.api.dependencies import ServiceContainer
-from src.api.keyboards.time_select import get_period_keyboard
+from src.api.keyboards.activity import get_cancel_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
+from src.api.keyboards.time_select import (
+    get_period_keyboard,
+    get_start_time_keyboard,
+    get_end_time_keyboard,
+    get_period_keyboard_with_auto
+)
 from src.api.keyboards.poll import get_poll_category_keyboard
-from src.api.keyboards.activity import get_recent_activities_keyboard
 from src.api.messages.activity_messages import get_category_selection_message
-from src.application.utils.time_parser import parse_period
+from src.api.states.activity import ActivityStates
 from src.application.utils.formatters import format_time, format_duration, extract_tags
-from src.application.utils.decorators import with_typing_action
-from src.application.utils.fsm_helpers import schedule_fsm_timeout
 from src.application.services import fsm_timeout_service as fsm_timeout_module
-from src.core.logging_middleware import log_user_action
+from src.core.middleware.typing import with_typing_action
 
-# Removed obsolete helper imports - now using parse_period instead
-
-router = Router()
 logger = logging.getLogger(__name__)
 
+router = Router()
 
-@router.callback_query(F.data == "add_activity")
+
+@router.message(F.text == "📝 Записать активность")
 @with_typing_action
-@log_user_action("add_activity_started")
-async def start_add_activity(callback: types.CallbackQuery, state: FSMContext):
-    """Start activity recording process."""
-    logger.debug(
-        "Starting activity creation",
-        extra={
-            "user_id": callback.from_user.id,
-            "username": callback.from_user.username
-        }
-    )
+async def start_add_activity(message: types.Message, state: FSMContext):
+    """Start activity recording - MANUAL trigger.
+
+    This is the entry point for MANUAL activity recording (user clicked button).
+    It presents the user with period selection options.
+
+    Flow:
+        Start -> Period Selection -> Category -> Description -> Save
+    """
+    telegram_id = message.from_user.id
+
+    # Set FSM state
     await state.set_state(ActivityStates.waiting_for_period)
 
+    # Mark this as manual flow (not automatic poll)
+    await state.update_data(trigger_source="manual")
+
     # Schedule FSM timeout
-    await schedule_fsm_timeout(
-        callback.from_user.id,
-        ActivityStates.waiting_for_period,
-        callback.bot
-    )
-
-    text = (
-        "⏰ ЗАДАЙ ПЕРИОД\n\n"
-        "👇 Выбери кнопкой ниже\n"
-        "или\n"
-        "✍️ Напиши текстом:\n\n"
-        "Примеры:\n"
-        "30м — последние 30 минут\n"
-        "2ч — последние 2 часа\n"
-        "14:30 — 15:30 — точный период"
-    )
-
-    await callback.message.answer(text, reply_markup=get_period_keyboard())
-    await callback.answer()
-
-
-@router.callback_query(
-    StateFilter(ActivityStates.waiting_for_period),
-    F.data == "cancel"
-)
-@with_typing_action
-@log_user_action("activity_creation_cancelled")
-async def cancel_activity_creation(callback: types.CallbackQuery, state: FSMContext):
-    """Cancel activity creation process.
-
-    Handles the cancel button in period selection keyboard.
-    Clears FSM state and returns user to main menu.
-
-    Args:
-        callback: Telegram callback query from cancel button
-        state: FSM context for state management
-    """
-    logger.debug(
-        "Activity creation cancelled",
-        extra={
-            "user_id": callback.from_user.id,
-            "current_state": await state.get_state()
-        }
-    )
-
-    # Clear FSM state
-    await state.clear()
-
-    # Cancel FSM timeout if exists
     if fsm_timeout_module.fsm_timeout_service:
-        fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+            user_id=telegram_id,
+            state=ActivityStates.waiting_for_period,
+            bot=message.bot
+        )
 
-    await callback.message.answer(
-        "❌ Запись активности отменена.",
-        reply_markup=get_main_menu_keyboard()
+    # Send period selection keyboard with auto-calculate option
+    text = (
+        "📝 Записываем активность\n\n"
+        "Автоматически рассчитать период от последней активности или выбрать вручную?\n\n"
+        "⏰ Выбери период:"
     )
+
+    await message.answer(text, reply_markup=get_period_keyboard_with_auto())
+
+
+@router.callback_query(ActivityStates.waiting_for_period, F.data == "noop")
+async def handle_noop(callback: types.CallbackQuery):
+    """Handle no-op callback (visual dividers in keyboards).
+
+    Some keyboards have visual divider buttons that don't perform actions.
+    This handler simply acknowledges them without doing anything.
+    """
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("period_"))
+@router.callback_query(ActivityStates.waiting_for_period, F.data == "period_auto")
 @with_typing_action
-@log_user_action("quick_period_selected")
-async def quick_period_selection(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
-    """Handle quick period selection via inline buttons.
+async def auto_calculate_period(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    services: ServiceContainer
+):
+    """Auto-calculate period from last activity (manual flow).
 
-    User clicked one of the period buttons (15m, 30m, 1h, 3h, 8h, 12h).
-    Parse the period and proceed to category selection.
+    Uses the same logic as automatic polls to calculate the time range
+    based on the user's last recorded activity end time.
+
+    Flow:
+        User clicks "Auto" -> Calculate period -> Category selection
     """
-    logger.debug(
-        "Quick period selected",
-        extra={
-            "user_id": callback.from_user.id,
-            "period_key": callback.data.replace("period_", "")
-        }
-    )
-
-    # Map callback data to period string
-    period_map = {
-        "15m": "15м",
-        "30m": "30м",
-        "1h": "1ч",
-        "3h": "3ч",
-        "8h": "8ч",
-        "12h": "12ч",
-    }
-
-    period_key = callback.data.replace("period_", "")
-    period_str = period_map.get(period_key)
-
-    if not period_str:
-        await callback.answer("⚠️ Неизвестная команда")
-        return
+    telegram_id = callback.from_user.id
 
     try:
-        # Parse period to get start_time and end_time
-        start_time, end_time = parse_period(period_str)
+        # Get user data
+        user = await services.user.get_by_telegram_id(telegram_id)
+        if not user:
+            await callback.message.answer(
+                "⚠️ Пользователь не найден.",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await state.clear()
+            await callback.answer()
+            return
 
-        logger.debug(
-            "Period parsed successfully",
+        # Get settings for poll interval calculation
+        settings = await services.settings.get_settings(user["id"])
+        if not settings:
+            logger.warning(
+                "Settings not found for user, using defaults",
+                extra={"user_id": user["id"]}
+            )
+            settings = {}
+
+        # Auto-calculate period using same logic as polls
+        from src.application.utils.time_helpers import calculate_poll_period
+
+        start_time, end_time = await calculate_poll_period(
+            services.activity,
+            user["id"],
+            settings
+        )
+
+        logger.info(
+            "Auto-calculated period for manual flow",
             extra={
-                "user_id": callback.from_user.id,
+                "user_id": user["id"],
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
-                "period_str": period_str
+                "duration_minutes": int((end_time - start_time).total_seconds() / 60)
             }
         )
 
-        # Save to FSM
+        # Store period and user_id in state
         await state.update_data(
             start_time=start_time.isoformat(),
-            end_time=end_time.isoformat()
+            end_time=end_time.isoformat(),
+            user_id=user["id"]
         )
+
+        # Move to category selection
         await state.set_state(ActivityStates.waiting_for_category)
 
         # Schedule FSM timeout
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-                user_id=callback.from_user.id,
+                user_id=telegram_id,
                 state=ActivityStates.waiting_for_category,
                 bot=callback.bot
             )
 
-        # Get user's categories
-        telegram_id = callback.from_user.id
+        # Get user categories
+        categories = await services.category.get_user_categories(user["id"])
 
-        try:
-            user = await services.user.get_by_telegram_id(telegram_id)
-            if not user:
-                await callback.message.answer(
-                    "⚠️ Пользователь не найден.",
-                    reply_markup=get_main_menu_keyboard()
-                )
-                await state.clear()
-                await callback.answer()
-                return
-
-            categories = await services.category.get_user_categories(user["id"])
-
-            if not categories:
-                await callback.message.answer(
-                    "⚠️ У тебя нет категорий. Создай категорию в настройках.",
-                    reply_markup=get_main_menu_keyboard()
-                )
-                await state.clear()
-                await callback.answer()
-                return
-
-            # Store user_id for later
-            await state.update_data(user_id=user["id"])
-
-            start_time_str = format_time(start_time)
-            end_time_str = format_time(end_time)
-            duration_minutes = int((end_time - start_time).total_seconds() / 60)
-            duration_str = format_duration(duration_minutes)
-
-            text = get_category_selection_message(
-                source="manual",
-                start_time=start_time_str,
-                end_time=end_time_str,
-                duration=duration_str,
-                add_motivation=True
-            )
-
+        if not categories:
             await callback.message.answer(
-                text,
-                reply_markup=get_poll_category_keyboard(categories, cancel_callback="activity_cancel_category")
-            )
-            await callback.answer()
-
-        except Exception as e:
-            logger.error(f"Error in quick_period_selection: {e}")
-            await callback.message.answer(
-                "⚠️ Произошла ошибка.",
+                "⚠️ У тебя нет категорий. Сначала создай категорию.",
                 reply_markup=get_main_menu_keyboard()
             )
             await state.clear()
             await callback.answer()
+            return
 
-    except ValueError as e:
-        logger.error(f"Error parsing period: {e}")
+        # Format time for display
+        start_str = format_time(start_time)
+        end_str = format_time(end_time)
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        duration_str = format_duration(duration_minutes)
+
+        # Build category selection message
+        text = get_category_selection_message(
+            source="manual",  # This is manual flow
+            start_time=start_str,
+            end_time=end_str,
+            duration=duration_str,
+            add_motivation=False
+        )
+
+        # Send category selection message
         await callback.message.answer(
-            f"⚠️ Ошибка при обработке периода: {str(e)}",
-            reply_markup=get_period_keyboard()
+            text,
+            reply_markup=get_poll_category_keyboard(categories)
         )
         await callback.answer()
 
+    except Exception as e:
+        logger.error(
+            "Error auto-calculating period",
+            extra={
+                "telegram_user_id": telegram_id,
+                "error": str(e)
+            },
+            exc_info=True
+        )
+        await callback.message.answer(
+            "⚠️ Ошибка при расчёте периода.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        await callback.answer()
 
-@router.message(ActivityStates.waiting_for_period)
-@log_user_action("period_text_input")
-async def process_period_input(message: types.Message, state: FSMContext, services: ServiceContainer):
-    """Process period input as text message.
 
-    User entered period as text (e.g., "30м", "2ч", "14:30 — 15:30").
-    Parse the period and proceed to category selection.
+@router.callback_query(ActivityStates.waiting_for_period, F.data.startswith("period_"))
+@with_typing_action
+async def quick_period_selection(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
+    """Handle quick period selection (15m, 30m, 1h, etc).
+
+    User selected a predefined period - calculate start and end times,
+    then move to category selection.
     """
-    logger.debug(
-        "Processing period text input",
-        extra={
-            "user_id": message.from_user.id,
-            "input_text": message.text
-        }
+    period = callback.data.replace("period_", "")
+    telegram_id = callback.from_user.id
+
+    # Defensive: Ensure trigger_source is set (should be "manual")
+    data = await state.get_data()
+    if "trigger_source" not in data:
+        await state.update_data(trigger_source="manual")
+
+    # Parse period and calculate times
+    now = datetime.now(timezone.utc)
+
+    period_map = {
+        "15m": timedelta(minutes=15),
+        "30m": timedelta(minutes=30),
+        "1h": timedelta(hours=1),
+        "3h": timedelta(hours=3),
+        "8h": timedelta(hours=8),
+        "12h": timedelta(hours=12),
+    }
+
+    delta = period_map.get(period)
+    if not delta:
+        await callback.answer("⚠️ Неверный период")
+        return
+
+    end_time = now
+    start_time = now - delta
+
+    # Get user
+    user = await services.user.get_by_telegram_id(telegram_id)
+    if not user:
+        await callback.message.answer(
+            "⚠️ Пользователь не найден.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        await callback.answer()
+        return
+
+    # Store times and user_id
+    await state.update_data(
+        start_time=start_time.isoformat(),
+        end_time=end_time.isoformat(),
+        user_id=user["id"]
     )
 
+    # Move to category selection
+    await state.set_state(ActivityStates.waiting_for_category)
+
+    # Schedule FSM timeout
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+            user_id=telegram_id,
+            state=ActivityStates.waiting_for_category,
+            bot=callback.bot
+        )
+
+    # Get categories
+    categories = await services.category.get_user_categories(user["id"])
+
+    if not categories:
+        await callback.message.answer(
+            "⚠️ У тебя нет категорий. Сначала создай категорию.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        await callback.answer()
+        return
+
+    # Format time and duration
+    start_time_str = format_time(start_time)
+    end_time_str = format_time(end_time)
+    duration_minutes = int(delta.total_seconds() / 60)
+    duration_str = format_duration(duration_minutes)
+
+    # Build category selection message
+    text = get_category_selection_message(
+        source="manual",
+        start_time=start_time_str,
+        end_time=end_time_str,
+        duration=duration_str,
+        add_motivation=False
+    )
+
+    await callback.message.answer(
+        text,
+        reply_markup=get_poll_category_keyboard(categories)
+    )
+    await callback.answer()
+
+
+@router.message(ActivityStates.waiting_for_period)
+@with_typing_action
+async def process_period_input(message: types.Message, state: FSMContext, services: ServiceContainer):
+    """Handle custom period input (text message).
+
+    User typed a custom period instead of using quick buttons.
+    Parse the input and move to category selection.
+    """
+    # This is a placeholder - in the future we can add text parsing for custom periods
+    # For now, just show a helpful message
+    telegram_id = message.from_user.id
+
+    # Defensive: Ensure trigger_source is set (should be "manual")
+    data = await state.get_data()
+    if "trigger_source" not in data:
+        await state.update_data(trigger_source="manual")
+
+    await message.answer(
+        "⚠️ Используй кнопки для выбора периода.",
+        reply_markup=get_period_keyboard_with_auto()
+    )
+
+
+@router.callback_query(ActivityStates.waiting_for_category, F.data.startswith("poll_category_"))
+@router.callback_query(ActivityStates.waiting_for_category, F.data.startswith("activity_category_"))
+@with_typing_action
+async def process_category_callback(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    services: ServiceContainer
+):
+    """Handle category selection - SHARED by manual and automatic flows.
+
+    This handler works for both manual activity recording and automatic
+    poll responses. Flow differentiation is done via trigger_source in state.
+
+    Callback data formats:
+        - poll_category_{id} - from automatic polls
+        - activity_category_{id} - from manual recording
+
+    Flow:
+        Category selected -> Fetch recent activities -> Description prompt
+    """
+    telegram_id = callback.from_user.id
+    callback_data = callback.data
+
+    # Parse category ID from both callback formats
+    if callback_data.startswith("poll_category_"):
+        category_id = int(callback_data.replace("poll_category_", ""))
+    elif callback_data.startswith("activity_category_"):
+        category_id = int(callback_data.replace("activity_category_", ""))
+    else:
+        await callback.answer("⚠️ Неверный формат данных")
+        return
+
     try:
-        # Parse period to get start_time and end_time
-        start_time, end_time = parse_period(message.text)
+        # Get data from state
+        data = await state.get_data()
+        user_id = data.get("user_id")
+        start_time_str = data.get("start_time")
+        end_time_str = data.get("end_time")
+        trigger_source = data.get("trigger_source", "manual")
 
-        logger.debug(
-            "Period parsed successfully",
-            extra={
-                "user_id": message.from_user.id,
-                "start_time": start_time.isoformat(),
-                "end_time": end_time.isoformat(),
-                "input_text": message.text
-            }
-        )
+        # Validate required data
+        if not all([user_id, start_time_str, end_time_str]):
+            logger.warning(
+                "Missing required data for category selection",
+                extra={
+                    "has_user_id": user_id is not None,
+                    "has_start_time": start_time_str is not None,
+                    "has_end_time": end_time_str is not None
+                }
+            )
+            await callback.message.answer(
+                "⚠️ Недостаточно данных. Начни заново.",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await state.clear()
+            await callback.answer()
+            return
 
-        # Save to FSM
-        await state.update_data(
-            start_time=start_time.isoformat(),
-            end_time=end_time.isoformat()
-        )
-        await state.set_state(ActivityStates.waiting_for_category)
+        # Parse times
+        start_time = datetime.fromisoformat(start_time_str)
+        end_time = datetime.fromisoformat(end_time_str)
+
+        # Store category_id in state
+        await state.update_data(category_id=category_id)
+
+        # Move to description input
+        await state.set_state(ActivityStates.waiting_for_description)
 
         # Schedule FSM timeout
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-                user_id=message.from_user.id,
-                state=ActivityStates.waiting_for_category,
-                bot=message.bot
+                user_id=telegram_id,
+                state=ActivityStates.waiting_for_description,
+                bot=callback.bot
             )
 
-        # Get user's categories
-        telegram_id = message.from_user.id
+        # Use shared function to build description prompt
+        from src.api.handlers.activity.shared import fetch_and_build_description_prompt
 
-        try:
-            user = await services.user.get_by_telegram_id(telegram_id)
-            if not user:
-                await message.answer(
-                    "⚠️ Пользователь не найден.",
-                    reply_markup=get_main_menu_keyboard()
-                )
-                await state.clear()
-                return
-
-            categories = await services.category.get_user_categories(user["id"])
-
-            if not categories:
-                await message.answer(
-                    "⚠️ У тебя нет категорий. Создай категорию в настройках.",
-                    reply_markup=get_main_menu_keyboard()
-                )
-                await state.clear()
-                return
-
-            # Store user_id for later
-            await state.update_data(user_id=user["id"])
-
-            start_time_str = format_time(start_time)
-            end_time_str = format_time(end_time)
-            duration_minutes = int((end_time - start_time).total_seconds() / 60)
-            duration_str = format_duration(duration_minutes)
-
-            text = get_category_selection_message(
-                source="manual",
-                start_time=start_time_str,
-                end_time=end_time_str,
-                duration=duration_str,
-                add_motivation=True
-            )
-
-            await message.answer(
-                text,
-                reply_markup=get_poll_category_keyboard(categories, cancel_callback="activity_cancel_category")
-            )
-
-        except Exception as e:
-            logger.error(f"Error in process_period_input: {e}")
-            await message.answer(
-                "⚠️ Произошла ошибка.",
-                reply_markup=get_main_menu_keyboard()
-            )
-            await state.clear()
-
-    except ValueError as e:
-        await message.answer(
-            f"⚠️ Не могу распознать период. {str(e)}\n\nПопробуй ещё раз.",
-            reply_markup=get_period_keyboard()
+        text, keyboard = await fetch_and_build_description_prompt(
+            services=services,
+            user_id=user_id,
+            category_id=category_id,
+            start_time=start_time,
+            end_time=end_time,
+            limit=20
         )
+
+        logger.info(
+            "Category selected, prompting for description",
+            extra={
+                "user_id": user_id,
+                "category_id": category_id,
+                "trigger_source": trigger_source,
+                "has_suggestions": keyboard is not None
+            }
+        )
+
+        # Send description prompt
+        await callback.message.answer(text, reply_markup=keyboard)
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(
+            "Error processing category selection",
+            extra={
+                "telegram_user_id": telegram_id,
+                "error": str(e)
+            },
+            exc_info=True
+        )
+        await callback.message.answer(
+            "⚠️ Ошибка при обработке категории.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        await callback.answer()
 
 
 @router.callback_query(ActivityStates.waiting_for_description, F.data.startswith("activity_desc_"))
 @with_typing_action
-async def select_recent_activity(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
-    """Handle selection of recent activity from inline buttons.
+async def select_recent_activity(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    services: ServiceContainer
+):
+    """Handle selection of recent activity - SHARED by manual and automatic flows.
 
     User clicked on one of the recent activity buttons - use that description
-    to save the activity.
+    to save the activity. This handler works for both flows.
+
+    Flow:
+        Recent activity clicked -> Extract description -> Save activity
     """
+    telegram_id = callback.from_user.id
+
     # Extract activity_id from callback data
     activity_id_str = callback.data.replace("activity_desc_", "")
 
@@ -351,31 +480,31 @@ async def select_recent_activity(callback: types.CallbackQuery, state: FSMContex
         await callback.answer()
         return
 
-    # Get all data from state
-    data = await state.get_data()
-    user_id = data.get("user_id")
-    category_id = data.get("category_id")
-
-    # Fetch the selected activity to get its description
     try:
-        # We need to fetch the activity by ID to get its full description
-        # For now, we'll ask the user to use get_user_activities and find it
-        # But a better approach would be to store descriptions in callback_data or state
+        # Get data from state
+        data = await state.get_data()
+        user_id = data.get("user_id")
+        category_id = data.get("category_id")
+        trigger_source = data.get("trigger_source", "manual")
 
-        # Get recent activities again to find the description
+        # Fetch the selected activity to get its description
         if category_id:
             response = await services.activity.get_user_activities_by_category(
                 user_id=user_id,
                 category_id=category_id,
-                limit=10
+                limit=20
             )
         else:
             response = await services.activity.get_user_activities(
                 user_id=user_id,
-                limit=10
+                limit=20
             )
 
-        recent_activities = response.get("activities", []) if isinstance(response, dict) else response
+        recent_activities = (
+            response.get("activities", [])
+            if isinstance(response, dict)
+            else response
+        )
 
         # Find the activity with matching ID
         selected_activity = next(
@@ -391,165 +520,138 @@ async def select_recent_activity(callback: types.CallbackQuery, state: FSMContex
         description = selected_activity.get("description", "")
         tags = extract_tags(description)
 
-        # Save activity with selected description
-        await save_activity(
-            callback.message, state, user_id, category_id, callback.from_user.id, services, description, tags
+        logger.info(
+            "Recent activity selected",
+            extra={
+                "user_id": user_id,
+                "activity_id": activity_id,
+                "trigger_source": trigger_source,
+                "description_length": len(description)
+            }
         )
+
+        # Create post-save callback if this is automatic flow
+        post_save_callback = None
+        if trigger_source == "automatic":
+            post_save_callback = _create_poll_scheduling_callback(
+                telegram_id, callback.bot, services
+            )
+
+        # Use shared function to save activity
+        from src.api.handlers.activity.shared import create_and_save_activity
+
+        await create_and_save_activity(
+            message=callback.message,
+            state=state,
+            services=services,
+            telegram_user_id=telegram_id,
+            description=description,
+            tags=tags,
+            post_save_callback=post_save_callback
+        )
+
         await callback.answer()
 
     except Exception as e:
-        logger.error(f"Error selecting recent activity: {e}")
+        logger.error(
+            "Error selecting recent activity",
+            extra={
+                "telegram_user_id": telegram_id,
+                "error": str(e)
+            },
+            exc_info=True
+        )
         await callback.message.answer(
             "⚠️ Ошибка при сохранении активности.",
             reply_markup=get_main_menu_keyboard()
         )
+        await state.clear()
         await callback.answer()
 
 
 @router.message(ActivityStates.waiting_for_description)
-async def process_description(message: types.Message, state: FSMContext, services: ServiceContainer):
-    """Process activity description (text message).
+@with_typing_action
+async def process_description(
+    message: types.Message,
+    state: FSMContext,
+    services: ServiceContainer
+):
+    """Process activity description - SHARED by manual and automatic flows.
 
-    Description is entered as text - save activity with all collected data.
+    User entered activity description as text. Validate it and save the activity.
+    This handler works for both manual and automatic flows.
+
+    Flow:
+        Description entered -> Validate -> Extract tags -> Save activity
     """
+    telegram_id = message.from_user.id
     description = message.text.strip()
 
-    if not description or len(description) < 3:
-        await message.answer("⚠️ Описание должно содержать минимум 3 символа. Попробуй ещё раз.")
+    # Validate description using shared function
+    from src.api.handlers.activity.shared import validate_description
+
+    is_valid, error_msg = validate_description(description, min_length=3)
+    if not is_valid:
+        await message.answer(error_msg)
         return
 
     # Extract tags from description
     tags = extract_tags(description)
 
-    # Get all data from state
+    # Get trigger source to determine if we need post-save callback
     data = await state.get_data()
-    user_id = data.get("user_id")
-    category_id = data.get("category_id")
+    trigger_source = data.get("trigger_source", "manual")
 
-    # Save activity
-    await save_activity(
-        message, state, user_id, category_id, message.from_user.id, services, description, tags
+    logger.info(
+        "Description entered",
+        extra={
+            "telegram_user_id": telegram_id,
+            "trigger_source": trigger_source,
+            "description_length": len(description),
+            "tags_count": len(tags)
+        }
+    )
+
+    # Create post-save callback if this is automatic flow
+    post_save_callback = None
+    if trigger_source == "automatic":
+        post_save_callback = _create_poll_scheduling_callback(
+            telegram_id, message.bot, services
+        )
+
+    # Use shared function to save activity
+    from src.api.handlers.activity.shared import create_and_save_activity
+
+    await create_and_save_activity(
+        message=message,
+        state=state,
+        services=services,
+        telegram_user_id=telegram_id,
+        description=description,
+        tags=tags,
+        post_save_callback=post_save_callback
     )
 
 
-@router.callback_query(ActivityStates.waiting_for_category, F.data.startswith("poll_category_"))
-@with_typing_action
-async def process_category_callback(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
-    """Process category selection via inline button.
+@router.callback_query(F.data == "cancel")
+async def handle_cancel(callback: types.CallbackQuery, state: FSMContext):
+    """Handle cancel button in any state."""
+    telegram_id = callback.from_user.id
 
-    User selected category from inline keyboard. Now fetch recent activities
-    for this category and show them as inline buttons for description input.
-    """
-    category_id = int(callback.data.split("_")[-1])
-
-    data = await state.get_data()
-    user_id = data.get("user_id")
-    start_time_str = data.get("start_time")
-    end_time_str = data.get("end_time")
-
-    if not all([user_id, start_time_str, end_time_str]):
-        await callback.message.answer(
-            "⚠️ Ошибка: недостаточно данных. Попробуй ещё раз.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        await state.clear()
-        await callback.answer()
-        return
-
-    # Save selected category_id to state
-    await state.update_data(category_id=category_id)
-    await state.set_state(ActivityStates.waiting_for_description)
-
-    # Schedule FSM timeout
-    if fsm_timeout_module.fsm_timeout_service:
-        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
-            user_id=callback.from_user.id,
-            state=ActivityStates.waiting_for_description,
-            bot=callback.bot
-        )
-
-    # Get recent activities filtered by selected category
-    try:
-        response = await services.activity.get_user_activities_by_category(
-            user_id=user_id,
-            category_id=category_id,
-            limit=20
-        )
-        recent_activities = response.get("activities", []) if isinstance(response, dict) else response
-
-        start_time = datetime.fromisoformat(start_time_str)
-        end_time = datetime.fromisoformat(end_time_str)
-        start_time_str_fmt = format_time(start_time)
-        end_time_str_fmt = format_time(end_time)
-        duration_minutes = int((end_time - start_time).total_seconds() / 60)
-        duration_str = format_duration(duration_minutes)
-
-        text = (
-            f"✏️ Опиши активность\n\n"
-            f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
-        )
-
-        if recent_activities:
-            text += "Выбери из последних или напиши своё (минимум 3 символа).\nМожешь добавить теги через #хештег"
-            keyboard = get_recent_activities_keyboard(recent_activities)
-        else:
-            text += "Напиши, чем ты занимался (минимум 3 символа).\nМожешь добавить теги через #хештег"
-            keyboard = None
-
-        await callback.message.answer(text, reply_markup=keyboard)
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(f"Error fetching recent activities: {e}")
-        # Fallback: just ask for description without suggestions
-        start_time = datetime.fromisoformat(start_time_str)
-        end_time = datetime.fromisoformat(end_time_str)
-        start_time_str_fmt = format_time(start_time)
-        end_time_str_fmt = format_time(end_time)
-        duration_minutes = int((end_time - start_time).total_seconds() / 60)
-        duration_str = format_duration(duration_minutes)
-
-        text = (
-            f"✏️ Опиши активность\n\n"
-            f"⏰ {start_time_str_fmt} — {end_time_str_fmt} ({duration_str})\n\n"
-            f"Напиши, чем ты занимался (минимум 3 символа).\n"
-            f"Можешь добавить теги через #хештег"
-        )
-
-        await callback.message.answer(text)
-        await callback.answer()
-
-
-@router.callback_query(ActivityStates.waiting_for_category, F.data == "activity_cancel_category")
-@with_typing_action
-async def cancel_category_selection(callback: types.CallbackQuery, state: FSMContext):
-    """Handle cancel button in category selection.
-
-    User clicked cancel button - clear state and return to main menu.
-    Note: Uses 'activity_cancel_category' instead of 'poll_cancel' to avoid
-    conflicts with poll handler which uses the same callback_data but different state.
-    """
     await state.clear()
+
+    # Cancel FSM timeout
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
     await callback.message.answer(
-        "❌ Запись активности отменена.",
+        "❌ Отменено.",
         reply_markup=get_main_menu_keyboard()
     )
     await callback.answer()
 
 
-@router.message(ActivityStates.waiting_for_category)
-async def process_category(message: types.Message, state: FSMContext, services: ServiceContainer):
-    """Process category selection (text message).
-
-    Fallback text handler - reminds user to use inline buttons.
-    Main selection should be done via inline buttons.
-    """
-    # Ignore text input - user should use inline buttons
-    await message.answer(
-        "⚠️ Пожалуйста, используй кнопки для выбора категории."
-    )
-
-
+# Old save_activity function - kept for reference, will be removed after testing
 async def save_activity(
     message: types.Message,
     state: FSMContext,
@@ -629,3 +731,64 @@ async def save_activity(
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_user_id)
 
+
+# Helper functions
+
+def _create_poll_scheduling_callback(
+    telegram_id: int,
+    bot: Bot,
+    services: ServiceContainer
+) -> Callable[[dict], Awaitable[None]]:
+    """Create post-save callback for scheduling next poll.
+
+    Returns an async callback function that schedules the next automatic poll
+    after activity is saved. Used only for automatic poll flow.
+
+    Args:
+        telegram_id: Telegram user ID
+        bot: Bot instance for scheduling
+        services: Service container with scheduler access
+
+    Returns:
+        Async callback function that takes state_data dict
+
+    Example:
+        >>> callback = _create_poll_scheduling_callback(123, bot, services)
+        >>> await create_and_save_activity(..., post_save_callback=callback)
+    """
+    async def schedule_next_poll(state_data: dict) -> None:
+        """Schedule next poll after activity save.
+
+        Args:
+            state_data: FSM state data containing settings and user_timezone
+        """
+        try:
+            from src.api.handlers.poll.poll_sender import send_automatic_poll
+
+            settings = state_data.get("settings", {})
+            user_timezone = state_data.get("user_timezone", "Europe/Moscow")
+
+            await services.scheduler.schedule_poll(
+                user_id=telegram_id,
+                settings=settings,
+                user_timezone=user_timezone,
+                send_poll_callback=send_automatic_poll,
+                bot=bot
+            )
+
+            logger.debug(
+                "Scheduled next poll after activity save",
+                extra={"telegram_user_id": telegram_id}
+            )
+
+        except Exception as e:
+            logger.error(
+                "Error scheduling next poll in post-save callback",
+                extra={
+                    "telegram_user_id": telegram_id,
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+
+    return schedule_next_poll
