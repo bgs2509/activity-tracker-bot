@@ -58,7 +58,7 @@ services:
       dockerfile: services/tracker_activity_bot/Dockerfile
     container_name: tracker_activity_bot
     environment:
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-DUMMY-TEST-TOKEN}
       DATA_API_URL: http://data_postgres_api:8000
       REDIS_URL: redis://redis:6379/0
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
