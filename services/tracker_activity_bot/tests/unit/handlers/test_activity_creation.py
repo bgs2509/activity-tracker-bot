@@ -61,10 +61,13 @@ def mock_callback():
     callback.from_user.id = 123456789
     callback.from_user.username = "testuser"
     callback.message = MagicMock(spec=types.Message)
+    callback.message.chat = MagicMock(spec=types.Chat)
+    callback.message.chat.id = 123456789
     callback.message.answer = AsyncMock()
     callback.message.edit_text = AsyncMock()
     callback.answer = AsyncMock()
     callback.bot = MagicMock()
+    callback.bot.send_chat_action = AsyncMock()
     callback.data = ""
     return callback
 
@@ -75,8 +78,11 @@ def mock_message():
     message = MagicMock(spec=types.Message)
     message.from_user = MagicMock(spec=types.User)
     message.from_user.id = 123456789
+    message.chat = MagicMock(spec=types.Chat)
+    message.chat.id = 123456789
     message.answer = AsyncMock()
     message.bot = MagicMock()
+    message.bot.send_chat_action = AsyncMock()
     message.text = "Test message"
     return message
 
@@ -176,7 +182,7 @@ class TestStartAddActivity:
               AND timeout is scheduled
         """
         # Arrange
-        with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout') as mock_timeout:
+        with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module') as mock_timeout:
             with patch('src.api.handlers.activity.activity_creation.get_period_keyboard_with_auto') as mock_kb:
                 mock_kb.return_value = MagicMock()
 
@@ -260,7 +266,7 @@ class TestAutoCalculatePeriod:
             end_time = datetime(2025, 11, 11, 11, 0, tzinfo=timezone.utc)
             mock_calc.return_value = (start_time, end_time)
 
-            with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
                 with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format_time:
                     mock_format_time.side_effect = ["10:00", "11:00"]
                     with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format_dur:
@@ -313,7 +319,7 @@ class TestAutoCalculatePeriod:
             with patch('src.api.handlers.activity.activity_creation.fetch_and_build_description_prompt') as mock_fetch:
                 mock_fetch.return_value = ("Test prompt", None)
 
-                with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+                with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
                     # Act
                     await auto_calculate_period(mock_callback, mock_state, mock_services)
 
@@ -384,7 +390,7 @@ class TestQuickPeriodSelection:
             mock_dt.now.return_value = now
             mock_dt.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
-            with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
                 with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format_time:
                     mock_format_time.side_effect = ["11:45", "12:00"]
                     with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format_dur:
@@ -428,7 +434,7 @@ class TestQuickPeriodSelection:
             mock_dt.now.return_value = now
             mock_dt.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
-            with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+            with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
                 with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format_time:
                     mock_format_time.side_effect = ["12:00", "15:00"]
                     with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format_dur:
@@ -503,7 +509,7 @@ class TestProcessPeriodInput:
                 mock_dt.now.return_value = now
                 mock_dt.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
-                with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+                with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
                     with patch('src.api.handlers.activity.activity_creation.format_time') as mock_format_time:
                         mock_format_time.side_effect = ["10:15", "11:00"]
                         with patch('src.api.handlers.activity.activity_creation.format_duration') as mock_format_dur:
@@ -653,7 +659,7 @@ class TestProcessCategoryCallback:
             with patch('src.api.handlers.activity.activity_creation.fetch_and_build_description_prompt') as mock_fetch:
                 mock_fetch.return_value = ("Enter description", None)
 
-                with patch('src.api.handlers.activity.activity_creation.schedule_fsm_timeout'):
+                with patch('src.api.handlers.activity.activity_creation.fsm_timeout_module'):
                     # Act
                     await process_category_callback(mock_callback, mock_state, mock_services)
 
