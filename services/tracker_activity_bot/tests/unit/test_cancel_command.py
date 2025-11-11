@@ -6,7 +6,7 @@ This test suite ensures users can cancel any active FSM state
 using the /cancel command across all bot handlers.
 """
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from aiogram import types, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -17,12 +17,13 @@ from src.api.handlers.categories.category_creation import cancel_category_fsm
 from src.api.states.settings import SettingsStates
 from src.api.states.activity import ActivityStates
 from src.api.states.category import CategoryStates
+from src.api.dependencies import ServiceContainer
 
 
 @pytest.fixture
 def bot():
     """Provide mock bot instance."""
-    bot = Bot(token="TEST_TOKEN")
+    bot = Bot(token="123456789:ABCdefGHIjklMNOpqrsTUVwxyz123456789")
     bot.session = AsyncMock()
     return bot
 
@@ -40,19 +41,32 @@ async def state():
 def message(bot):
     """Factory for creating mock Message objects."""
     def _make(text: str = "/cancel", user_id: int = 123):
-        user = types.User(id=user_id, is_bot=False, first_name="Test")
-        chat = types.Chat(id=user_id, type="private")
-        msg = types.Message(
-            message_id=1,
-            date=1234567890,
-            chat=chat,
-            from_user=user,
-            text=text,
-            bot=bot
-        )
-        msg.answer = AsyncMock()
-        return msg
+        message = MagicMock(spec=types.Message)
+        message.from_user = MagicMock(spec=types.User)
+        message.from_user.id = user_id
+        message.from_user.is_bot = False
+        message.from_user.first_name = "Test"
+        message.chat = MagicMock(spec=types.Chat)
+        message.chat.id = user_id
+        message.chat.type = "private"
+        message.text = text
+        message.message_id = 1
+        message.date = 1234567890
+        message.bot = bot
+        message.answer = AsyncMock()
+        return message
     return _make
+
+
+@pytest.fixture
+def services():
+    """Provide mock ServiceContainer."""
+    services = MagicMock(spec=ServiceContainer)
+    services.user = AsyncMock()
+    services.category = AsyncMock()
+    services.settings = AsyncMock()
+    services.scheduler = AsyncMock()
+    return services
 
 
 class TestCancelSettingsFSM:
@@ -60,12 +74,12 @@ class TestCancelSettingsFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_weekday_interval_custom(self, message, state):
+    async def test_cancel_weekday_interval_custom(self, message, state, services):
         """Test /cancel clears weekday interval custom input FSM."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
         msg = message()
-        await cancel_settings_fsm(msg, state)
+        await cancel_settings_fsm(msg, state, services)
 
         # Verify FSM cleared
         assert await state.get_state() is None
@@ -76,12 +90,12 @@ class TestCancelSettingsFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_weekend_interval_custom(self, message, state):
+    async def test_cancel_weekend_interval_custom(self, message, state, services):
         """Test /cancel clears weekend interval custom input FSM."""
         await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
 
         msg = message()
-        await cancel_settings_fsm(msg, state)
+        await cancel_settings_fsm(msg, state, services)
 
         assert await state.get_state() is None
         call_text = msg.answer.call_args[0][0]
@@ -89,13 +103,13 @@ class TestCancelSettingsFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_when_no_active_fsm(self, message, state):
+    async def test_cancel_when_no_active_fsm(self, message, state, services):
         """Test /cancel when no active FSM state."""
         # No FSM state set
         assert await state.get_state() is None
 
         msg = message()
-        await cancel_settings_fsm(msg, state)
+        await cancel_settings_fsm(msg, state, services)
 
         # Should show "nothing to cancel" message
         call_text = msg.answer.call_args[0][0]
@@ -107,12 +121,12 @@ class TestCancelActivityFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_activity_waiting_for_description(self, message, state):
+    async def test_cancel_activity_waiting_for_description(self, message, state, services):
         """Test /cancel during description input."""
         await state.set_state(ActivityStates.waiting_for_description)
 
         msg = message()
-        await cancel_activity_fsm(msg, state)
+        await cancel_activity_fsm(msg, state, services)
 
         # FSM cleared
         assert await state.get_state() is None
@@ -123,12 +137,12 @@ class TestCancelActivityFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_activity_waiting_for_category(self, message, state):
+    async def test_cancel_activity_waiting_for_category(self, message, state, services):
         """Test /cancel during category selection."""
         await state.set_state(ActivityStates.waiting_for_category)
 
         msg = message()
-        await cancel_activity_fsm(msg, state)
+        await cancel_activity_fsm(msg, state, services)
 
         assert await state.get_state() is None
         call_text = msg.answer.call_args[0][0]
@@ -136,24 +150,24 @@ class TestCancelActivityFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_activity_waiting_for_time(self, message, state):
+    async def test_cancel_activity_waiting_for_time(self, message, state, services):
         """Test /cancel during time input."""
         await state.set_state(ActivityStates.waiting_for_start_time)
 
         msg = message()
-        await cancel_activity_fsm(msg, state)
+        await cancel_activity_fsm(msg, state, services)
 
         assert await state.get_state() is None
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_activity_when_not_recording(self, message, state):
+    async def test_cancel_activity_when_not_recording(self, message, state, services):
         """Test /cancel when not recording activity."""
         # No activity FSM state
         assert await state.get_state() is None
 
         msg = message()
-        await cancel_activity_fsm(msg, state)
+        await cancel_activity_fsm(msg, state, services)
 
         # Should show "nothing to cancel"
         call_text = msg.answer.call_args[0][0]
@@ -165,12 +179,12 @@ class TestCancelCategoryFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_category_waiting_for_name(self, message, state):
+    async def test_cancel_category_waiting_for_name(self, message, state, services):
         """Test /cancel during category name input."""
         await state.set_state(CategoryStates.waiting_for_name)
 
         msg = message()
-        await cancel_category_fsm(msg, state)
+        await cancel_category_fsm(msg, state, services)
 
         # FSM cleared
         assert await state.get_state() is None
@@ -181,12 +195,12 @@ class TestCancelCategoryFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_category_waiting_for_emoji(self, message, state):
+    async def test_cancel_category_waiting_for_emoji(self, message, state, services):
         """Test /cancel during emoji input."""
         await state.set_state(CategoryStates.waiting_for_emoji)
 
         msg = message()
-        await cancel_category_fsm(msg, state)
+        await cancel_category_fsm(msg, state, services)
 
         assert await state.get_state() is None
         call_text = msg.answer.call_args[0][0]
@@ -194,13 +208,13 @@ class TestCancelCategoryFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_category_when_not_creating(self, message, state):
+    async def test_cancel_category_when_not_creating(self, message, state, services):
         """Test /cancel when not creating category."""
         # No category FSM state
         assert await state.get_state() is None
 
         msg = message()
-        await cancel_category_fsm(msg, state)
+        await cancel_category_fsm(msg, state, services)
 
         # Should show "nothing to cancel"
         call_text = msg.answer.call_args[0][0]
@@ -212,13 +226,13 @@ class TestCancelCrossFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_settings_doesnt_clear_activity_fsm(self, message, state):
+    async def test_cancel_settings_doesnt_clear_activity_fsm(self, message, state, services):
         """Test settings cancel doesn't clear activity FSM (isolation)."""
         # Set activity FSM state
         await state.set_state(ActivityStates.waiting_for_category)
 
         msg = message()
-        await cancel_settings_fsm(msg, state)
+        await cancel_settings_fsm(msg, state, services)
 
         # Activity FSM should still be active
         # (This test assumes handlers check their own FSM namespace)

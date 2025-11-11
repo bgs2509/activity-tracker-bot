@@ -1,7 +1,120 @@
-"""Time parsing utilities."""
+"""Time parsing utilities.
+
+This module provides functions to parse user time input in various formats
+(relative times, exact times, durations, periods) and convert them to UTC datetimes.
+
+Supported Patterns:
+    EXACT_TIME_PATTERN: Matches "14:30", "14-30" (exact time)
+    MINUTES_PATTERN: Matches "30", "30м", "30min" (minutes)
+    HOURS_PATTERN: Matches "2", "2ч", "2h", "2час" (hours)
+    NOW_KEYWORDS: Keywords for current time ("сейчас", "now", "0")
+"""
 import re
 from datetime import datetime, timedelta
 import pytz
+
+# ============================================================================
+# Regex Patterns (DRY)
+# ============================================================================
+
+# Exact time formats: "14:30", "14-30"
+EXACT_TIME_PATTERN = re.compile(r"^(\d{1,2})[-:](\d{2})$")
+
+# Minutes formats: "30", "30м", "30min"
+MINUTES_PATTERN = re.compile(r"^(\d+)(м|min)?$")
+
+# Hours formats: "2", "2ч", "2h", "2час"
+HOURS_PATTERN = re.compile(r"^(\d+)(ч|h|час)$")
+
+# Period pattern: "14:30 — 15:30", "14:30-15:30", "14:30 - 15:30"
+PERIOD_PATTERN = re.compile(r"^(\d{1,2})[-:](\d{2})\s*[—\-]\s*(\d{1,2})[-:](\d{2})$")
+
+# Keywords for "now"
+NOW_KEYWORDS = ["сейчас", "now", "0"]
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def _parse_minutes(time_str: str) -> int | None:
+    """
+    Extract minutes from string using MINUTES_PATTERN.
+
+    Args:
+        time_str: String like "30", "30м", "30min"
+
+    Returns:
+        Integer minutes or None if no match
+
+    Example:
+        >>> _parse_minutes("30м")
+        30
+        >>> _parse_minutes("45min")
+        45
+    """
+    match = MINUTES_PATTERN.match(time_str.lower())
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _parse_hours(time_str: str) -> int | None:
+    """
+    Extract hours from string using HOURS_PATTERN.
+
+    Args:
+        time_str: String like "2", "2ч", "2h", "2час"
+
+    Returns:
+        Integer hours or None if no match
+
+    Example:
+        >>> _parse_hours("2ч")
+        2
+        >>> _parse_hours("3h")
+        3
+    """
+    match = HOURS_PATTERN.match(time_str.lower())
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _parse_exact_time(time_str: str) -> tuple[int, int] | None:
+    """
+    Extract hour and minute from exact time string.
+
+    Args:
+        time_str: String like "14:30", "14-30"
+
+    Returns:
+        Tuple of (hour, minute) or None if no match
+
+    Raises:
+        ValueError: If hour/minute values are out of valid range
+
+    Example:
+        >>> _parse_exact_time("14:30")
+        (14, 30)
+        >>> _parse_exact_time("25:00")
+        ValueError: Invalid time format: hour must be 0-23, minute 0-59
+    """
+    match = EXACT_TIME_PATTERN.match(time_str)
+    if match:
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError("Invalid time format: hour must be 0-23, minute 0-59")
+
+        return hour, minute
+    return None
+
+
+# ============================================================================
+# Public API
+# ============================================================================
 
 
 def parse_time_input(
@@ -38,33 +151,26 @@ def parse_time_input(
     else:
         now = datetime.now(tz)
 
-    # Pattern 1: "сейчас", "now", "0" → current time
-    if time_str in ["сейчас", "now", "0"]:
+    # Pattern 1: Keywords for current time
+    if time_str in NOW_KEYWORDS:
         return now.astimezone(pytz.UTC)
 
     # Pattern 2: Exact time "14:30" or "14-30"
-    exact_time_match = re.match(r"^(\d{1,2})[-:](\d{2})$", time_str)
-    if exact_time_match:
-        hour = int(exact_time_match.group(1))
-        minute = int(exact_time_match.group(2))
-
-        if not (0 <= hour <= 23 and 0 <= minute <= 59):
-            raise ValueError("Invalid time format: hour must be 0-23, minute 0-59")
-
+    exact_time = _parse_exact_time(time_str)
+    if exact_time:
+        hour, minute = exact_time
         result_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         return result_time.astimezone(pytz.UTC)
 
     # Pattern 3: Minutes ago "30м", "30", "30min"
-    minutes_match = re.match(r"^(\d+)(м|min)?$", time_str)
-    if minutes_match:
-        minutes = int(minutes_match.group(1))
+    minutes = _parse_minutes(time_str)
+    if minutes is not None:
         result_time = now - timedelta(minutes=minutes)
         return result_time.astimezone(pytz.UTC)
 
     # Pattern 4: Hours ago "2ч", "2h", "2час"
-    hours_match = re.match(r"^(\d+)(ч|h|час)$", time_str)
-    if hours_match:
-        hours = int(hours_match.group(1))
+    hours = _parse_hours(time_str)
+    if hours is not None:
         result_time = now - timedelta(hours=hours)
         return result_time.astimezone(pytz.UTC)
 
@@ -95,33 +201,26 @@ def parse_duration(
     tz = pytz.timezone(timezone)
     start_local = start_time.astimezone(tz)
 
-    # Pattern 1: "сейчас", "now" → current time
-    if duration_str in ["сейчас", "now", "0"]:
+    # Pattern 1: Keywords for current time
+    if duration_str in NOW_KEYWORDS:
         return datetime.now(tz).astimezone(pytz.UTC)
 
     # Pattern 2: Exact time "16:00"
-    exact_time_match = re.match(r"^(\d{1,2})[-:](\d{2})$", duration_str)
-    if exact_time_match:
-        hour = int(exact_time_match.group(1))
-        minute = int(exact_time_match.group(2))
-
-        if not (0 <= hour <= 23 and 0 <= minute <= 59):
-            raise ValueError("Invalid time format")
-
+    exact_time = _parse_exact_time(duration_str)
+    if exact_time:
+        hour, minute = exact_time
         end_time = start_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
         return end_time.astimezone(pytz.UTC)
 
     # Pattern 3: Minutes duration "30м", "30"
-    minutes_match = re.match(r"^(\d+)(м|min)?$", duration_str)
-    if minutes_match:
-        minutes = int(minutes_match.group(1))
+    minutes = _parse_minutes(duration_str)
+    if minutes is not None:
         end_time = start_local + timedelta(minutes=minutes)
         return end_time.astimezone(pytz.UTC)
 
     # Pattern 4: Hours duration "2ч", "2h"
-    hours_match = re.match(r"^(\d+)(ч|h|час)$", duration_str)
-    if hours_match:
-        hours = int(hours_match.group(1))
+    hours = _parse_hours(duration_str)
+    if hours is not None:
         end_time = start_local + timedelta(hours=hours)
         return end_time.astimezone(pytz.UTC)
 
@@ -164,27 +263,21 @@ def parse_period(
 
     # Pattern 1: Relative period "30м", "2ч", etc.
     # Minutes: "30м", "30", "30min"
-    minutes_match = re.match(r"^(\d+)(м|min)?$", period_str.lower())
-    if minutes_match:
-        minutes = int(minutes_match.group(1))
+    minutes = _parse_minutes(period_str)
+    if minutes is not None:
         start_time = now - timedelta(minutes=minutes)
         end_time = now
         return start_time.astimezone(pytz.UTC), end_time.astimezone(pytz.UTC)
 
     # Hours: "2ч", "2h", "2час"
-    hours_match = re.match(r"^(\d+)(ч|h|час)$", period_str.lower())
-    if hours_match:
-        hours = int(hours_match.group(1))
+    hours = _parse_hours(period_str)
+    if hours is not None:
         start_time = now - timedelta(hours=hours)
         end_time = now
         return start_time.astimezone(pytz.UTC), end_time.astimezone(pytz.UTC)
 
     # Pattern 2: Exact time period "14:30 — 15:30" or "14:30-15:30" or "14:30 - 15:30"
-    # Support different separators: —, -, space-dash-space
-    period_match = re.match(
-        r"^(\d{1,2})[-:](\d{2})\s*[—\-]\s*(\d{1,2})[-:](\d{2})$",
-        period_str
-    )
+    period_match = PERIOD_PATTERN.match(period_str)
     if period_match:
         start_hour = int(period_match.group(1))
         start_minute = int(period_match.group(2))

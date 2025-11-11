@@ -5,6 +5,8 @@ Contains keyboard builders, validators, and utility functions.
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+from src.application.utils.validators import validate_string_length
+
 
 def build_category_list_keyboard() -> InlineKeyboardMarkup:
     """Build keyboard for category list view.
@@ -200,13 +202,12 @@ def validate_category_name(name: str) -> str | None:
     Returns:
         Error message if invalid, None if valid
     """
-    if len(name) < 2:
-        return "⚠️ Название должно содержать минимум 2 символа. Попробуй ещё раз:"
-
-    if len(name) > 50:
-        return "⚠️ Название должно содержать максимум 50 символов. Попробуй ещё раз:"
-
-    return None
+    return validate_string_length(
+        value=name,
+        min_length=2,
+        max_length=50,
+        field_name_ru="Название"
+    )
 
 
 def validate_emoji(emoji: str | None) -> str | None:
@@ -218,7 +219,12 @@ def validate_emoji(emoji: str | None) -> str | None:
     Returns:
         Error message if invalid, None if valid
     """
-    if emoji and len(emoji) > 10:
-        return "⚠️ Эмодзи слишком длинный (максимум 10 символов). Попробуй ещё раз:"
+    if not emoji:
+        return None
 
-    return None
+    return validate_string_length(
+        value=emoji,
+        max_length=10,
+        field_name_ru="Эмодзи",
+        allow_empty=True
+    )

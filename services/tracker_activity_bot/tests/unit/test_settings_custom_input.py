@@ -5,7 +5,7 @@ Tests TASK 2: Custom time input for intervals and reminder delay.
 This test suite validates user input, updates settings, and reschedules polls.
 """
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from aiogram import types, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -18,12 +18,13 @@ from src.api.handlers.settings.reminder_settings import (
     process_reminder_delay_custom,
 )
 from src.api.states.settings import SettingsStates
+from src.api.dependencies import ServiceContainer
 
 
 @pytest.fixture
 def bot():
     """Provide mock bot instance."""
-    bot = Bot(token="TEST_TOKEN")
+    bot = Bot(token="123456789:ABCdefGHIjklMNOpqrsTUVwxyz123456789")
     bot.session = AsyncMock()
     return bot
 
@@ -41,19 +42,32 @@ async def state():
 def message(bot):
     """Factory for creating mock Message objects."""
     def _make(text: str, user_id: int = 123):
-        user = types.User(id=user_id, is_bot=False, first_name="Test")
-        chat = types.Chat(id=user_id, type="private")
-        msg = types.Message(
-            message_id=1,
-            date=1234567890,
-            chat=chat,
-            from_user=user,
-            text=text,
-            bot=bot
-        )
-        msg.answer = AsyncMock()
-        return msg
+        message = MagicMock(spec=types.Message)
+        message.from_user = MagicMock(spec=types.User)
+        message.from_user.id = user_id
+        message.from_user.is_bot = False
+        message.from_user.first_name = "Test"
+        message.chat = MagicMock(spec=types.Chat)
+        message.chat.id = user_id
+        message.chat.type = "private"
+        message.text = text
+        message.message_id = 1
+        message.date = 1234567890
+        message.bot = bot
+        message.answer = AsyncMock()
+        return message
     return _make
+
+
+@pytest.fixture
+def services():
+    """Provide mock ServiceContainer."""
+    services = MagicMock(spec=ServiceContainer)
+    services.user = AsyncMock()
+    services.category = AsyncMock()
+    services.settings = AsyncMock()
+    services.scheduler = AsyncMock()
+    return services
 
 
 class TestWeekdayCustomInput:
@@ -65,7 +79,7 @@ class TestWeekdayCustomInput:
     @patch('src.api.handlers.settings.UserSettingsService')
     @patch('src.api.handlers.settings.scheduler_service')
     async def test_valid_weekday_input(
-        self, mock_sched, mock_set, mock_user, message, state
+        self, mock_sched, mock_set, mock_user, message, state, services
     ):
         """Test valid weekday interval input updates settings and reschedules poll."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
@@ -81,7 +95,7 @@ class TestWeekdayCustomInput:
         mock_sched.schedule_poll = AsyncMock()
 
         msg = message("90")
-        await process_weekday_custom_input(msg, state)
+        await process_weekday_custom_input(msg, state, services)
 
         # Verify settings updated with correct value
         mock_set.return_value.update_settings.assert_called_once()
@@ -100,12 +114,12 @@ class TestWeekdayCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_weekday_input_too_low(self, message, state):
+    async def test_weekday_input_too_low(self, message, state, services):
         """Test validation rejects interval below minimum (5 minutes)."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
         msg = message("3")
-        await process_weekday_custom_input(msg, state)
+        await process_weekday_custom_input(msg, state, services)
 
         # FSM should NOT be cleared (allow retry)
         current_state = await state.get_state()
@@ -117,12 +131,12 @@ class TestWeekdayCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_weekday_input_too_high(self, message, state):
+    async def test_weekday_input_too_high(self, message, state, services):
         """Test validation rejects interval above maximum (480 minutes)."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
         msg = message("500")
-        await process_weekday_custom_input(msg, state)
+        await process_weekday_custom_input(msg, state, services)
 
         # FSM should NOT be cleared
         current_state = await state.get_state()
@@ -134,12 +148,12 @@ class TestWeekdayCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_weekday_input_not_a_number(self, message, state):
+    async def test_weekday_input_not_a_number(self, message, state, services):
         """Test validation rejects non-numeric input."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
         msg = message("abc")
-        await process_weekday_custom_input(msg, state)
+        await process_weekday_custom_input(msg, state, services)
 
         # FSM should NOT be cleared
         current_state = await state.get_state()
@@ -151,12 +165,12 @@ class TestWeekdayCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_weekday_input_negative(self, message, state):
+    async def test_weekday_input_negative(self, message, state, services):
         """Test validation rejects negative values."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
         msg = message("-10")
-        await process_weekday_custom_input(msg, state)
+        await process_weekday_custom_input(msg, state, services)
 
         current_state = await state.get_state()
         assert current_state == SettingsStates.waiting_for_weekday_interval_custom.state
@@ -174,7 +188,7 @@ class TestWeekendCustomInput:
     @patch('src.api.handlers.settings.UserSettingsService')
     @patch('src.api.handlers.settings.scheduler_service')
     async def test_valid_weekend_input(
-        self, mock_sched, mock_set, mock_user, message, state
+        self, mock_sched, mock_set, mock_user, message, state, services
     ):
         """Test valid weekend interval input."""
         await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
@@ -189,7 +203,7 @@ class TestWeekendCustomInput:
         mock_sched.schedule_poll = AsyncMock()
 
         msg = message("210")
-        await process_weekend_custom_input(msg, state)
+        await process_weekend_custom_input(msg, state, services)
 
         # Verify settings updated
         call_kwargs = mock_set.return_value.update_settings.call_args[1]
@@ -204,12 +218,12 @@ class TestWeekendCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_weekend_input_too_low(self, message, state):
+    async def test_weekend_input_too_low(self, message, state, services):
         """Test validation rejects weekend interval below minimum."""
         await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
 
         msg = message("3")
-        await process_weekend_custom_input(msg, state)
+        await process_weekend_custom_input(msg, state, services)
 
         # FSM should NOT be cleared
         current_state = await state.get_state()
@@ -220,12 +234,12 @@ class TestWeekendCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_weekend_input_too_high(self, message, state):
+    async def test_weekend_input_too_high(self, message, state, services):
         """Test validation rejects weekend interval above maximum (600 minutes)."""
         await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
 
         msg = message("700")
-        await process_weekend_custom_input(msg, state)
+        await process_weekend_custom_input(msg, state, services)
 
         current_state = await state.get_state()
         assert current_state == SettingsStates.waiting_for_weekend_interval_custom.state
@@ -242,7 +256,7 @@ class TestReminderDelayCustomInput:
     @patch('src.api.handlers.settings.UserService')
     @patch('src.api.handlers.settings.UserSettingsService')
     async def test_valid_reminder_delay(
-        self, mock_set, mock_user, message, state
+        self, mock_set, mock_user, message, state, services
     ):
         """Test valid reminder delay input."""
         await state.set_state(SettingsStates.waiting_for_reminder_delay_custom)
@@ -256,7 +270,7 @@ class TestReminderDelayCustomInput:
         mock_set.return_value.update_settings = AsyncMock()
 
         msg = message("45")
-        await process_reminder_delay_custom(msg, state)
+        await process_reminder_delay_custom(msg, state, services)
 
         # Verify settings updated
         call_kwargs = mock_set.return_value.update_settings.call_args[1]
@@ -271,12 +285,12 @@ class TestReminderDelayCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_reminder_delay_too_low(self, message, state):
+    async def test_reminder_delay_too_low(self, message, state, services):
         """Test validation rejects delay below minimum (5 minutes)."""
         await state.set_state(SettingsStates.waiting_for_reminder_delay_custom)
 
         msg = message("2")
-        await process_reminder_delay_custom(msg, state)
+        await process_reminder_delay_custom(msg, state, services)
 
         # FSM should NOT be cleared
         current_state = await state.get_state()
@@ -287,12 +301,12 @@ class TestReminderDelayCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_reminder_delay_too_high(self, message, state):
+    async def test_reminder_delay_too_high(self, message, state, services):
         """Test validation rejects delay above maximum (120 minutes)."""
         await state.set_state(SettingsStates.waiting_for_reminder_delay_custom)
 
         msg = message("150")
-        await process_reminder_delay_custom(msg, state)
+        await process_reminder_delay_custom(msg, state, services)
 
         current_state = await state.get_state()
         assert current_state == SettingsStates.waiting_for_reminder_delay_custom.state

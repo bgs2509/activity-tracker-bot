@@ -32,6 +32,7 @@ from src.application.utils.formatters import (
     format_duration,
     extract_tags
 )
+from src.application.utils.validators import validate_string_length
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 
 logger = logging.getLogger(__name__)
@@ -64,10 +65,15 @@ def validate_description(description: str, min_length: int = 3) -> tuple[bool, s
     Note:
         The error message is in Russian (user-facing).
     """
-    description = description.strip()
+    error_msg = validate_string_length(
+        value=description,
+        min_length=min_length,
+        field_name_ru="Описание",
+        strip_whitespace=True
+    )
 
-    if not description or len(description) < min_length:
-        return False, f"⚠️ Описание должно содержать минимум {min_length} символа. Попробуй ещё раз."
+    if error_msg:
+        return False, error_msg
 
     return True, None
 

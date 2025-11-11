@@ -7,6 +7,10 @@ orchestrating between API layer and data layer.
 
 from typing import Optional
 
+from src.application.validators.time_validators import (
+    validate_activity_duration,
+    validate_end_time,
+)
 from src.domain.models.activity import Activity
 from src.infrastructure.repositories.activity_repository import ActivityRepository
 from src.schemas.activity import ActivityCreate
@@ -42,20 +46,9 @@ class ActivityService:
         Raises:
             ValueError: If business rules violated (e.g., invalid time range)
         """
-        # Business validation: end_time must be after start_time
-        if activity_data.end_time <= activity_data.start_time:
-            raise ValueError(
-                f"End time ({activity_data.end_time}) must be after "
-                f"start time ({activity_data.start_time})"
-            )
-
-        # Business validation: duration shouldn't exceed 24 hours
-        duration_seconds = (activity_data.end_time - activity_data.start_time).total_seconds()
-        if duration_seconds > 24 * 3600:
-            raise ValueError(
-                f"Activity duration ({duration_seconds / 3600:.1f}h) "
-                f"exceeds maximum allowed duration (24h)"
-            )
+        # Business validation using centralized validators
+        validate_end_time(activity_data.end_time, activity_data.start_time)
+        validate_activity_duration(activity_data.start_time, activity_data.end_time, max_hours=24)
 
         # Delegate to repository for persistence
         activity = await self.repository.create(activity_data)
