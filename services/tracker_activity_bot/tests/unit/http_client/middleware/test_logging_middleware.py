@@ -195,7 +195,7 @@ class TestLoggingMiddlewareProcessRequest:
         extra = mock_logger.debug.call_args[1]["extra"]
         assert extra["method"] == "PATCH"
         assert extra["has_body"] is True
-        assert extra["content_length"] == 20
+        assert extra["content_length"] == 19  # len(b'{"timezone": "UTC"}')
 
         assert result is mock_request
 
