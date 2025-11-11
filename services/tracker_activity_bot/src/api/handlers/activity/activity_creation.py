@@ -75,6 +75,44 @@ async def start_add_activity(message: types.Message, state: FSMContext):
     await message.answer(text, reply_markup=get_period_keyboard_with_auto())
 
 
+@router.callback_query(F.data == "add_activity")
+@with_typing_action
+async def start_add_activity_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Start activity recording - MANUAL trigger (callback button).
+
+    This is the entry point for MANUAL activity recording (user clicked inline button).
+    It presents the user with period selection options.
+
+    Flow:
+        Start -> Period Selection -> Category -> Description -> Save
+    """
+    telegram_id = callback.from_user.id
+
+    # Set FSM state
+    await state.set_state(ActivityStates.waiting_for_period)
+
+    # Mark this as manual flow (not automatic poll)
+    await state.update_data(trigger_source="manual")
+
+    # Schedule FSM timeout
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+            user_id=telegram_id,
+            state=ActivityStates.waiting_for_period,
+            bot=callback.bot
+        )
+
+    # Send period selection keyboard with auto-calculate option
+    text = (
+        "📝 Записываем активность\n\n"
+        "Автоматически рассчитать период от последней активности или выбрать вручную?\n\n"
+        "⏰ Выбери период:"
+    )
+
+    await callback.message.answer(text, reply_markup=get_period_keyboard_with_auto())
+    await callback.answer()
+
+
 @router.callback_query(ActivityStates.waiting_for_period, F.data == "noop")
 async def handle_noop(callback: types.CallbackQuery):
     """Handle no-op callback (visual dividers in keyboards).
@@ -308,6 +346,205 @@ async def quick_period_selection(callback: types.CallbackQuery, state: FSMContex
         reply_markup=get_poll_category_keyboard(categories)
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("time_start_"))
+@with_typing_action
+async def handle_start_time_selection(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
+    """Handle start time quick selection (15m ago, 30m ago, 1h ago, etc).
+
+    User selected how long ago the activity started - calculate start time,
+    store it, and present end time selection keyboard.
+
+    Callback data format: time_start_{period}
+    Example: time_start_15m -> activity started 15 minutes ago
+    """
+    time_data = callback.data.replace("time_start_", "")
+    telegram_id = callback.from_user.id
+
+    # Parse time period
+    time_map = {
+        "15m": timedelta(minutes=15),
+        "30m": timedelta(minutes=30),
+        "1h": timedelta(hours=1),
+        "2h": timedelta(hours=2),
+        "3h": timedelta(hours=3),
+        "8h": timedelta(hours=8),
+    }
+
+    delta = time_map.get(time_data)
+    if not delta:
+        await callback.answer("⚠️ Неверный период")
+        return
+
+    # Calculate start time
+    now = datetime.now(timezone.utc)
+    start_time = now - delta
+
+    # Get user
+    user = await services.user.get_by_telegram_id(telegram_id)
+    if not user:
+        await callback.message.answer(
+            "⚠️ Пользователь не найден.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        await callback.answer()
+        return
+
+    # Store start time and user_id in state
+    await state.update_data(
+        start_time=start_time.isoformat(),
+        user_id=user["id"],
+        trigger_source="manual"
+    )
+
+    # Set state to waiting for end time
+    await state.set_state(ActivityStates.waiting_for_end_time)
+
+    # Schedule FSM timeout
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+            user_id=telegram_id,
+            state=ActivityStates.waiting_for_end_time,
+            bot=callback.bot
+        )
+
+    # Send end time selection keyboard
+    start_time_str = format_time(start_time)
+    text = (
+        f"✅ Время начала: {start_time_str}\n\n"
+        "⏰ Теперь выбери, когда активность закончилась:"
+    )
+
+    await callback.message.answer(text, reply_markup=get_end_time_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("time_end_"))
+@with_typing_action
+async def handle_end_time_selection(callback: types.CallbackQuery, state: FSMContext, services: ServiceContainer):
+    """Handle end time quick selection (now, 15m after start, 30m after start, etc).
+
+    User selected when the activity ended - calculate end time based on start time,
+    then move to category selection.
+
+    Callback data format: time_end_{period}
+    Example: time_end_now -> activity ended now
+             time_end_30m -> activity lasted 30 minutes from start
+    """
+    time_data = callback.data.replace("time_end_", "")
+    telegram_id = callback.from_user.id
+
+    try:
+        # Get start time from state
+        data = await state.get_data()
+        start_time_str = data.get("start_time")
+        user_id = data.get("user_id")
+
+        if not start_time_str or not user_id:
+            await callback.message.answer(
+                "⚠️ Недостаточно данных. Начни заново.",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await state.clear()
+            await callback.answer()
+            return
+
+        start_time = datetime.fromisoformat(start_time_str)
+
+        # Calculate end time
+        if time_data == "now":
+            end_time = datetime.now(timezone.utc)
+        else:
+            # Parse duration
+            time_map = {
+                "15m": timedelta(minutes=15),
+                "30m": timedelta(minutes=30),
+                "1h": timedelta(hours=1),
+                "2h": timedelta(hours=2),
+                "3h": timedelta(hours=3),
+                "8h": timedelta(hours=8),
+            }
+
+            delta = time_map.get(time_data)
+            if not delta:
+                await callback.answer("⚠️ Неверный период")
+                return
+
+            end_time = start_time + delta
+
+        # Validate: end_time must be after start_time
+        if end_time <= start_time:
+            await callback.message.answer(
+                "⚠️ Время окончания должно быть позже времени начала.",
+                reply_markup=get_end_time_keyboard()
+            )
+            await callback.answer()
+            return
+
+        # Store end time
+        await state.update_data(end_time=end_time.isoformat())
+
+        # Move to category selection
+        await state.set_state(ActivityStates.waiting_for_category)
+
+        # Schedule FSM timeout
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+                user_id=telegram_id,
+                state=ActivityStates.waiting_for_category,
+                bot=callback.bot
+            )
+
+        # Get categories
+        categories = await services.category.get_user_categories(user_id)
+
+        if not categories:
+            await callback.message.answer(
+                "⚠️ У тебя нет категорий. Сначала создай категорию.",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await state.clear()
+            await callback.answer()
+            return
+
+        # Format time and duration
+        start_time_str = format_time(start_time)
+        end_time_str = format_time(end_time)
+        duration_minutes = int((end_time - start_time).total_seconds() / 60)
+        duration_str = format_duration(duration_minutes)
+
+        # Build category selection message
+        text = get_category_selection_message(
+            source="manual",
+            start_time=start_time_str,
+            end_time=end_time_str,
+            duration=duration_str,
+            add_motivation=False
+        )
+
+        await callback.message.answer(
+            text,
+            reply_markup=get_poll_category_keyboard(categories)
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(
+            "Error processing end time selection",
+            extra={
+                "telegram_user_id": telegram_id,
+                "error": str(e)
+            },
+            exc_info=True
+        )
+        await callback.message.answer(
+            "⚠️ Ошибка при обработке времени.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        await state.clear()
+        await callback.answer()
 
 
 @router.message(ActivityStates.waiting_for_period)
