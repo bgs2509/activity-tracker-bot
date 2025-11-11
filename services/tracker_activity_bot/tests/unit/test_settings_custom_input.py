@@ -75,35 +75,34 @@ class TestWeekdayCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    @patch('src.api.handlers.settings.UserService')
-    @patch('src.api.handlers.settings.UserSettingsService')
-    @patch('src.api.handlers.settings.scheduler_service')
+    @patch('src.api.handlers.settings.interval_settings.get_user_and_settings')
     async def test_valid_weekday_input(
-        self, mock_sched, mock_set, mock_user, message, state, services
+        self, mock_get_user_settings, message, state, services
     ):
         """Test valid weekday interval input updates settings and reschedules poll."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
         # Setup mocks
-        mock_user.return_value.get_by_telegram_id = AsyncMock(
-            return_value={"id": "u1", "timezone": "Europe/Moscow"}
+        mock_get_user_settings.return_value = (
+            {"id": "u1", "telegram_id": 123, "timezone": "Europe/Moscow"},
+            {"id": "s1", "poll_interval_weekday": 120}
         )
-        mock_set.return_value.get_settings = AsyncMock(
-            return_value={"id": "s1", "poll_interval_weekday": 120}
+        services.settings.update_settings = AsyncMock()
+        services.settings.get_settings = AsyncMock(
+            return_value={"id": "s1", "poll_interval_weekday": 90}
         )
-        mock_set.return_value.update_settings = AsyncMock()
-        mock_sched.schedule_poll = AsyncMock()
+        services.scheduler.schedule_poll = AsyncMock()
 
         msg = message("90")
         await process_weekday_custom_input(msg, state, services)
 
         # Verify settings updated with correct value
-        mock_set.return_value.update_settings.assert_called_once()
-        call_kwargs = mock_set.return_value.update_settings.call_args[1]
+        services.settings.update_settings.assert_called_once()
+        call_kwargs = services.settings.update_settings.call_args[1]
         assert call_kwargs["poll_interval_weekday"] == 90
 
         # Verify poll rescheduled
-        mock_sched.schedule_poll.assert_called_once()
+        services.scheduler.schedule_poll.assert_called_once()
 
         # Verify FSM cleared
         assert await state.get_state() is None
@@ -115,10 +114,10 @@ class TestWeekdayCustomInput:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_weekday_input_too_low(self, message, state, services):
-        """Test validation rejects interval below minimum (5 minutes)."""
+        """Test validation rejects interval below minimum (1 minute)."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
-        msg = message("3")
+        msg = message("0")
         await process_weekday_custom_input(msg, state, services)
 
         # FSM should NOT be cleared (allow retry)
@@ -127,12 +126,12 @@ class TestWeekdayCustomInput:
 
         # Error message shown
         call_text = msg.answer.call_args[0][0]
-        assert "от 5 до 480" in call_text.lower()
+        assert "от 1 до 360" in call_text.lower()
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_weekday_input_too_high(self, message, state, services):
-        """Test validation rejects interval above maximum (480 minutes)."""
+        """Test validation rejects interval above maximum (360 minutes)."""
         await state.set_state(SettingsStates.waiting_for_weekday_interval_custom)
 
         msg = message("500")
@@ -144,7 +143,7 @@ class TestWeekdayCustomInput:
 
         # Error message
         call_text = msg.answer.call_args[0][0]
-        assert "от 5 до 480" in call_text.lower()
+        assert "от 1 до 360" in call_text.lower()
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -176,7 +175,7 @@ class TestWeekdayCustomInput:
         assert current_state == SettingsStates.waiting_for_weekday_interval_custom.state
 
         call_text = msg.answer.call_args[0][0]
-        assert "от 5 до 480" in call_text.lower()
+        assert "от 1 до 360" in call_text.lower()
 
 
 class TestWeekendCustomInput:
@@ -184,29 +183,28 @@ class TestWeekendCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    @patch('src.api.handlers.settings.UserService')
-    @patch('src.api.handlers.settings.UserSettingsService')
-    @patch('src.api.handlers.settings.scheduler_service')
+    @patch('src.api.handlers.settings.interval_settings.get_user_and_settings')
     async def test_valid_weekend_input(
-        self, mock_sched, mock_set, mock_user, message, state, services
+        self, mock_get_user_settings, message, state, services
     ):
         """Test valid weekend interval input."""
         await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
 
-        mock_user.return_value.get_by_telegram_id = AsyncMock(
-            return_value={"id": "u1", "timezone": "Europe/Moscow"}
+        mock_get_user_settings.return_value = (
+            {"id": "u1", "telegram_id": 123, "timezone": "Europe/Moscow"},
+            {"id": "s1", "poll_interval_weekend": 120}
         )
-        mock_set.return_value.get_settings = AsyncMock(
-            return_value={"id": "s1", "poll_interval_weekend": 120}
+        services.settings.update_settings = AsyncMock()
+        services.settings.get_settings = AsyncMock(
+            return_value={"id": "s1", "poll_interval_weekend": 210}
         )
-        mock_set.return_value.update_settings = AsyncMock()
-        mock_sched.schedule_poll = AsyncMock()
+        services.scheduler.schedule_poll = AsyncMock()
 
         msg = message("210")
         await process_weekend_custom_input(msg, state, services)
 
         # Verify settings updated
-        call_kwargs = mock_set.return_value.update_settings.call_args[1]
+        call_kwargs = services.settings.update_settings.call_args[1]
         assert call_kwargs["poll_interval_weekend"] == 210
 
         # Verify confirmation message
@@ -222,7 +220,7 @@ class TestWeekendCustomInput:
         """Test validation rejects weekend interval below minimum."""
         await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
 
-        msg = message("3")
+        msg = message("0")
         await process_weekend_custom_input(msg, state, services)
 
         # FSM should NOT be cleared
@@ -230,12 +228,12 @@ class TestWeekendCustomInput:
         assert current_state == SettingsStates.waiting_for_weekend_interval_custom.state
 
         call_text = msg.answer.call_args[0][0]
-        assert "от 5 до 600" in call_text.lower()
+        assert "от 1 до 480" in call_text.lower()
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_weekend_input_too_high(self, message, state, services):
-        """Test validation rejects weekend interval above maximum (600 minutes)."""
+        """Test validation rejects weekend interval above maximum (480 minutes)."""
         await state.set_state(SettingsStates.waiting_for_weekend_interval_custom)
 
         msg = message("700")
@@ -245,7 +243,7 @@ class TestWeekendCustomInput:
         assert current_state == SettingsStates.waiting_for_weekend_interval_custom.state
 
         call_text = msg.answer.call_args[0][0]
-        assert "от 5 до 600" in call_text.lower()
+        assert "от 1 до 480" in call_text.lower()
 
 
 class TestReminderDelayCustomInput:
@@ -253,27 +251,24 @@ class TestReminderDelayCustomInput:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    @patch('src.api.handlers.settings.UserService')
-    @patch('src.api.handlers.settings.UserSettingsService')
+    @patch('src.api.handlers.settings.reminder_settings.get_user_and_settings')
     async def test_valid_reminder_delay(
-        self, mock_set, mock_user, message, state, services
+        self, mock_get_user_settings, message, state, services
     ):
         """Test valid reminder delay input."""
         await state.set_state(SettingsStates.waiting_for_reminder_delay_custom)
 
-        mock_user.return_value.get_by_telegram_id = AsyncMock(
-            return_value={"id": "u1"}
+        mock_get_user_settings.return_value = (
+            {"id": "u1", "telegram_id": 123},
+            {"id": "s1"}
         )
-        mock_set.return_value.get_settings = AsyncMock(
-            return_value={"id": "s1"}
-        )
-        mock_set.return_value.update_settings = AsyncMock()
+        services.settings.update_settings = AsyncMock()
 
         msg = message("45")
         await process_reminder_delay_custom(msg, state, services)
 
         # Verify settings updated
-        call_kwargs = mock_set.return_value.update_settings.call_args[1]
+        call_kwargs = services.settings.update_settings.call_args[1]
         assert call_kwargs["reminder_delay_minutes"] == 45
 
         # Verify confirmation message

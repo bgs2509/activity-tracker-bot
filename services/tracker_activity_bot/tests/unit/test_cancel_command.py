@@ -126,7 +126,7 @@ class TestCancelActivityFSM:
         await state.set_state(ActivityStates.waiting_for_description)
 
         msg = message()
-        await cancel_activity_fsm(msg, state, services)
+        await cancel_activity_fsm(msg, state)
 
         # FSM cleared
         assert await state.get_state() is None
@@ -142,7 +142,7 @@ class TestCancelActivityFSM:
         await state.set_state(ActivityStates.waiting_for_category)
 
         msg = message()
-        await cancel_activity_fsm(msg, state, services)
+        await cancel_activity_fsm(msg, state)
 
         assert await state.get_state() is None
         call_text = msg.answer.call_args[0][0]
@@ -150,12 +150,12 @@ class TestCancelActivityFSM:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_activity_waiting_for_time(self, message, state, services):
-        """Test /cancel during time input."""
-        await state.set_state(ActivityStates.waiting_for_start_time)
+    async def test_cancel_activity_waiting_for_period(self, message, state, services):
+        """Test /cancel during period selection."""
+        await state.set_state(ActivityStates.waiting_for_period)
 
         msg = message()
-        await cancel_activity_fsm(msg, state, services)
+        await cancel_activity_fsm(msg, state)
 
         assert await state.get_state() is None
 
@@ -167,7 +167,7 @@ class TestCancelActivityFSM:
         assert await state.get_state() is None
 
         msg = message()
-        await cancel_activity_fsm(msg, state, services)
+        await cancel_activity_fsm(msg, state)
 
         # Should show "nothing to cancel"
         call_text = msg.answer.call_args[0][0]
@@ -184,7 +184,7 @@ class TestCancelCategoryFSM:
         await state.set_state(CategoryStates.waiting_for_name)
 
         msg = message()
-        await cancel_category_fsm(msg, state, services)
+        await cancel_category_fsm(msg, state)
 
         # FSM cleared
         assert await state.get_state() is None
@@ -200,7 +200,7 @@ class TestCancelCategoryFSM:
         await state.set_state(CategoryStates.waiting_for_emoji)
 
         msg = message()
-        await cancel_category_fsm(msg, state, services)
+        await cancel_category_fsm(msg, state)
 
         assert await state.get_state() is None
         call_text = msg.answer.call_args[0][0]
@@ -214,7 +214,7 @@ class TestCancelCategoryFSM:
         assert await state.get_state() is None
 
         msg = message()
-        await cancel_category_fsm(msg, state, services)
+        await cancel_category_fsm(msg, state)
 
         # Should show "nothing to cancel"
         call_text = msg.answer.call_args[0][0]
