@@ -10,7 +10,7 @@ from apscheduler.triggers.date import DateTrigger
 from src.api.dependencies import get_service_container
 from src.api.keyboards.poll import get_poll_response_keyboard, get_poll_initial_category_keyboard
 from src.api.messages.activity_messages import get_category_selection_message
-from src.api.states.activity import ActivityStates
+from src.api.states.poll import PollStates
 from src.application.utils.formatters import format_time, format_duration
 from src.application.utils.time_helpers import get_poll_interval, calculate_poll_period
 from src.core.constants import POLL_POSTPONE_MINUTES
@@ -417,7 +417,7 @@ async def _set_poll_category_state(bot: Bot, user_id: int) -> None:
             user_id=user_id
         )
 
-        await storage.set_state(key, ActivityStates.waiting_for_category)
+        await storage.set_state(key, PollStates.waiting_for_poll_category)
 
         logger.debug(
             "Set FSM state to waiting_for_poll_category",

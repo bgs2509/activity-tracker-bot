@@ -14,7 +14,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from apscheduler.triggers.date import DateTrigger
 
-from src.api.states.activity import ActivityStates
+from src.api.states.poll import PollStates
 from src.api.dependencies import ServiceContainer, get_service_container
 from src.api.keyboards.poll import get_poll_reminder_keyboard, get_poll_category_keyboard
 from src.api.keyboards.main_menu import get_main_menu_keyboard
@@ -373,7 +373,7 @@ services = get_service_container()
 
 
 @router.callback_query(
-    ActivityStates.waiting_for_category,
+    PollStates.waiting_for_poll_category,
     F.data.startswith("poll_category_")
 )
 @with_typing_action
@@ -421,13 +421,13 @@ async def handle_poll_category_select(
             settings=settings,
             user_timezone=user.get("timezone", "Europe/Moscow")
         )
-        await state.set_state(ActivityStates.waiting_for_description)
+        await state.set_state(PollStates.waiting_for_poll_description)
 
         # Schedule FSM timeout
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.schedule_timeout(
                 user_id=telegram_id,
-                state=ActivityStates.waiting_for_description,
+                state=PollStates.waiting_for_poll_description,
                 bot=callback.bot
             )
 
@@ -492,7 +492,7 @@ async def handle_poll_category_select(
         )
 
 
-@router.callback_query(ActivityStates.waiting_for_description, F.data.startswith("activity_desc_"))
+@router.callback_query(PollStates.waiting_for_poll_description, F.data.startswith("activity_desc_"))
 @with_typing_action
 async def handle_poll_recent_activity_select(
     callback: types.CallbackQuery,
@@ -623,7 +623,7 @@ async def handle_poll_recent_activity_select(
         )
 
 
-@router.message(ActivityStates.waiting_for_description)
+@router.message(PollStates.waiting_for_poll_description)
 async def handle_poll_description(
     message: types.Message,
     state: FSMContext,
@@ -726,7 +726,7 @@ async def handle_poll_description(
 
 
 @router.callback_query(
-    ActivityStates.waiting_for_category,
+    PollStates.waiting_for_poll_category,
     F.data == "poll_cancel"
 )
 @with_typing_action

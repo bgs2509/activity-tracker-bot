@@ -32,7 +32,7 @@ STATE_CONTEXTS = {
     "SettingsStates:waiting_for_quiet_hours_start_custom": "указать начало тихих часов",
     "SettingsStates:waiting_for_quiet_hours_end_custom": "указать конец тихих часов",
     "SettingsStates:waiting_for_reminder_delay_custom": "указать задержку напоминания",
-    "PollStates:waiting_for_poll_category": "выбрать категорию для активности",
+    "ActivityStates:waiting_for_category": "выбрать категорию для активности",
 }
 
 

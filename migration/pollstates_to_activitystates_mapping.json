@@ -1,0 +1,15 @@
+{
+  "state_mapping": {
+    "PollStates.waiting_for_poll_category": "ActivityStates.waiting_for_category",
+    "PollStates.waiting_for_poll_description": "ActivityStates.waiting_for_description"
+  },
+  "import_mapping": {
+    "from src.api.states.poll import PollStates": "from src.api.states.activity import ActivityStates",
+    "from ..states.poll import PollStates": "from ..states.activity import ActivityStates"
+  },
+  "files_to_update": [
+    "src/api/handlers/poll/poll_response.py",
+    "src/api/handlers/poll/poll_sender.py",
+    "src/application/services/fsm_timeout_service.py"
+  ]
+}
