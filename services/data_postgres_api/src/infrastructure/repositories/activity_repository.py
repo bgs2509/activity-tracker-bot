@@ -131,7 +131,7 @@ class ActivityRepository(BaseRepository[Activity, ActivityCreate, ActivityUpdate
                 .order_by(Activity.start_time.desc())
                 .limit(limit)
             )
-            activities = list(result.unique().scalars().all())
+            activities = list(result.scalars().all())
 
             logger.debug(
                 "Recent activities retrieved",
@@ -194,7 +194,7 @@ class ActivityRepository(BaseRepository[Activity, ActivityCreate, ActivityUpdate
                 .order_by(Activity.start_time.desc())
                 .limit(limit)
             )
-            activities = list(result.unique().scalars().all())
+            activities = list(result.scalars().all())
 
             logger.debug(
                 "Recent activities by category retrieved",

@@ -139,11 +139,13 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             await self.session.flush()
             await self.session.refresh(entity)
 
+            entity_id = getattr(entity, "id", None)
+
             logger.info(
                 "Entity created successfully",
                 extra={
                     "entity_type": self.model.__name__,
-                    "entity_id": entity.id,
+                    "entity_id": entity_id,
                     "operation": "create"
                 }
             )

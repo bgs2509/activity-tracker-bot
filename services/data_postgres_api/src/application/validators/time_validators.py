@@ -12,7 +12,7 @@ def validate_start_time(start_time: datetime) -> None:
     Validate that start_time is valid for an activity.
 
     Args:
-        start_time: Activity start time (must be timezone-aware)
+        start_time: Activity start time (naive datetime treated as UTC)
 
     Raises:
         ValueError: If start_time is invalid
@@ -23,8 +23,9 @@ def validate_start_time(start_time: datetime) -> None:
         >>> validate_start_time(datetime.now(timezone.utc) + timedelta(hours=1))
         ValueError: Start time cannot be in the future
     """
+    # Convert naive datetime to UTC for backward compatibility
     if not start_time.tzinfo:
-        raise ValueError("Start time must be timezone-aware")
+        start_time = start_time.replace(tzinfo=timezone.utc)
 
     now_utc = datetime.now(timezone.utc)
     if start_time > now_utc:
@@ -36,8 +37,8 @@ def validate_end_time(end_time: datetime, start_time: datetime) -> None:
     Validate that end_time is valid relative to start_time.
 
     Args:
-        end_time: Activity end time (must be timezone-aware)
-        start_time: Activity start time (must be timezone-aware)
+        end_time: Activity end time (naive datetime treated as UTC)
+        start_time: Activity start time (naive datetime treated as UTC)
 
     Raises:
         ValueError: If end_time is invalid
@@ -49,8 +50,11 @@ def validate_end_time(end_time: datetime, start_time: datetime) -> None:
         >>> validate_end_time(end, start)  # OK
         >>> validate_end_time(start, end)  # Raises ValueError
     """
-    if not end_time.tzinfo or not start_time.tzinfo:
-        raise ValueError("Times must be timezone-aware")
+    # Convert naive datetimes to UTC for backward compatibility
+    if not end_time.tzinfo:
+        end_time = end_time.replace(tzinfo=timezone.utc)
+    if not start_time.tzinfo:
+        start_time = start_time.replace(tzinfo=timezone.utc)
 
     if end_time <= start_time:
         raise ValueError(
