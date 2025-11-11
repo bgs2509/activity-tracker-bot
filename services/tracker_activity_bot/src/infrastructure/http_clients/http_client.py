@@ -13,6 +13,7 @@ from .middleware import (
     ResponseMiddleware,
     ErrorMiddleware
 )
+from .middleware.correlation_middleware import CorrelationIDMiddleware
 
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ class DataAPIClient:
         # Use provided middleware or defaults
         if middlewares is None:
             middlewares = [
+                CorrelationIDMiddleware(),  # First: Add correlation ID header
                 TimingMiddleware(),
                 LoggingMiddleware(),
                 ErrorHandlingMiddleware()
