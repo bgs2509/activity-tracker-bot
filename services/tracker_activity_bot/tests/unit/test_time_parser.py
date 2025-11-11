@@ -51,7 +51,7 @@ class TestParseTimeInput:
     def test_parse_exact_time_colon(self):
         """Test exact time format with colon (14:30)."""
         tz = pytz.timezone("Europe/Moscow")
-        reference = datetime(2025, 11, 5, 14, 0, 0, tzinfo=tz)
+        reference = tz.localize(datetime(2025, 11, 5, 14, 0, 0))
 
         result = parse_time_input("14:30", reference_time=reference)
 
@@ -65,7 +65,7 @@ class TestParseTimeInput:
     def test_parse_exact_time_dash(self):
         """Test exact time format with dash (14-30)."""
         tz = pytz.timezone("Europe/Moscow")
-        reference = datetime(2025, 11, 5, 14, 0, 0, tzinfo=tz)
+        reference = tz.localize(datetime(2025, 11, 5, 14, 0, 0))
 
         result = parse_time_input("14-30", reference_time=reference)
 
@@ -77,7 +77,7 @@ class TestParseTimeInput:
     def test_parse_exact_time_single_digit_hour(self):
         """Test exact time with single digit hour (9:15)."""
         tz = pytz.timezone("Europe/Moscow")
-        reference = datetime(2025, 11, 5, 14, 0, 0, tzinfo=tz)
+        reference = tz.localize(datetime(2025, 11, 5, 14, 0, 0))
 
         result = parse_time_input("9:15", reference_time=reference)
 
@@ -177,7 +177,7 @@ class TestParseTimeInput:
     def test_parse_whitespace_handling(self):
         """Test input with leading/trailing whitespace."""
         tz = pytz.timezone("Europe/Moscow")
-        reference = datetime(2025, 11, 5, 14, 0, 0, tzinfo=tz)
+        reference = tz.localize(datetime(2025, 11, 5, 14, 0, 0))
 
         result = parse_time_input("  14:30  ", reference_time=reference)
 
@@ -189,7 +189,7 @@ class TestParseTimeInput:
     def test_parse_case_insensitivity(self):
         """Test input is case-insensitive (NOW = now)."""
         tz = pytz.timezone("Europe/Moscow")
-        reference = datetime(2025, 11, 5, 14, 30, 0, tzinfo=tz)
+        reference = tz.localize(datetime(2025, 11, 5, 14, 30, 0))
 
         result = parse_time_input("NOW", reference_time=reference)
 

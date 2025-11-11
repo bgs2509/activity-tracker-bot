@@ -50,7 +50,7 @@ def reference_time(moscow_tz):
     Returns:
         datetime: 2025-11-07 14:30:00 Moscow time
     """
-    return datetime(2025, 11, 7, 14, 30, 0, tzinfo=moscow_tz)
+    return moscow_tz.localize(datetime(2025, 11, 7, 14, 30, 0))
 
 
 # ============================================================================
@@ -646,7 +646,7 @@ class TestParseDuration:
         THEN: end_time=10:30 is returned
         """
         # Arrange
-        start_time_moscow = datetime(2025, 11, 7, 10, 0, 0, tzinfo=moscow_tz)
+        start_time_moscow = moscow_tz.localize(datetime(2025, 11, 7, 10, 0, 0))
         start_time_utc = start_time_moscow.astimezone(pytz.UTC)
 
         # Act
@@ -675,7 +675,7 @@ class TestParseDuration:
         THEN: end_time=12:00 is returned
         """
         # Arrange
-        start_time_moscow = datetime(2025, 11, 7, 10, 0, 0, tzinfo=moscow_tz)
+        start_time_moscow = moscow_tz.localize(datetime(2025, 11, 7, 10, 0, 0))
         start_time_utc = start_time_moscow.astimezone(pytz.UTC)
 
         # Act
