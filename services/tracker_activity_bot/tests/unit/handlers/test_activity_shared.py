@@ -271,7 +271,8 @@ class TestFetchAndBuildDescriptionPrompt:
         assert isinstance(text, str)
         assert keyboard is not None
         assert "Выбери из последних" in text
-        assert "10:00 — 12:00" in text
+        # Times converted from UTC to Moscow (UTC+3): 10:00 → 13:00, 12:00 → 15:00
+        assert "13:00 — 15:00" in text
         assert "2ч" in text
         mock_services.activity.get_user_activities_by_category.assert_called_once_with(
             user_id=1,
@@ -343,8 +344,9 @@ class TestFetchAndBuildDescriptionPrompt:
         )
 
         # Assert
-        assert "14:30" in text
-        assert "16:45" in text
+        # Times converted from UTC to Moscow (UTC+3): 14:30 → 17:30, 16:45 → 19:45
+        assert "17:30" in text
+        assert "19:45" in text
 
     @pytest.mark.unit
     async def test_fetch_calculates_duration_correctly(
