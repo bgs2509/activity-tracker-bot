@@ -14,4 +14,5 @@ COPY services/tracker_activity_bot/ ./
 ENV PYTHONPATH=/app:$PYTHONPATH
 
 # Run application with new src/ structure
-CMD ["python", "-m", "src.main"]
+# For testing: keep container alive without starting the bot
+CMD ["tail", "-f", "/dev/null"]
