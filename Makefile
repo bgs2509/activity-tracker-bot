@@ -155,7 +155,7 @@ test-integration-docker: ## Run integration tests with Docker (handler registrat
 	@echo "Запуск integration-тестов..."
 	@echo "  ✓ Проверка регистрации обработчиков кнопок"
 	@echo "  ✓ Проверка контрактов Bot ↔ API"
-	@docker run --rm -v $(PWD):/app -w /app python:3.11-slim sh -c "pip install -q pytest && pytest tests/integration/ -v -m integration" || true
+	@docker run --rm --network=activity-tracker-bot_tracker_network -v $(PWD):/app -w /app python:3.11-slim sh -c "pip install -q -r services/tracker_activity_bot/requirements.txt -r services/data_postgres_api/requirements.txt && pytest tests/integration/ -v -m integration" || true
 	@echo "\n✓ Integration тесты завершены"
 
 test-coverage-docker: ## Run coverage tests inside Docker containers
@@ -173,7 +173,7 @@ test-integration-optimized-docker: ## Run new integration tests with Docker and 
 	@docker compose --env-file .env.test up -d --wait
 	@echo "\n✓ Контейнеры запущены\n"
 	@echo "Запуск новых integration-тестов с параллелизацией..."
-	@docker run --rm --network=activity-tracker-bot_tracker_network -v $(PWD):/app -w /app python:3.11-slim sh -c "pip install -q -r services/tracker_activity_bot/requirements.txt && pytest tests/integration/ -v -m 'level1 or level2 or level3' -n 4" || true
+	@docker run --rm --network=activity-tracker-bot_tracker_network -v $(PWD):/app -w /app python:3.11-slim sh -c "pip install -q -r services/tracker_activity_bot/requirements.txt -r services/data_postgres_api/requirements.txt && pytest tests/integration/ -v -m 'level1 or level2 or level3' -n 4" || true
 	@echo "\n✓ Integration тесты завершены"
 
 test-all-docker: test-unit-docker test-integration-docker test-integration-optimized-docker ## Run all Docker-based tests (unit + old integration + new integration)

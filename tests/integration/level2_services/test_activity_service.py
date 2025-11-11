@@ -278,7 +278,7 @@ async def test_list_activities_returns_all_user_activities(db_session, test_user
     activities = await service.list_activities(user_id=test_user.id)
 
     # Assert
-    assert len(activities) >= 3
+    assert len(activities) == 3, f"Expected exactly 3 activities, got {len(activities)}"
     assert all(a.user_id == test_user.id for a in activities)
 
 
@@ -328,9 +328,9 @@ async def test_list_activities_filters_by_date_range(db_session, test_user, test
     )
 
     # Assert
-    assert len(activities) >= 1
+    assert len(activities) == 1, f"Expected exactly 1 activity (old one filtered out), got {len(activities)}"
     assert all(a.start_time >= date_from for a in activities)
-    assert any(a.description == "Recent activity" for a in activities)
+    assert activities[0].description == "Recent activity"
 
 
 @pytest.mark.integration
@@ -389,8 +389,9 @@ async def test_list_activities_filters_by_category(db_session, test_user, test_c
     )
 
     # Assert
-    assert len(activities) >= 1
+    assert len(activities) == 1, f"Expected exactly 1 activity (category 2 filtered out), got {len(activities)}"
     assert all(a.category_id == test_category.id for a in activities)
+    assert activities[0].description == "Activity in category 1"
 
 
 @pytest.mark.integration
