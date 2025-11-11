@@ -97,12 +97,10 @@ def test_import_states():
     try:
         from src.api.states import activity
         from src.api.states import category
-        from src.api.states import poll
         from src.api.states import settings
 
         assert activity is not None
         assert category is not None
-        assert poll is not None
         assert settings is not None
     except ImportError as e:
         pytest.fail(f"Failed to import states: {e}")
