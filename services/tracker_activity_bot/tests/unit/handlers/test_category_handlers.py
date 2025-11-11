@@ -59,11 +59,15 @@ def mock_callback():
     callback = MagicMock(spec=types.CallbackQuery)
     callback.from_user = MagicMock(spec=types.User)
     callback.from_user.id = 123456789
+    callback.from_user.username = "testuser"
     callback.message = MagicMock(spec=types.Message)
+    callback.message.chat = MagicMock()
+    callback.message.chat.id = 123456789
     callback.message.answer = AsyncMock()
     callback.message.edit_text = AsyncMock()
     callback.answer = AsyncMock()
     callback.bot = MagicMock()
+    callback.bot.send_chat_action = AsyncMock()
     callback.data = ""
     return callback
 
@@ -74,6 +78,7 @@ def mock_message():
     message = MagicMock(spec=types.Message)
     message.from_user = MagicMock(spec=types.User)
     message.from_user.id = 123456789
+    message.from_user.username = "testuser"
     message.answer = AsyncMock()
     message.bot = MagicMock()
     message.text = "Test category"
@@ -144,10 +149,11 @@ class TestShowCategoriesList:
         THEN: Categories are listed with emojis
         """
         # Arrange
+        mock_services.user.get_by_telegram_id.return_value = sample_user
         mock_services.category.get_user_categories.return_value = sample_categories
 
-        # Act
-        await show_categories_list(mock_callback, mock_services, sample_user)
+        # Act - pass services as keyword argument for @require_user decorator
+        await show_categories_list(mock_callback, services=mock_services)
 
         # Assert: Categories fetched
         mock_services.category.get_user_categories.assert_called_once_with(1)
@@ -178,10 +184,11 @@ class TestShowCategoriesList:
         THEN: Only header is shown
         """
         # Arrange
+        mock_services.user.get_by_telegram_id.return_value = sample_user
         mock_services.category.get_user_categories.return_value = []
 
-        # Act
-        await show_categories_list(mock_callback, mock_services, sample_user)
+        # Act - pass services as keyword argument for @require_user decorator
+        await show_categories_list(mock_callback, services=mock_services)
 
         # Assert: Message edited
         mock_callback.message.edit_text.assert_called_once()

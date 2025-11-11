@@ -188,5 +188,6 @@ async def delete_category_execute(
             "❌ Произошла ошибка при удалении категории",
             show_alert=True
         )
+        return
 
     await callback.answer()
