@@ -593,11 +593,27 @@ async def process_category_callback(
     telegram_id = callback.from_user.id
     callback_data = callback.data
 
+    # Handle special cases first
+    if callback_data == "poll_category_remind_later":
+        # Handle remind later action - just acknowledge and return
+        await callback.answer("⏰ Напомню позже")
+        await callback.message.delete()
+        await state.clear()
+        return
+
     # Parse category ID from both callback formats
     if callback_data.startswith("poll_category_"):
-        category_id = int(callback_data.replace("poll_category_", ""))
+        try:
+            category_id = int(callback_data.replace("poll_category_", ""))
+        except ValueError:
+            await callback.answer("⚠️ Неверный формат данных")
+            return
     elif callback_data.startswith("activity_category_"):
-        category_id = int(callback_data.replace("activity_category_", ""))
+        try:
+            category_id = int(callback_data.replace("activity_category_", ""))
+        except ValueError:
+            await callback.answer("⚠️ Неверный формат данных")
+            return
     else:
         await callback.answer("⚠️ Неверный формат данных")
         return
