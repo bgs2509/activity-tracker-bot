@@ -10,7 +10,7 @@ from typing import Optional
 
 # Message constants for category selection headers
 CATEGORY_HEADER_MANUAL = "📝 Запись активности"
-CATEGORY_HEADER_POLL = "📊 Отчет по активности"
+CATEGORY_HEADER_POLL = "📝 Запись активности"
 CATEGORY_PROMPT = "📂 Выбери категорию"
 
 # Motivational phrases with ironic humor for activity tracking
@@ -66,11 +66,11 @@ def get_category_selection_message(
 
         Poll entry without time:
         >>> get_category_selection_message("poll")
-        '📊 Отчет по активности\\n\\n📂 Выбери категорию'
+        '📝 Запись активности\\n\\n📂 Выбери категорию'
 
         Poll entry with time and motivation:
         >>> get_category_selection_message("poll", "12:30", "14:45", "2ч 15м", True)
-        '📊 Отчет по активности\\n\\n⏰ 12:30 — 14:45 (2ч 15м)\\n\\n🤔 Что полезного натворил?\\n\\n📂 Выбери категорию'
+        '📝 Запись активности\\n\\n⏰ 12:30 — 14:45 (2ч 15м)\\n\\n🤔 Что полезного натворил?\\n\\n📂 Выбери категорию'
     """
     headers = {
         "manual": CATEGORY_HEADER_MANUAL,
