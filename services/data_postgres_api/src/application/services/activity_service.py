@@ -5,15 +5,16 @@ This module contains business logic for activity operations,
 orchestrating between API layer and data layer.
 """
 
+from datetime import timedelta
 from typing import Optional
+import logging
 
-from src.application.validators.time_validators import (
-    validate_activity_duration,
-    validate_end_time,
-)
+from src.application.validators.time_validators import validate_end_time
 from src.domain.models.activity import Activity
 from src.infrastructure.repositories.activity_repository import ActivityRepository
 from src.schemas.activity import ActivityCreate
+
+logger = logging.getLogger(__name__)
 
 
 class ActivityService:
@@ -37,6 +38,8 @@ class ActivityService:
         """
         Create new activity with business validation.
 
+        Automatically caps activity duration at 24 hours maximum.
+
         Args:
             activity_data: Activity creation data from API request
 
@@ -46,9 +49,28 @@ class ActivityService:
         Raises:
             ValueError: If business rules violated (e.g., invalid time range)
         """
-        # Business validation using centralized validators
+        # Business validation
         validate_end_time(activity_data.end_time, activity_data.start_time)
-        validate_activity_duration(activity_data.start_time, activity_data.end_time, max_hours=24)
+
+        # Cap duration at 24 hours maximum (similar to sleep handling in bot)
+        max_duration = timedelta(hours=24)
+        duration = activity_data.end_time - activity_data.start_time
+
+        if duration > max_duration:
+            # Adjust end_time to cap at 24 hours
+            original_end = activity_data.end_time
+            activity_data.end_time = activity_data.start_time + max_duration
+
+            logger.warning(
+                "Activity duration capped at 24 hours",
+                extra={
+                    "user_id": activity_data.user_id,
+                    "original_duration_hours": duration.total_seconds() / 3600,
+                    "capped_duration_hours": 24.0,
+                    "original_end_time": original_end.isoformat(),
+                    "adjusted_end_time": activity_data.end_time.isoformat(),
+                }
+            )
 
         # Delegate to repository for persistence
         activity = await self.repository.create(activity_data)

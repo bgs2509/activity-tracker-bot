@@ -6,6 +6,7 @@ Tests business logic without database dependencies using mocked repository.
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, Mock
+import logging
 
 from src.application.services.activity_service import ActivityService
 from src.domain.models.activity import Activity
@@ -91,12 +92,24 @@ async def test_create_activity_end_time_equals_start_time(activity_service, vali
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_activity_duration_exceeds_24_hours(activity_service, valid_activity_data):
-    """Test that activity duration > 24 hours is rejected."""
+async def test_create_activity_duration_exceeds_24_hours(activity_service, mock_repository, valid_activity_data, mock_activity):
+    """Test that activity duration > 24 hours is automatically capped at 24 hours."""
+    # Set duration to 25 hours
     valid_activity_data.end_time = valid_activity_data.start_time + timedelta(hours=25)
+    expected_capped_end_time = valid_activity_data.start_time + timedelta(hours=24)
 
-    with pytest.raises(ValueError, match="Activity duration .* exceeds maximum allowed duration \\(24h\\)"):
-        await activity_service.create_activity(valid_activity_data)
+    mock_repository.create = AsyncMock(return_value=mock_activity)
+
+    # Should not raise an error, instead should cap at 24 hours
+    result = await activity_service.create_activity(valid_activity_data)
+
+    # Verify the activity was created with capped end_time
+    assert result == mock_activity
+    mock_repository.create.assert_called_once()
+
+    # Check that end_time was adjusted to 24 hours
+    called_data = mock_repository.create.call_args[0][0]
+    assert called_data.end_time == expected_capped_end_time
 
 
 @pytest.mark.unit
@@ -123,6 +136,25 @@ async def test_create_activity_very_short_duration(activity_service, mock_reposi
 
     assert result == mock_activity
     mock_repository.create.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_activity_duration_capping_logs_warning(activity_service, mock_repository, valid_activity_data, mock_activity, caplog):
+    """Test that capping activity duration logs a warning."""
+    # Set duration to 48 hours
+    valid_activity_data.end_time = valid_activity_data.start_time + timedelta(hours=48)
+    mock_repository.create = AsyncMock(return_value=mock_activity)
+
+    with caplog.at_level(logging.WARNING):
+        await activity_service.create_activity(valid_activity_data)
+
+    # Check that a warning was logged
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
+    assert "Activity duration capped at 24 hours" in caplog.records[0].message
+    assert caplog.records[0].original_duration_hours == 48.0
+    assert caplog.records[0].capped_duration_hours == 24.0
 
 
 # ============================================================================

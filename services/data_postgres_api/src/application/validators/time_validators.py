@@ -74,6 +74,10 @@ def validate_activity_duration(
     """
     Validate that activity duration is within acceptable limits.
 
+    DEPRECATED: This validation is no longer used in ActivityService.
+    The service now automatically caps durations at 24 hours instead of raising errors.
+    Kept for backward compatibility and potential future use.
+
     Args:
         start_time: Activity start time
         end_time: Activity end time
@@ -92,7 +96,9 @@ def validate_activity_duration(
     duration = end_time - start_time
     duration_hours = duration.total_seconds() / 3600
 
-    if duration_hours > max_hours:
+    # Add small epsilon to handle floating point precision issues
+    EPSILON = 0.001  # ~3.6 seconds tolerance
+    if duration_hours > max_hours + EPSILON:
         raise ValueError(
             f"Activity duration ({duration_hours:.1f}h) exceeds "
             f"maximum allowed duration ({max_hours}h)"
