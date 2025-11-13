@@ -1,5 +1,5 @@
 """Main menu keyboard."""
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 
 def get_main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -31,4 +31,29 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="❓ Справка", callback_data="help"),
         ],
     ])
+    return keyboard
+
+
+def get_persistent_reply_keyboard() -> ReplyKeyboardMarkup:
+    """Get persistent reply keyboard with quick access to activity recording.
+
+    This keyboard is always visible at the bottom of the Telegram chat,
+    providing instant access to the most important action - recording activity.
+
+    Best practices applied:
+    - Single primary action for maximum clarity
+    - Always visible (persistent=True) for instant access
+    - Compact size (resize_keyboard=True) for better UX
+    - Works alongside InlineKeyboards without conflicts
+
+    Returns:
+        ReplyKeyboardMarkup: Persistent keyboard with activity recording button
+    """
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📝 Записать активность")],
+        ],
+        resize_keyboard=True,  # Compact size
+        persistent=True,       # Always visible
+    )
     return keyboard
