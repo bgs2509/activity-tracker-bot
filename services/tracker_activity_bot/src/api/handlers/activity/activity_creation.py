@@ -782,12 +782,12 @@ async def select_recent_activity(
             }
         )
 
-        # Create post-save callback if this is automatic flow
-        post_save_callback = None
-        if trigger_source == "automatic":
-            post_save_callback = _create_poll_scheduling_callback(
-                telegram_id, callback.bot, services
-            )
+        # Create post-save callback to reschedule next automatic poll
+        # Always reschedule after saving activity to avoid duplicate questions
+        # about the same time period in the next automatic poll
+        post_save_callback = _create_poll_scheduling_callback(
+            telegram_id, callback.bot, services
+        )
 
         # Use shared function to save activity
         from src.api.handlers.activity.shared import create_and_save_activity
@@ -864,12 +864,12 @@ async def process_description(
         }
     )
 
-    # Create post-save callback if this is automatic flow
-    post_save_callback = None
-    if trigger_source == "automatic":
-        post_save_callback = _create_poll_scheduling_callback(
-            telegram_id, message.bot, services
-        )
+    # Create post-save callback to reschedule next automatic poll
+    # Always reschedule after saving activity to avoid duplicate questions
+    # about the same time period in the next automatic poll
+    post_save_callback = _create_poll_scheduling_callback(
+        telegram_id, message.bot, services
+    )
 
     # Use shared function to save activity
     from src.api.handlers.activity.shared import create_and_save_activity
