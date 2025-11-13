@@ -24,7 +24,8 @@ from src.api.keyboards.time_select import (
     get_period_keyboard,
     get_start_time_keyboard,
     get_end_time_keyboard,
-    get_period_keyboard_with_auto
+    get_period_keyboard_with_auto,
+    get_manual_period_keyboard
 )
 from src.api.keyboards.poll import get_poll_category_keyboard
 from src.api.messages.activity_messages import get_category_selection_message
@@ -120,6 +121,25 @@ async def handle_noop(callback: types.CallbackQuery):
     Some keyboards have visual divider buttons that don't perform actions.
     This handler simply acknowledges them without doing anything.
     """
+    await callback.answer()
+
+
+@router.callback_query(ActivityStates.waiting_for_period, F.data == "period_manual")
+@with_typing_action
+async def show_manual_period_keyboard(callback: types.CallbackQuery):
+    """Show manual period selection keyboard.
+
+    User clicked "Manual" - display second screen with 9 time period options.
+
+    Flow:
+        User clicks "Manual" -> Show period selection keyboard
+    """
+    text = (
+        "📝 Записываем активность\n\n"
+        "⏰ Выбери период:"
+    )
+
+    await callback.message.edit_text(text, reply_markup=get_manual_period_keyboard())
     await callback.answer()
 
 
@@ -269,10 +289,13 @@ async def quick_period_selection(callback: types.CallbackQuery, state: FSMContex
     now = datetime.now(timezone.utc)
 
     period_map = {
+        "5m": timedelta(minutes=5),
         "15m": timedelta(minutes=15),
         "30m": timedelta(minutes=30),
         "1h": timedelta(hours=1),
+        "2h": timedelta(hours=2),
         "3h": timedelta(hours=3),
+        "5h": timedelta(hours=5),
         "8h": timedelta(hours=8),
         "12h": timedelta(hours=12),
     }

@@ -70,43 +70,66 @@ def get_start_time_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_period_keyboard_with_auto() -> InlineKeyboardMarkup:
-    """Period keyboard with 'Auto Calculate' button for manual flow.
+    """Period keyboard with 'Auto' and 'Manual' options.
 
-    Provides quick-select period buttons plus an option to automatically
-    calculate period from last activity (similar to automatic poll behavior).
+    Simplified first step - user chooses between automatic calculation
+    or manual time selection.
 
     Returns:
-        InlineKeyboardMarkup with auto-calculate option and period buttons
+        InlineKeyboardMarkup with 2 main options
 
     Layout:
-        [⚡️ Авто (от последней активности)]
-        [───── или выбери вручную ──────]
-        [15 минут] [30 минут]
-        [1 час]    [3 часа]
-        [8 часов]  [12 часов]
+        [🤖 Авто (от последней активности)]
+        [⌨️ Вручную указать время]
         [❌ Отменить]
     """
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        # Auto-calculate option (prominent at top)
+        # Auto-calculate option
         [InlineKeyboardButton(
-            text="⚡️ Авто (от последней активности)",
+            text="🤖 Авто (от последней активности)",
             callback_data="period_auto"
         )],
-        # Visual divider (non-clickable)
+        # Manual time selection option
         [InlineKeyboardButton(
-            text="───── или выбери вручную ──────",
-            callback_data="noop"
+            text="⌨️ Вручную указать время",
+            callback_data="period_manual"
         )],
-        # Quick period selection buttons (2x3 grid)
+        # Cancel button
+        [InlineKeyboardButton(text="❌ Отменить", callback_data="cancel")],
+    ])
+    return keyboard
+
+
+def get_manual_period_keyboard() -> InlineKeyboardMarkup:
+    """Manual period selection keyboard with 9 time options.
+
+    Shows after user clicks "Manual" - provides granular time period choices.
+
+    Returns:
+        InlineKeyboardMarkup with 9 period buttons
+
+    Layout:
+        [5 минут] [15 минут] [30 минут]
+        [1 час]   [2 часа]   [3 часа]
+        [5 часов] [8 часов]  [12 часов]
+        [❌ Отменить]
+    """
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        # Short periods (minutes)
         [
+            InlineKeyboardButton(text="5 минут", callback_data="period_5m"),
             InlineKeyboardButton(text="15 минут", callback_data="period_15m"),
             InlineKeyboardButton(text="30 минут", callback_data="period_30m"),
         ],
+        # Medium periods (1-3 hours)
         [
             InlineKeyboardButton(text="1 час", callback_data="period_1h"),
+            InlineKeyboardButton(text="2 часа", callback_data="period_2h"),
             InlineKeyboardButton(text="3 часа", callback_data="period_3h"),
         ],
+        # Long periods (5-12 hours)
         [
+            InlineKeyboardButton(text="5 часов", callback_data="period_5h"),
             InlineKeyboardButton(text="8 часов", callback_data="period_8h"),
             InlineKeyboardButton(text="12 часов", callback_data="period_12h"),
         ],
