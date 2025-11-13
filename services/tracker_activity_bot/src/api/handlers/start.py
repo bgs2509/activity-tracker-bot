@@ -55,7 +55,11 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
             send_poll_callback=send_automatic_poll,
             bot=message.bot
         )
-        logger.info(f"Scheduled first poll for user {telegram_id}")
+        logger.info(
+            f"Scheduled first poll for NEW user {telegram_id} "
+            f"with intervals: weekday={settings.get('poll_interval_weekday')}min, "
+            f"weekend={settings.get('poll_interval_weekend')}min"
+        )
 
         # Welcome message for new user
         text = (
@@ -78,16 +82,21 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
             logger.info(f"Creating missing settings for existing user {user['id']}")
             settings = await services.settings.create_settings(user["id"])
 
-            # Schedule poll for existing user who didn't have settings
-            user_timezone = user.get("timezone", "Europe/Moscow")
-            await services.scheduler.schedule_poll(
-                user_id=telegram_id,
-                settings=settings,
-                user_timezone=user_timezone,
-                send_poll_callback=send_automatic_poll,
-                bot=message.bot
-            )
-            logger.info(f"Scheduled poll for existing user {telegram_id}")
+        # Schedule poll for ALL returning users (with or without settings)
+        user_timezone = user.get("timezone", "Europe/Moscow")
+        await services.scheduler.schedule_poll(
+            user_id=telegram_id,
+            settings=settings,
+            user_timezone=user_timezone,
+            send_poll_callback=send_automatic_poll,
+            bot=message.bot
+        )
+        logger.info(
+            f"Scheduled poll for RETURNING user {telegram_id} "
+            f"(settings existed: {settings is not None}) "
+            f"with intervals: weekday={settings.get('poll_interval_weekday') if settings else 'N/A'}min, "
+            f"weekend={settings.get('poll_interval_weekend') if settings else 'N/A'}min"
+        )
 
         # Welcome message for returning user
         text = (
