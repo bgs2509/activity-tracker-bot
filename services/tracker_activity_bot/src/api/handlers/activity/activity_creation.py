@@ -1017,8 +1017,54 @@ def _create_poll_scheduling_callback(
         try:
             from src.api.handlers.poll.poll_sender import send_automatic_poll
 
+            # Debug log to see what's in state_data
+            logger.info(
+                "DEBUG: Poll rescheduling callback invoked",
+                extra={
+                    "telegram_user_id": telegram_id,
+                    "has_settings": "settings" in state_data,
+                    "has_user_timezone": "user_timezone" in state_data,
+                    "has_user_id": "user_id" in state_data,
+                    "state_data_keys": list(state_data.keys())
+                }
+            )
+
             settings = state_data.get("settings", {})
             user_timezone = state_data.get("user_timezone", "Europe/Moscow")
+            user_id = state_data.get("user_id")
+
+            # If settings are missing, try to fetch them from API
+            if not settings and user_id:
+                logger.warning(
+                    "Settings missing in state_data, fetching from API",
+                    extra={"telegram_user_id": telegram_id, "user_id": user_id}
+                )
+                try:
+                    settings = await services.settings.get_settings(user_id)
+                    if settings:
+                        logger.info(
+                            "Successfully fetched settings from API",
+                            extra={
+                                "telegram_user_id": telegram_id,
+                                "weekday_interval": settings.get("poll_interval_weekday"),
+                                "weekend_interval": settings.get("poll_interval_weekend")
+                            }
+                        )
+                except Exception as fetch_error:
+                    logger.error(
+                        "Failed to fetch settings from API, using defaults",
+                        extra={
+                            "telegram_user_id": telegram_id,
+                            "error": str(fetch_error)
+                        }
+                    )
+                    # Use default settings as fallback
+                    settings = {
+                        "poll_interval_weekday": 120,
+                        "poll_interval_weekend": 180,
+                        "quiet_hours_start": "23:00",
+                        "quiet_hours_end": "07:00"
+                    }
 
             await services.scheduler.schedule_poll(
                 user_id=telegram_id,
@@ -1028,9 +1074,13 @@ def _create_poll_scheduling_callback(
                 bot=bot
             )
 
-            logger.debug(
-                "Scheduled next poll after activity save",
-                extra={"telegram_user_id": telegram_id}
+            logger.info(
+                "Successfully scheduled next poll after activity save",
+                extra={
+                    "telegram_user_id": telegram_id,
+                    "weekday_interval": settings.get("poll_interval_weekday") if settings else None,
+                    "weekend_interval": settings.get("poll_interval_weekend") if settings else None
+                }
             )
 
         except Exception as e:
@@ -1038,7 +1088,8 @@ def _create_poll_scheduling_callback(
                 "Error scheduling next poll in post-save callback",
                 extra={
                     "telegram_user_id": telegram_id,
-                    "error": str(e)
+                    "error": str(e),
+                    "error_type": type(e).__name__
                 },
                 exc_info=True
             )

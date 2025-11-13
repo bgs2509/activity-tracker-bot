@@ -73,6 +73,18 @@ class SchedulerService:
             send_poll_callback: Async function to send poll
             bot: Bot instance to pass to callback
         """
+        logger.info(
+            "DEBUG: schedule_poll called",
+            extra={
+                "user_id": user_id,
+                "settings_provided": bool(settings),
+                "weekday_interval": settings.get("poll_interval_weekday") if settings else None,
+                "weekend_interval": settings.get("poll_interval_weekend") if settings else None,
+                "user_timezone": user_timezone,
+                "existing_job": user_id in self.jobs
+            }
+        )
+
         # Calculate next poll time
         now = datetime.now(pytz.UTC)
         tz = pytz.timezone(user_timezone)
@@ -130,7 +142,16 @@ class SchedulerService:
         )
 
         self.jobs[user_id] = job.id
-        logger.info(f"Scheduled poll for user {user_id} at {next_time} (in {interval_minutes}m)")
+        logger.info(
+            f"Scheduled poll for user {user_id} at {next_time} (in {interval_minutes}m)",
+            extra={
+                "user_id": user_id,
+                "job_id": job.id,
+                "next_poll_time": next_time.isoformat(),
+                "interval_minutes": interval_minutes,
+                "total_jobs_count": len(self.jobs)
+            }
+        )
 
     async def cancel_poll(self, user_id: int):
         """Cancel scheduled poll for user."""
