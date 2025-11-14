@@ -79,7 +79,7 @@ This project implements a **Proof of Concept (Level 1)** Telegram bot for tracki
 
 ```
 activity-tracker-bot/
-├── .framework/                        # Framework submodule (read-only)
+├── .ai-framework/                     # Framework submodule (read-only)
 │   └── docs/                          # Framework documentation
 │
 ├── services/
@@ -303,7 +303,7 @@ MIT License - see LICENSE file for details
 
 - Built with [doc4microservices framework](https://github.com/...)
 - Uses **Improved Hybrid Approach** architecture
-- Follows `.framework/` best practices
+- Follows `.ai-framework/` best practices
 
 ---
 

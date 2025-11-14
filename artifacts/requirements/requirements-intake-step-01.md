@@ -341,7 +341,7 @@
 **Priority**: MUST HAVE
 **ID**: REQ-T-001
 
-**Architectural Principle**: **Improved Hybrid Approach** (согласно `.framework/docs/atomic/architecture/improved-hybrid-overview.md`)
+**Architectural Principle**: **Improved Hybrid Approach** (согласно `.ai-framework/docs/atomic/architecture/improved-hybrid-overview.md`)
 
 **Services**:
 
@@ -378,7 +378,7 @@
 - **Access**: ТОЛЬКО для `tracker_activity_bot`
 - **Container**: `redis:7-alpine`
 
-**Source**: `.framework/docs/atomic/architecture/service-separation-principles.md`
+**Source**: `.ai-framework/docs/atomic/architecture/service-separation-principles.md`
 
 ---
 
@@ -389,7 +389,7 @@
 
 **Requirement**: Оба сервиса ДОЛЖНЫ использовать **обязательную `src/` директорию** с DDD/Hexagonal структурой.
 
-**Согласно**: `.framework/docs/atomic/architecture/project-structure-patterns.md` (Level 1 requirement)
+**Согласно**: `.ai-framework/docs/atomic/architecture/project-structure-patterns.md` (Level 1 requirement)
 
 #### Structure: `tracker_activity_bot/`
 ```
@@ -437,7 +437,7 @@ services/data_postgres_api/
 
 **Requirement**: Все сервисы ДОЛЖНЫ использовать **structured JSON logging** через `python-json-logger`.
 
-**Согласно**: `.framework/docs/reference/maturity-levels.md` (Level 1, строки 48-52)
+**Согласно**: `.ai-framework/docs/reference/maturity-levels.md` (Level 1, строки 48-52)
 
 **Implementation**:
 
@@ -506,7 +506,7 @@ python-json-logger==2.0.7
 
 **Requirement**: Business service (`tracker_activity_bot`) НЕ может напрямую обращаться к PostgreSQL. Все операции с данными ТОЛЬКО через HTTP API (`data_postgres_api`).
 
-**Согласно**: `.framework/docs/atomic/architecture/data-access-architecture.md`
+**Согласно**: `.ai-framework/docs/atomic/architecture/data-access-architecture.md`
 
 **Implementation**: HTTP clients в `tracker_activity_bot/src/infrastructure/http_clients/`
 
@@ -771,12 +771,12 @@ pytest services/data_postgres_api/tests --cov=src --cov-report=term-missing
 ## 📎 References
 
 **Framework Documentation**:
-- `.framework/docs/guides/architecture-guide.md` — Архитектурные принципы
-- `.framework/docs/atomic/architecture/improved-hybrid-overview.md` — Improved Hybrid Approach
-- `.framework/docs/atomic/architecture/data-access-architecture.md` — HTTP-only data access
-- `.framework/docs/atomic/architecture/service-separation-principles.md` — Сервисная сепарация
-- `.framework/docs/atomic/architecture/naming/README.md` — Naming conventions
-- `.framework/docs/reference/maturity-levels.md` — 4 уровня зрелости
+- `.ai-framework/docs/guides/architecture-guide.md` — Архитектурные принципы
+- `.ai-framework/docs/atomic/architecture/improved-hybrid-overview.md` — Improved Hybrid Approach
+- `.ai-framework/docs/atomic/architecture/data-access-architecture.md` — HTTP-only data access
+- `.ai-framework/docs/atomic/architecture/service-separation-principles.md` — Сервисная сепарация
+- `.ai-framework/docs/atomic/architecture/naming/README.md` — Naming conventions
+- `.ai-framework/docs/reference/maturity-levels.md` — 4 уровня зрелости
 
 **Source Prompt**:
 - `artifacts/prompts/step-01-v01.md` — Полный промпт для Step 01

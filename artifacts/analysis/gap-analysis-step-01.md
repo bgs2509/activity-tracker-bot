@@ -4,7 +4,7 @@
 > **Анализируемая версия**: Current implementation (master branch)
 > **Baseline (эталон)**: artifacts/prompts/step-01-v01.md
 > **Maturity Level**: Level 1 (PoC - Proof of Concept)
-> **Метод анализа**: Сравнение текущей реализации с требованиями промпта и `.framework/` Level 1 стандартами
+> **Метод анализа**: Сравнение текущей реализации с требованиями промпта и `.ai-framework/` Level 1 стандартами
 
 ---
 
@@ -43,7 +43,7 @@
 **Priority**: 🔴 **CRITICAL**
 **Category**: Observability
 **Requirement**: REQ-T-003 (Structured JSON Logging)
-**Source**: `.framework/docs/reference/maturity-levels.md` (Level 1, mandatory)
+**Source**: `.ai-framework/docs/reference/maturity-levels.md` (Level 1, mandatory)
 
 **Expected** (согласно промпту, строки 1131-1234):
 ```
@@ -367,7 +367,7 @@ services/data_postgres_api/
 
 **Rationale**:
 - `src/domain/models/` — правильное место для SQLAlchemy models в DDD
-- Согласно `.framework/docs/atomic/architecture/project-structure-patterns.md`
+- Согласно `.ai-framework/docs/atomic/architecture/project-structure-patterns.md`
 - Подготовка к эволюции на Level 2+ без рефакторинга
 
 **Status**: ✅ **NOT A GAP** (informational note)
@@ -388,7 +388,7 @@ services/data_postgres_api/
 - Все запросы через HTTP API (`data_postgres_api`) ✅
 - HTTP clients реализованы корректно ✅
 
-**Source**: `.framework/docs/atomic/architecture/improved-hybrid-overview.md`
+**Source**: `.ai-framework/docs/atomic/architecture/improved-hybrid-overview.md`
 
 ---
 
@@ -412,7 +412,7 @@ services/data_postgres_api/
 **✅ Redis**:
 - Доступ ТОЛЬКО для `tracker_activity_bot` ✅
 
-**Source**: `.framework/docs/atomic/architecture/service-separation-principles.md`
+**Source**: `.ai-framework/docs/atomic/architecture/service-separation-principles.md`
 
 ---
 
@@ -462,7 +462,7 @@ src/                             ✅ MANDATORY src/ directory
     └── logging.py               ❌ MISSING (GAP-001)
 ```
 
-**Source**: `.framework/docs/atomic/architecture/project-structure-patterns.md`
+**Source**: `.ai-framework/docs/atomic/architecture/project-structure-patterns.md`
 
 ---
 
@@ -778,11 +778,11 @@ dp = Dispatcher(storage=storage)                      ✅
 ## 📚 References
 
 ### Framework Documentation
-- `.framework/docs/reference/maturity-levels.md` — Level 1 requirements
-- `.framework/docs/atomic/architecture/improved-hybrid-overview.md` — Improved Hybrid Approach
-- `.framework/docs/atomic/architecture/data-access-architecture.md` — HTTP-only data access
-- `.framework/docs/atomic/architecture/service-separation-principles.md` — Service separation
-- `.framework/docs/atomic/architecture/project-structure-patterns.md` — DDD/Hexagonal structure
+- `.ai-framework/docs/reference/maturity-levels.md` — Level 1 requirements
+- `.ai-framework/docs/atomic/architecture/improved-hybrid-overview.md` — Improved Hybrid Approach
+- `.ai-framework/docs/atomic/architecture/data-access-architecture.md` — HTTP-only data access
+- `.ai-framework/docs/atomic/architecture/service-separation-principles.md` — Service separation
+- `.ai-framework/docs/atomic/architecture/project-structure-patterns.md` — DDD/Hexagonal structure
 
 ### Project Artifacts
 - `artifacts/requirements/requirements-intake-step-01.md` — Requirements specification

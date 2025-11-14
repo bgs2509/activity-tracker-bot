@@ -36,7 +36,7 @@
 
 ### Сервисы (Microservices)
 
-Согласно `.framework/docs/atomic/architecture/improved-hybrid-overview.md`:
+Согласно `.ai-framework/docs/atomic/architecture/improved-hybrid-overview.md`:
 
 #### 1. **tracker_activity_bot** (Aiogram Business Service)
 
@@ -181,7 +181,7 @@ activity-tracker-bot/
 └── README.md                               # Project documentation
 ```
 
-> **⚠️ ВАЖНО**: Используется DDD/Hexagonal архитектура с обязательной `src/` директорией в обоих сервисах, согласно `.framework/docs/atomic/architecture/project-structure-patterns.md`. Это требование Level 1 для возможности эволюции без рефакторинга при переходе на Level 2/3/4.
+> **⚠️ ВАЖНО**: Используется DDD/Hexagonal архитектура с обязательной `src/` директорией в обоих сервисах, согласно `.ai-framework/docs/atomic/architecture/project-structure-patterns.md`. Это требование Level 1 для возможности эволюции без рефакторинга при переходе на Level 2/3/4.
 
 ---
 
@@ -262,7 +262,7 @@ activity-tracker-bot/
 http://data_postgres_api:8000/api/v1
 ```
 
-**Naming convention**: REST API paths используют kebab-case для слов (`.framework/docs/atomic/architecture/naming/README.md`).
+**Naming convention**: REST API paths используют kebab-case для слов (`.ai-framework/docs/atomic/architecture/naming/README.md`).
 
 ---
 
@@ -1132,7 +1132,7 @@ await state.update_data(
 
 **⚠️ ОБЯЗАТЕЛЬНО для Level 1**: Все сервисы ДОЛЖНЫ использовать structured JSON logging через `python-json-logger`.
 
-**Согласно `.framework/docs/reference/maturity-levels.md` (Level 1, строки 48-52)**:
+**Согласно `.ai-framework/docs/reference/maturity-levels.md` (Level 1, строки 48-52)**:
 > "Observability:
 >  ✅ Structured logging (JSON format via python-json-logger)"
 
@@ -1330,7 +1330,7 @@ class UserClient:
 
 ### Dependency Injection в data_postgres_api
 
-**Согласно `.framework/docs/atomic/services/fastapi/dependency-injection.md`**:
+**Согласно `.ai-framework/docs/atomic/services/fastapi/dependency-injection.md`**:
 
 **Файл**: `data_postgres_api/src/core/database.py`
 
@@ -1505,7 +1505,7 @@ LOG_LEVEL=INFO
 
 ## ✅ Acceptance Criteria (Quality Gates для PoC)
 
-**Согласно `.framework/docs/reference/maturity-levels.md` (Level 1 - PoC)**:
+**Согласно `.ai-framework/docs/reference/maturity-levels.md` (Level 1 - PoC)**:
 
 ### Functional Validation
 
@@ -1590,7 +1590,7 @@ pytest services/data_postgres_api/tests --cov=services/data_postgres_api --cov-r
 - ✅ CI/CD pipelines
 - ✅ Automated backups
 
-**См.**: `.framework/docs/reference/maturity-levels.md`
+**См.**: `.ai-framework/docs/reference/maturity-levels.md`
 
 ---
 
@@ -1599,50 +1599,50 @@ pytest services/data_postgres_api/tests --cov=services/data_postgres_api --cov-r
 **Обязательно изучить перед реализацией:**
 
 ### Архитектура
-- `.framework/docs/guides/architecture-guide.md` — Архитектурные принципы
-- `.framework/docs/atomic/architecture/improved-hybrid-overview.md` — Improved Hybrid Approach
-- `.framework/docs/atomic/architecture/data-access-architecture.md` — HTTP-only data access
-- `.framework/docs/atomic/architecture/service-separation-principles.md` — Сервисная сепарация
+- `.ai-framework/docs/guides/architecture-guide.md` — Архитектурные принципы
+- `.ai-framework/docs/atomic/architecture/improved-hybrid-overview.md` — Improved Hybrid Approach
+- `.ai-framework/docs/atomic/architecture/data-access-architecture.md` — HTTP-only data access
+- `.ai-framework/docs/atomic/architecture/service-separation-principles.md` — Сервисная сепарация
 
 ### Naming Conventions
-- `.framework/docs/atomic/architecture/naming/README.md` — Полный гид по naming
-- `.framework/docs/atomic/architecture/naming/naming-services.md` — Naming для сервисов
-- `.framework/docs/atomic/architecture/naming/naming-python.md` — Naming для Python кода
+- `.ai-framework/docs/atomic/architecture/naming/README.md` — Полный гид по naming
+- `.ai-framework/docs/atomic/architecture/naming/naming-services.md` — Naming для сервисов
+- `.ai-framework/docs/atomic/architecture/naming/naming-python.md` — Naming для Python кода
 
 ### Aiogram (Bot Service)
-- `.framework/docs/atomic/services/aiogram/basic-setup.md` — Базовая настройка Aiogram
-- `.framework/docs/atomic/services/aiogram/bot-initialization.md` — Инициализация бота
-- `.framework/docs/atomic/services/aiogram/handler-patterns.md` — Паттерны обработчиков
-- `.framework/docs/atomic/services/aiogram/state-management.md` — FSM (Finite State Machine)
+- `.ai-framework/docs/atomic/services/aiogram/basic-setup.md` — Базовая настройка Aiogram
+- `.ai-framework/docs/atomic/services/aiogram/bot-initialization.md` — Инициализация бота
+- `.ai-framework/docs/atomic/services/aiogram/handler-patterns.md` — Паттерны обработчиков
+- `.ai-framework/docs/atomic/services/aiogram/state-management.md` — FSM (Finite State Machine)
 
 ### FastAPI (Data Service)
-- `.framework/docs/atomic/services/fastapi/basic-setup.md` — Базовая настройка FastAPI
-- `.framework/docs/atomic/services/fastapi/routing-patterns.md` — Роутинг и структура API
-- `.framework/docs/atomic/services/fastapi/dependency-injection.md` — Dependency Injection
+- `.ai-framework/docs/atomic/services/fastapi/basic-setup.md` — Базовая настройка FastAPI
+- `.ai-framework/docs/atomic/services/fastapi/routing-patterns.md` — Роутинг и структура API
+- `.ai-framework/docs/atomic/services/fastapi/dependency-injection.md` — Dependency Injection
 
 ### PostgreSQL
-- `.framework/docs/atomic/databases/postgresql/basic-setup.md` — Настройка PostgreSQL
-- `.framework/docs/atomic/databases/postgresql/sqlalchemy-integration.md` — SQLAlchemy 2.0 async
+- `.ai-framework/docs/atomic/databases/postgresql/basic-setup.md` — Настройка PostgreSQL
+- `.ai-framework/docs/atomic/databases/postgresql/sqlalchemy-integration.md` — SQLAlchemy 2.0 async
 
 ### Redis
-- `.framework/docs/atomic/integrations/redis/connection-management.md` — Redis connection pooling
-- `.framework/docs/atomic/integrations/redis/aiogram-integration.md` — Aiogram + Redis FSM
+- `.ai-framework/docs/atomic/integrations/redis/connection-management.md` — Redis connection pooling
+- `.ai-framework/docs/atomic/integrations/redis/aiogram-integration.md` — Aiogram + Redis FSM
 
 ### HTTP Communication
-- `.framework/docs/atomic/integrations/http-communication/business-to-data-calls.md` — Business → Data HTTP паттерны
-- `.framework/docs/atomic/integrations/http-communication/http-client-patterns.md` — HTTP client конфигурация
+- `.ai-framework/docs/atomic/integrations/http-communication/business-to-data-calls.md` — Business → Data HTTP паттерны
+- `.ai-framework/docs/atomic/integrations/http-communication/http-client-patterns.md` — HTTP client конфигурация
 
 ### Docker & Infrastructure
-- `.framework/docs/atomic/infrastructure/containerization/docker-compose-setup.md` — Docker Compose best practices
-- `.framework/docs/atomic/infrastructure/containerization/dockerfile-patterns.md` — Dockerfile паттерны
+- `.ai-framework/docs/atomic/infrastructure/containerization/docker-compose-setup.md` — Docker Compose best practices
+- `.ai-framework/docs/atomic/infrastructure/containerization/dockerfile-patterns.md` — Dockerfile паттерны
 
 ### Testing
-- `.framework/docs/atomic/testing/unit-testing/pytest-setup.md` — Pytest конфигурация
-- `.framework/docs/atomic/testing/quality-assurance/linting-standards.md` — Ruff, Mypy стандарты
+- `.ai-framework/docs/atomic/testing/unit-testing/pytest-setup.md` — Pytest конфигурация
+- `.ai-framework/docs/atomic/testing/quality-assurance/linting-standards.md` — Ruff, Mypy стандарты
 
 ### Maturity Levels
-- `.framework/docs/reference/maturity-levels.md` — 4 уровня зрелости (PoC → Production)
-- `.framework/docs/reference/conditional-stage-rules.md` — Правила для каждого уровня
+- `.ai-framework/docs/reference/maturity-levels.md` — 4 уровня зрелости (PoC → Production)
+- `.ai-framework/docs/reference/conditional-stage-rules.md` — Правила для каждого уровня
 
 ---
 
@@ -1650,7 +1650,7 @@ pytest services/data_postgres_api/tests --cov=services/data_postgres_api --cov-r
 
 ### Этап 1: Подготовка инфраструктуры
 
-- [ ] Создать структуру проекта согласно `.framework/docs/reference/project-structure.md`
+- [ ] Создать структуру проекта согласно `.ai-framework/docs/reference/project-structure.md`
 - [ ] Настроить `docker-compose.yml` с PostgreSQL, Redis
 - [ ] Создать `.env.example` с переменными окружения
 - [ ] Настроить Makefile для команд разработки

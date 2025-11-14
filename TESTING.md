@@ -424,4 +424,4 @@ services/{service_name}/tests/
 
 - [Pytest Documentation](https://docs.pytest.org/)
 - [pytest-cov Documentation](https://pytest-cov.readthedocs.io/)
-- [Framework Testing Guidelines](.framework/docs/atomic/testing/)
+- [Framework Testing Guidelines](.ai-framework/docs/atomic/testing/)

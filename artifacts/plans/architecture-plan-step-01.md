@@ -10,7 +10,7 @@
 
 ## 📐 Executive Summary
 
-Этот документ описывает архитектуру системы Activity Tracker Bot на Level 1 (PoC), включая текущее состояние реализации и соответствие архитектурным требованиям `.framework/`.
+Этот документ описывает архитектуру системы Activity Tracker Bot на Level 1 (PoC), включая текущее состояние реализации и соответствие архитектурным требованиям `.ai-framework/`.
 
 **Ключевые принципы**:
 - ✅ **Improved Hybrid Approach** — сервисная сепарация
@@ -506,7 +506,7 @@ def parse_user_time(time_str: str, user_timezone: str = "Europe/Moscow") -> date
 
 **Requirement**: **Structured JSON Logging** (MANDATORY для Level 1)
 
-**Согласно**: `.framework/docs/reference/maturity-levels.md` (REQ-T-003)
+**Согласно**: `.ai-framework/docs/reference/maturity-levels.md` (REQ-T-003)
 
 #### Implementation Design
 
@@ -809,12 +809,12 @@ volumes:
 ## 📚 References
 
 **Framework Documentation**:
-- `.framework/docs/guides/architecture-guide.md` — Architectural principles
-- `.framework/docs/atomic/architecture/improved-hybrid-overview.md` — Improved Hybrid Approach
-- `.framework/docs/atomic/architecture/data-access-architecture.md` — HTTP-only data access
-- `.framework/docs/atomic/architecture/service-separation-principles.md` — Service separation
-- `.framework/docs/atomic/architecture/project-structure-patterns.md` — DDD/Hexagonal structure
-- `.framework/docs/reference/maturity-levels.md` — Level 1 requirements
+- `.ai-framework/docs/guides/architecture-guide.md` — Architectural principles
+- `.ai-framework/docs/atomic/architecture/improved-hybrid-overview.md` — Improved Hybrid Approach
+- `.ai-framework/docs/atomic/architecture/data-access-architecture.md` — HTTP-only data access
+- `.ai-framework/docs/atomic/architecture/service-separation-principles.md` — Service separation
+- `.ai-framework/docs/atomic/architecture/project-structure-patterns.md` — DDD/Hexagonal structure
+- `.ai-framework/docs/reference/maturity-levels.md` — Level 1 requirements
 
 **Project Artifacts**:
 - `artifacts/requirements/requirements-intake-step-01.md` — Requirements specification
