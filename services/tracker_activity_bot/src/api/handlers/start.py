@@ -5,7 +5,7 @@ from aiogram.filters import Command
 
 from src.api.dependencies import ServiceContainer
 from src.api.handlers.poll import send_automatic_poll
-from src.api.keyboards.main_menu import get_main_menu_keyboard, get_persistent_reply_keyboard
+from src.api.keyboards.main_menu import get_persistent_reply_keyboard, send_main_menu
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -73,8 +73,7 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
             "• Выходные: каждые 3 часа\n"
             "• Тихие часы: 23:00 — 07:00 (бот не будет беспокоить)\n\n"
             "Изменить настройки можно в разделе \"Настройки\".\n\n"
-            "💡 Кнопка \"📝 Записать активность\" всегда доступна внизу экрана!\n\n"
-            "Выбери действие:"
+            "💡 Кнопка \"📝 Записать активность\" всегда доступна внизу экрана!"
         )
     else:
         # Check if user has settings (for backward compatibility with existing users)
@@ -100,10 +99,7 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
         )
 
         # Welcome message for returning user
-        text = (
-            f"👋 С возвращением, {first_name}!\n\n"
-            "Выбери действие:"
-        )
+        text = f"👋 С возвращением, {first_name}!"
 
     # Send message with BOTH keyboards:
     # - ReplyKeyboard (persistent bottom buttons) for quick access
@@ -112,8 +108,5 @@ async def cmd_start(message: types.Message, services: ServiceContainer):
         text,
         reply_markup=get_persistent_reply_keyboard()  # Persistent bottom keyboard
     )
-    # Send inline menu immediately after
-    await message.answer(
-        "📱 Меню:",
-        reply_markup=get_main_menu_keyboard()  # Inline keyboard with menu options
-    )
+    # Send inline menu immediately after using unified function
+    await send_main_menu(message)

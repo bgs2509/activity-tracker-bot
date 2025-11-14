@@ -190,16 +190,14 @@ class TestStartHandlerNewUser:
 
         # Act
         with patch('src.api.handlers.start.send_automatic_poll'):
-            with patch('src.api.handlers.start.get_main_menu_keyboard') as mock_keyboard:
-                mock_keyboard.return_value = MagicMock()
-                await cmd_start(mock_message, mock_services)
+            await cmd_start(mock_message, mock_services)
 
-        # Assert: Message sent
-        mock_message.answer.assert_called_once()
-        call_args = mock_message.answer.call_args
+        # Assert: Two messages sent (welcome + menu)
+        assert mock_message.answer.call_count == 2
 
-        # Check message text
-        message_text = call_args[0][0]
+        # Check first message (welcome with instructions)
+        first_call = mock_message.answer.call_args_list[0]
+        message_text = first_call[0][0]
         assert "Привет, Тест!" in message_text
         assert "отслеживать твою активность" in message_text
         assert "базовые категории" in message_text
@@ -208,9 +206,13 @@ class TestStartHandlerNewUser:
         assert "Будни: каждые 2 часа" in message_text
         assert "Тихие часы: 23:00 — 07:00" in message_text
 
-        # Check keyboard
-        assert "reply_markup" in call_args[1]
-        mock_keyboard.assert_called_once()
+        # Check first message has reply keyboard
+        assert "reply_markup" in first_call[1]
+
+        # Check second message (main menu)
+        second_call = mock_message.answer.call_args_list[1]
+        second_message_text = second_call[0][0]
+        assert "🏠 Главное меню" in second_message_text
 
     @pytest.mark.unit
     async def test_start_command_new_user_uses_telegram_user_data(
@@ -285,13 +287,19 @@ class TestStartHandlerExistingUser:
         mock_services.category.bulk_create_categories.assert_not_called()
 
         # Assert: Welcome back message
-        mock_message.answer.assert_called_once()
-        message_text = mock_message.answer.call_args[0][0]
-        assert "С возвращением, Тест!" in message_text
-        assert "Выбери действие:" in message_text
+        # Note: First call is welcome message, second call is main menu
+        assert mock_message.answer.call_count == 2
+
+        # Check first message (welcome)
+        first_call_text = mock_message.answer.call_args_list[0][0][0]
+        assert "С возвращением, Тест!" in first_call_text
+
+        # Check second message (main menu)
+        second_call_text = mock_message.answer.call_args_list[1][0][0]
+        assert "🏠 Главное меню" in second_call_text
 
         # Should be shorter message (no detailed instructions)
-        assert "отслеживать твою активность" not in message_text
+        assert "отслеживать твою активность" not in first_call_text
 
     @pytest.mark.unit
     async def test_start_command_existing_user_does_not_create_settings(

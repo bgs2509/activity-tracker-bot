@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 
 from src.api.dependencies import ServiceContainer
 from src.api.keyboards.settings import get_main_settings_keyboard
-from src.api.keyboards.main_menu import get_main_menu_keyboard
+from src.api.keyboards.main_menu import send_main_menu, get_main_menu_keyboard
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.decorators import with_typing_action
 from src.application.utils.formatters import format_duration
@@ -476,8 +476,5 @@ async def return_to_main_menu(
         extra={"user_id": callback.from_user.id}
     )
 
-    await callback.message.answer(
-        "🏠 Главное меню",
-        reply_markup=get_main_menu_keyboard()
-    )
+    await send_main_menu(callback.message)
     await callback.answer()

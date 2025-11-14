@@ -1,4 +1,5 @@
 """Main menu keyboard."""
+from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 
@@ -55,3 +56,23 @@ def get_persistent_reply_keyboard() -> ReplyKeyboardMarkup:
         persistent=True,       # Always visible
     )
     return keyboard
+
+
+async def send_main_menu(message: types.Message) -> None:
+    """Send main menu with unified text and keyboard.
+
+    This function provides a single point of control for displaying the main menu,
+    ensuring consistency across all entry points (/start command, main_menu callbacks, etc.).
+
+    Args:
+        message: Telegram message object to send the menu to
+
+    Best practices applied:
+    - DRY principle: Single source of truth for main menu display
+    - Consistent UX: Same text and keyboard everywhere
+    - Easy maintenance: Update in one place to affect all usages
+    """
+    await message.answer(
+        "🏠 Главное меню",
+        reply_markup=get_main_menu_keyboard()
+    )
