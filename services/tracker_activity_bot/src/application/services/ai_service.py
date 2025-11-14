@@ -10,7 +10,7 @@ Architecture:
 - Returns structured JSON with confidence levels and alternatives
 
 Key Features:
-- 1-second timeout per model attempt
+- 10-second timeout per model attempt
 - Automatic fallback to alternative models
 - Context-aware parsing based on user's past activities
 - Confidence scoring (high/medium/low)
@@ -170,11 +170,11 @@ class AIService:
                     }
                 )
 
-                # Call AI with 1-second timeout
+                # Call AI with 10-second timeout
                 result = await self._call_ai_with_timeout(
                     prompt=prompt,
                     model=current_model,
-                    timeout=1.0
+                    timeout=10.0
                 )
 
                 if result:

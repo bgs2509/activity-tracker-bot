@@ -23,7 +23,7 @@ class AIModelSelector:
 
     This service implements a reliability-based model selection algorithm:
     1. Models are sorted by reliability rating (0-100)
-    2. Best model is tried first with 1-second timeout
+    2. Best model is tried first with 10-second timeout
     3. On failure, rating is decreased and next model is tried
     4. Ratings are persisted to disk after each update
 
@@ -73,7 +73,6 @@ class AIModelSelector:
         """Initialize with default set of free OpenRouter models."""
         self.models = {
             "meta-llama/llama-3.2-3b-instruct:free": 100,
-            "google/gemma-2-9b-it:free": 95,
             "microsoft/phi-3-mini-128k-instruct:free": 90,
             "meta-llama/llama-3.2-1b-instruct:free": 85,
             "google/gemma-2-2b-it:free": 80,
