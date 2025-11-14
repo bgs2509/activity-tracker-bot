@@ -20,7 +20,7 @@ Key Features:
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any
 
 from openai import AsyncOpenAI, APITimeoutError, APIError
@@ -99,6 +99,12 @@ class AIService:
         self.api_key = settings.openrouter_api_key
         self.model_selector = AIModelSelector()
 
+        # Temporary disable mechanism to prevent overload
+        self.consecutive_failures = 0
+        self.temporarily_disabled_until = None
+        self.max_consecutive_failures = 5
+        self.disable_duration_minutes = 5
+
         if not self.api_key:
             logger.warning(
                 "OpenRouter API key not configured, AI parsing will be disabled"
@@ -149,6 +155,28 @@ class AIService:
             logger.warning("AI service is disabled, skipping parsing")
             return None
 
+        # Check if temporarily disabled due to consecutive failures
+        if self.temporarily_disabled_until:
+            now = datetime.now(timezone.utc)
+            if now < self.temporarily_disabled_until:
+                remaining_seconds = (self.temporarily_disabled_until - now).total_seconds()
+                logger.warning(
+                    "AI service temporarily disabled due to consecutive failures",
+                    extra={
+                        "remaining_seconds": int(remaining_seconds),
+                        "consecutive_failures": self.consecutive_failures
+                    }
+                )
+                return None
+            else:
+                # Re-enable after cooldown period
+                logger.info(
+                    "AI service re-enabled after cooldown period",
+                    extra={"consecutive_failures": self.consecutive_failures}
+                )
+                self.temporarily_disabled_until = None
+                self.consecutive_failures = 0
+
         # Build prompt with context
         prompt = self._build_prompt(user_input, categories, recent_activities)
 
@@ -178,7 +206,8 @@ class AIService:
                 )
 
                 if result:
-                    # Success! Increase model rating
+                    # Success! Reset failure counter and increase model rating
+                    self.consecutive_failures = 0
                     self.model_selector.increase_rating(current_model)
 
                     logger.info(
@@ -228,10 +257,33 @@ class AIService:
                 # Try next model for any unexpected error
                 current_model = self.model_selector.get_next_model(current_model)
 
+        # All models failed - increment failure counter
+        self.consecutive_failures += 1
+
         logger.error(
             "All AI models failed or timed out",
-            extra={"attempts": attempts, "max_retries": max_retries}
+            extra={
+                "attempts": attempts,
+                "max_retries": max_retries,
+                "consecutive_failures": self.consecutive_failures
+            }
         )
+
+        # Check if we should temporarily disable AI service
+        if self.consecutive_failures >= self.max_consecutive_failures:
+            self.temporarily_disabled_until = (
+                datetime.now(timezone.utc) +
+                timedelta(minutes=self.disable_duration_minutes)
+            )
+            logger.warning(
+                "AI service temporarily disabled due to consecutive failures",
+                extra={
+                    "consecutive_failures": self.consecutive_failures,
+                    "disable_duration_minutes": self.disable_duration_minutes,
+                    "disabled_until": self.temporarily_disabled_until.isoformat()
+                }
+            )
+
         return None
 
     async def _call_ai_with_timeout(
