@@ -114,15 +114,15 @@ def format_activity_list(
             end_str = format_time(end_time, timezone)
             duration_str = format_duration(activity["duration_minutes"])
 
-            # Category name in UPPERCASE (if present)
+            # Category name with emoji (if present)
             category_text = ""
             if activity.get("category_name"):
-                category_name_upper = activity["category_name"].upper()
+                category_name = activity["category_name"]
                 # Add emoji if present
                 if activity.get("category_emoji"):
-                    category_text = f"{activity['category_emoji']} {category_name_upper} "
+                    category_text = f"{activity['category_emoji']} {category_name} "
                 else:
-                    category_text = f"{category_name_upper} "
+                    category_text = f"{category_name} "
 
             # Description
             description = activity["description"]

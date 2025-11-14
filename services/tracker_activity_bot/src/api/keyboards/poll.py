@@ -91,6 +91,6 @@ def get_poll_reminder_keyboard() -> InlineKeyboardMarkup:
         Keyboard with OK button
     """
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Понятно", callback_data="poll_reminder_ok")],
+        [InlineKeyboardButton(text="👌 Понятно", callback_data="poll_reminder_ok")],
     ])
     return keyboard

@@ -68,9 +68,9 @@ async def start_add_activity(message: types.Message, state: FSMContext):
 
     # Send period selection keyboard with auto-calculate option
     text = (
-        "📝 Записываем активность\n\n"
+        "**📝 Записываем активность**\n\n"
         "Автоматически рассчитать период от последней активности или выбрать вручную?\n\n"
-        "⏰ Выбери период:"
+        "⏰ **Выбери период:**"
     )
 
     await message.answer(text, reply_markup=get_period_keyboard_with_auto())
@@ -105,9 +105,9 @@ async def start_add_activity_callback(callback: types.CallbackQuery, state: FSMC
 
     # Send period selection keyboard with auto-calculate option
     text = (
-        "📝 Записываем активность\n\n"
+        "**📝 Записываем активность**\n\n"
         "Автоматически рассчитать период от последней активности или выбрать вручную?\n\n"
-        "⏰ Выбери период:"
+        "⏰ **Выбери период:**"
     )
 
     await callback.message.answer(text, reply_markup=get_period_keyboard_with_auto())
@@ -135,8 +135,8 @@ async def show_manual_period_keyboard(callback: types.CallbackQuery):
         User clicks "Manual" -> Show period selection keyboard
     """
     text = (
-        "📝 Записываем активность\n\n"
-        "⏰ Выбери период:"
+        "**📝 Записываем активность**\n\n"
+        "⏰ **Выбери период:**"
     )
 
     await callback.message.edit_text(text, reply_markup=get_manual_period_keyboard())
