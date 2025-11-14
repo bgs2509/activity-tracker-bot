@@ -2,6 +2,7 @@
 Correlation ID middleware for request tracing.
 
 This middleware adds correlation IDs to all requests for distributed tracing.
+Complies with .ai-framework/ standard using X-Request-ID header.
 """
 
 import uuid
@@ -10,7 +11,7 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-CORRELATION_ID_HEADER = "X-Correlation-ID"
+CORRELATION_ID_HEADER = "X-Request-ID"
 
 
 class CorrelationIDMiddleware(BaseHTTPMiddleware):

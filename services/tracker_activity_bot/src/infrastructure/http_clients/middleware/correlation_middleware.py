@@ -1,7 +1,8 @@
 """HTTP client middleware for correlation ID propagation.
 
-Automatically adds X-Correlation-ID header to all outgoing HTTP requests
+Automatically adds X-Request-ID header to all outgoing HTTP requests
 using the correlation ID from the current context.
+Complies with .ai-framework/ standard using X-Request-ID header.
 """
 
 import logging
@@ -19,7 +20,7 @@ class CorrelationIDMiddleware(RequestMiddleware):
     """Middleware to add correlation ID header to HTTP requests.
 
     Retrieves correlation ID from current context and adds it as
-    X-Correlation-ID header for distributed tracing.
+    X-Request-ID header for distributed tracing.
     """
 
     async def process_request(self, request: httpx.Request) -> httpx.Request:
@@ -29,12 +30,12 @@ class CorrelationIDMiddleware(RequestMiddleware):
             request: HTTP request to process
 
         Returns:
-            Request with X-Correlation-ID header added
+            Request with X-Request-ID header added
         """
         correlation_id = get_correlation_id()
 
         # Add header
-        request.headers["X-Correlation-ID"] = correlation_id
+        request.headers["X-Request-ID"] = correlation_id
 
         logger.debug(
             "Added correlation ID to outgoing HTTP request",
