@@ -106,6 +106,94 @@ async def show_settings_menu(
     await callback.answer()
 
 
+@router.message(Command("settings"))
+@with_typing_action
+@log_user_action("settings_command_used")
+async def settings_command_handler(
+    message: types.Message,
+    services: ServiceContainer
+) -> None:
+    """
+    Handle /settings command.
+
+    Displays current user settings including:
+    - Poll intervals (weekday/weekend)
+    - Next scheduled poll time
+    - Quiet hours configuration
+    - Reminder settings
+
+    Args:
+        message: Telegram message with /settings command
+        services: Service container with data access
+    """
+    telegram_id = message.from_user.id
+
+    logger.debug(
+        "User opened settings menu via command",
+        extra={"user_id": telegram_id}
+    )
+
+    # Get user and settings using DRY helper
+    user, settings = await get_user_and_settings(telegram_id, services)
+
+    if not user:
+        await message.answer(
+            "⚠️ Пользователь не найден.",
+            reply_markup=get_error_reply_markup()
+        )
+        return
+
+    if not settings:
+        await message.answer(
+            "⚠️ Настройки не найдены.",
+            reply_markup=get_error_reply_markup()
+        )
+        return
+
+    # Format interval strings
+    weekday_minutes = settings["poll_interval_weekday"]
+    weekday_str = format_duration(weekday_minutes)
+
+    weekend_minutes = settings["poll_interval_weekend"]
+    weekend_str = format_duration(weekend_minutes)
+
+    # Format quiet hours
+    quiet_enabled = settings["quiet_hours_start"] is not None
+    if quiet_enabled:
+        quiet_text = (
+            f"С {settings['quiet_hours_start'][:5]} "
+            f"до {settings['quiet_hours_end'][:5]}"
+        )
+    else:
+        quiet_text = "Выключены"
+
+    # Format reminder status
+    reminder_status = (
+        "Включены ✅" if settings["reminder_enabled"] else "Выключены ❌"
+    )
+
+    # Get next poll time from scheduler - create mock callback for compatibility
+    class MockCallback:
+        def __init__(self, bot, user_id):
+            self.bot = bot
+            self.from_user = type('obj', (object,), {'id': user_id})()
+
+    mock_callback = MockCallback(message.bot, telegram_id)
+    next_poll_text = await _get_next_poll_text(telegram_id, settings, user, mock_callback, services)
+
+    # Build settings message
+    text = _build_settings_text(
+        weekday_str=weekday_str,
+        weekend_str=weekend_str,
+        next_poll_text=next_poll_text,
+        quiet_text=quiet_text,
+        reminder_status=reminder_status,
+        reminder_delay=settings["reminder_delay_minutes"]
+    )
+
+    await message.answer(text, reply_markup=get_main_settings_keyboard())
+
+
 async def _get_next_poll_text(
     telegram_id: int,
     settings: dict,

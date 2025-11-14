@@ -5,6 +5,7 @@ Displays user's categories with options to add or delete.
 
 import logging
 from aiogram import Router, types, F
+from aiogram.filters import Command
 
 from src.api.dependencies import ServiceContainer
 from src.api.decorators import require_user
@@ -56,6 +57,45 @@ async def show_categories_list(
 
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
+
+
+@router.message(Command("category"))
+@with_typing_action
+@log_user_action("category_command_used")
+@require_user
+async def category_command_handler(
+    message: types.Message,
+    services: ServiceContainer,
+    user: dict
+):
+    """Handle /category command.
+
+    Displays list of user's categories with options to add or delete.
+
+    Args:
+        message: Telegram message with /category command
+        services: Service container for API access
+        user: Current user data (injected by @require_user)
+    """
+    logger.debug(
+        "User opened categories list via command",
+        extra={"user_id": message.from_user.id}
+    )
+
+    # Get categories
+    categories = await services.category.get_user_categories(user["id"])
+
+    # Build category list text
+    text = "📂 Твои категории активностей:\n\n"
+    for cat in categories:
+        emoji = cat.get("emoji", "")
+        name = cat["name"]
+        text += f"{emoji} {name}\n"
+
+    # Build keyboard
+    keyboard = build_category_list_keyboard()
+
+    await message.answer(text, reply_markup=keyboard)
 
 
 # NOTE: "main_menu" callback handler is defined in settings/main_menu.py

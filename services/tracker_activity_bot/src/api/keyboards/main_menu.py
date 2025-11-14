@@ -7,24 +7,22 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
 
     Layout structure:
     - Row 1: Primary actions (Add, View) - most used features
-    - Row 2: Management (Categories, Stats) - configuration
-    - Row 3: Help (centered) - auxiliary
+    - Row 2: Help (centered) - auxiliary
 
     Best practices applied:
     - 2 buttons per row for optimal readability
-    - Visual grouping by function
-    - Compact yet readable layout
+    - Compact layout with essential features
+    - Settings and Categories accessed via commands: /settings and /category
+
+    Note:
+        Categories and Settings are now command-based (/category, /settings)
+        to reduce visual clutter and improve main menu clarity.
     """
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         # Primary actions - most frequently used
         [
             InlineKeyboardButton(text="📝 Записать", callback_data="add_activity"),
             InlineKeyboardButton(text="📋 Мои записи", callback_data="my_activities"),
-        ],
-        # Management and configuration
-        [
-            InlineKeyboardButton(text="📂 Категории", callback_data="categories"),
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings"),
         ],
         # Auxiliary - full width for visual separation
         [
