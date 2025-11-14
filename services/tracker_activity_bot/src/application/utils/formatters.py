@@ -1,6 +1,9 @@
 """Formatting utilities for bot messages."""
+import logging
 from datetime import datetime, timedelta
 import pytz
+
+logger = logging.getLogger(__name__)
 
 
 def format_duration(minutes: int) -> str:
@@ -12,27 +15,69 @@ def format_duration(minutes: int) -> str:
         90 → "1ч 30м"
         120 → "2ч"
     """
+    logger.debug("format_duration started", extra={"minutes": minutes})
+
     if minutes < 60:
-        return f"{minutes}м"
+        result = f"{minutes}м"
+        logger.debug(
+            "format_duration completed (minutes only)",
+            extra={"minutes": minutes, "result": result}
+        )
+        return result
 
     hours = minutes // 60
     remaining_minutes = minutes % 60
 
     if remaining_minutes == 0:
-        return f"{hours}ч"
+        result = f"{hours}ч"
+        logger.debug(
+            "format_duration completed (hours only)",
+            extra={"minutes": minutes, "hours": hours, "result": result}
+        )
+        return result
 
-    return f"{hours}ч {remaining_minutes}м"
+    result = f"{hours}ч {remaining_minutes}м"
+    logger.debug(
+        "format_duration completed (hours and minutes)",
+        extra={
+            "minutes": minutes,
+            "hours": hours,
+            "remaining_minutes": remaining_minutes,
+            "result": result
+        }
+    )
+    return result
 
 
 def format_time(dt: datetime, timezone: str = "Europe/Moscow") -> str:
     """Format datetime to time string (HH:MM)."""
+    logger.debug(
+        "format_time started",
+        extra={"datetime_utc": dt.isoformat(), "timezone": timezone}
+    )
+
     tz = pytz.timezone(timezone)
     local_time = dt.astimezone(tz)
-    return local_time.strftime("%H:%M")
+    result = local_time.strftime("%H:%M")
+
+    logger.debug(
+        "format_time completed",
+        extra={
+            "datetime_utc": dt.isoformat(),
+            "timezone": timezone,
+            "result": result
+        }
+    )
+    return result
 
 
 def format_date(dt: datetime, timezone: str = "Europe/Moscow") -> str:
     """Format datetime to date string (DD Month YYYY)."""
+    logger.debug(
+        "format_date started",
+        extra={"datetime_utc": dt.isoformat(), "timezone": timezone}
+    )
+
     tz = pytz.timezone(timezone)
     local_time = dt.astimezone(tz)
 
@@ -45,8 +90,20 @@ def format_date(dt: datetime, timezone: str = "Europe/Moscow") -> str:
     day = local_time.day
     month = months[local_time.month]
     year = local_time.year
+    result = f"{day} {month} {year}"
 
-    return f"{day} {month} {year}"
+    logger.debug(
+        "format_date completed",
+        extra={
+            "datetime_utc": dt.isoformat(),
+            "timezone": timezone,
+            "day": day,
+            "month_name": month,
+            "year": year,
+            "result": result
+        }
+    )
+    return result
 
 
 def format_activity_list(
@@ -69,8 +126,22 @@ def format_activity_list(
     Returns:
         Formatted activity list as string
     """
+    logger.debug(
+        "format_activity_list started",
+        extra={
+            "activity_count": len(activities),
+            "timezone": timezone,
+            "has_reference_time": reference_time is not None
+        }
+    )
+
     if not activities:
-        return "У тебя пока нет записанных активностей."
+        result = "У тебя пока нет записанных активностей."
+        logger.debug(
+            "format_activity_list completed (empty list)",
+            extra={"result": result}
+        )
+        return result
 
     # Use timezone for date formatting
     tz = pytz.timezone(timezone)
@@ -138,7 +209,17 @@ def format_activity_list(
                 f"{description}{tags_text}\n"
             )
 
-    return "\n".join(lines)
+    result = "\n".join(lines)
+    logger.debug(
+        "format_activity_list completed",
+        extra={
+            "activity_count": len(activities),
+            "date_groups": len(sorted_dates),
+            "total_lines": len(lines),
+            "result_length": len(result)
+        }
+    )
+    return result
 
 
 def extract_tags(text: str) -> list[str]:
@@ -148,6 +229,17 @@ def extract_tags(text: str) -> list[str]:
     Examples:
         "Работал над проектом #важное #дедлайн" → ["важное", "дедлайн"]
     """
+    logger.debug("extract_tags started", extra={"text_length": len(text)})
+
     import re
     tags = re.findall(r"#(\w+)", text)
+
+    logger.debug(
+        "extract_tags completed",
+        extra={
+            "text_length": len(text),
+            "tags_found": len(tags),
+            "tags": tags
+        }
+    )
     return tags

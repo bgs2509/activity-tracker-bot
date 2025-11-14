@@ -9,9 +9,12 @@ Supported Patterns:
     HOURS_PATTERN: Matches "2", "2ч", "2h", "2час" (hours)
     NOW_KEYWORDS: Keywords for current time ("сейчас", "now", "0")
 """
+import logging
 import re
 from datetime import datetime, timedelta
 import pytz
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Regex Patterns (DRY)
@@ -53,9 +56,16 @@ def _parse_minutes(time_str: str) -> int | None:
         >>> _parse_minutes("45min")
         45
     """
+    logger.debug("_parse_minutes started", extra={"time_str": time_str})
     match = MINUTES_PATTERN.match(time_str.lower())
     if match:
-        return int(match.group(1))
+        minutes = int(match.group(1))
+        logger.debug(
+            "minutes parsed successfully",
+            extra={"time_str": time_str, "minutes": minutes}
+        )
+        return minutes
+    logger.debug("no minutes match", extra={"time_str": time_str})
     return None
 
 
@@ -75,9 +85,16 @@ def _parse_hours(time_str: str) -> int | None:
         >>> _parse_hours("3h")
         3
     """
+    logger.debug("_parse_hours started", extra={"time_str": time_str})
     match = HOURS_PATTERN.match(time_str.lower())
     if match:
-        return int(match.group(1))
+        hours = int(match.group(1))
+        logger.debug(
+            "hours parsed successfully",
+            extra={"time_str": time_str, "hours": hours}
+        )
+        return hours
+    logger.debug("no hours match", extra={"time_str": time_str})
     return None
 
 
@@ -100,15 +117,25 @@ def _parse_exact_time(time_str: str) -> tuple[int, int] | None:
         >>> _parse_exact_time("25:00")
         ValueError: Invalid time format: hour must be 0-23, minute 0-59
     """
+    logger.debug("_parse_exact_time started", extra={"time_str": time_str})
     match = EXACT_TIME_PATTERN.match(time_str)
     if match:
         hour = int(match.group(1))
         minute = int(match.group(2))
 
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            logger.warning(
+                "invalid time values",
+                extra={"time_str": time_str, "hour": hour, "minute": minute}
+            )
             raise ValueError("Invalid time format: hour must be 0-23, minute 0-59")
 
+        logger.debug(
+            "exact time parsed successfully",
+            extra={"time_str": time_str, "hour": hour, "minute": minute}
+        )
         return hour, minute
+    logger.debug("no exact time match", extra={"time_str": time_str})
     return None
 
 
@@ -142,39 +169,104 @@ def parse_time_input(
     Raises:
         ValueError: If time format is invalid
     """
-    time_str = time_str.strip().lower()
-    tz = pytz.timezone(timezone)
+    logger.debug(
+        "parse_time_input started",
+        extra={
+            "time_str": time_str,
+            "timezone": timezone,
+            "has_reference_time": reference_time is not None
+        }
+    )
 
-    # Use reference time or current time
-    if reference_time:
-        now = reference_time.astimezone(tz)
-    else:
-        now = datetime.now(tz)
+    try:
+        time_str = time_str.strip().lower()
+        tz = pytz.timezone(timezone)
 
-    # Pattern 1: Keywords for current time
-    if time_str in NOW_KEYWORDS:
-        return now.astimezone(pytz.UTC)
+        # Use reference time or current time
+        if reference_time:
+            now = reference_time.astimezone(tz)
+        else:
+            now = datetime.now(tz)
 
-    # Pattern 2: Exact time "14:30" or "14-30"
-    exact_time = _parse_exact_time(time_str)
-    if exact_time:
-        hour, minute = exact_time
-        result_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        return result_time.astimezone(pytz.UTC)
+        # Pattern 1: Keywords for current time
+        if time_str in NOW_KEYWORDS:
+            result = now.astimezone(pytz.UTC)
+            logger.debug(
+                "time parsed as now keyword",
+                extra={
+                    "time_str": time_str,
+                    "format": "now_keyword",
+                    "result_utc": result.isoformat()
+                }
+            )
+            return result
 
-    # Pattern 3: Minutes ago "30м", "30", "30min"
-    minutes = _parse_minutes(time_str)
-    if minutes is not None:
-        result_time = now - timedelta(minutes=minutes)
-        return result_time.astimezone(pytz.UTC)
+        # Pattern 2: Exact time "14:30" or "14-30"
+        exact_time = _parse_exact_time(time_str)
+        if exact_time:
+            hour, minute = exact_time
+            result_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            result = result_time.astimezone(pytz.UTC)
+            logger.debug(
+                "time parsed as exact time",
+                extra={
+                    "time_str": time_str,
+                    "format": "exact_time",
+                    "hour": hour,
+                    "minute": minute,
+                    "result_utc": result.isoformat()
+                }
+            )
+            return result
 
-    # Pattern 4: Hours ago "2ч", "2h", "2час"
-    hours = _parse_hours(time_str)
-    if hours is not None:
-        result_time = now - timedelta(hours=hours)
-        return result_time.astimezone(pytz.UTC)
+        # Pattern 3: Minutes ago "30м", "30", "30min"
+        minutes = _parse_minutes(time_str)
+        if minutes is not None:
+            result_time = now - timedelta(minutes=minutes)
+            result = result_time.astimezone(pytz.UTC)
+            logger.debug(
+                "time parsed as minutes ago",
+                extra={
+                    "time_str": time_str,
+                    "format": "minutes_ago",
+                    "minutes": minutes,
+                    "result_utc": result.isoformat()
+                }
+            )
+            return result
 
-    raise ValueError(f"Cannot parse time format: {time_str}")
+        # Pattern 4: Hours ago "2ч", "2h", "2час"
+        hours = _parse_hours(time_str)
+        if hours is not None:
+            result_time = now - timedelta(hours=hours)
+            result = result_time.astimezone(pytz.UTC)
+            logger.debug(
+                "time parsed as hours ago",
+                extra={
+                    "time_str": time_str,
+                    "format": "hours_ago",
+                    "hours": hours,
+                    "result_utc": result.isoformat()
+                }
+            )
+            return result
+
+        # No pattern matched
+        logger.error(
+            "parse_time_input failed: no format matched",
+            extra={"time_str": time_str, "timezone": timezone}
+        )
+        raise ValueError(f"Cannot parse time format: {time_str}")
+    except ValueError:
+        # Re-raise ValueError (already logged)
+        raise
+    except Exception as e:
+        logger.error(
+            "parse_time_input failed with unexpected error",
+            extra={"time_str": time_str, "timezone": timezone, "error": str(e)},
+            exc_info=True
+        )
+        raise
 
 
 def parse_duration(
@@ -195,36 +287,105 @@ def parse_duration(
     Returns:
         End time in UTC
     """
-    duration_str = duration_str.strip().lower()
+    logger.debug(
+        "parse_duration started",
+        extra={
+            "duration_str": duration_str,
+            "start_time_utc": start_time.isoformat(),
+            "timezone": timezone
+        }
+    )
 
-    # Convert start_time to user timezone for calculation
-    tz = pytz.timezone(timezone)
-    start_local = start_time.astimezone(tz)
+    try:
+        duration_str = duration_str.strip().lower()
 
-    # Pattern 1: Keywords for current time
-    if duration_str in NOW_KEYWORDS:
-        return datetime.now(tz).astimezone(pytz.UTC)
+        # Convert start_time to user timezone for calculation
+        tz = pytz.timezone(timezone)
+        start_local = start_time.astimezone(tz)
 
-    # Pattern 2: Exact time "16:00"
-    exact_time = _parse_exact_time(duration_str)
-    if exact_time:
-        hour, minute = exact_time
-        end_time = start_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        return end_time.astimezone(pytz.UTC)
+        # Pattern 1: Keywords for current time
+        if duration_str in NOW_KEYWORDS:
+            result = datetime.now(tz).astimezone(pytz.UTC)
+            logger.debug(
+                "duration parsed as now keyword",
+                extra={
+                    "duration_str": duration_str,
+                    "format": "now_keyword",
+                    "result_utc": result.isoformat()
+                }
+            )
+            return result
 
-    # Pattern 3: Minutes duration "30м", "30"
-    minutes = _parse_minutes(duration_str)
-    if minutes is not None:
-        end_time = start_local + timedelta(minutes=minutes)
-        return end_time.astimezone(pytz.UTC)
+        # Pattern 2: Exact time "16:00"
+        exact_time = _parse_exact_time(duration_str)
+        if exact_time:
+            hour, minute = exact_time
+            end_time = start_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            result = end_time.astimezone(pytz.UTC)
+            logger.debug(
+                "duration parsed as exact end time",
+                extra={
+                    "duration_str": duration_str,
+                    "format": "exact_time",
+                    "hour": hour,
+                    "minute": minute,
+                    "result_utc": result.isoformat()
+                }
+            )
+            return result
 
-    # Pattern 4: Hours duration "2ч", "2h"
-    hours = _parse_hours(duration_str)
-    if hours is not None:
-        end_time = start_local + timedelta(hours=hours)
-        return end_time.astimezone(pytz.UTC)
+        # Pattern 3: Minutes duration "30м", "30"
+        minutes = _parse_minutes(duration_str)
+        if minutes is not None:
+            end_time = start_local + timedelta(minutes=minutes)
+            result = end_time.astimezone(pytz.UTC)
+            logger.debug(
+                "duration parsed as minutes",
+                extra={
+                    "duration_str": duration_str,
+                    "format": "minutes_duration",
+                    "minutes": minutes,
+                    "result_utc": result.isoformat()
+                }
+            )
+            return result
 
-    raise ValueError(f"Cannot parse duration format: {duration_str}")
+        # Pattern 4: Hours duration "2ч", "2h"
+        hours = _parse_hours(duration_str)
+        if hours is not None:
+            end_time = start_local + timedelta(hours=hours)
+            result = end_time.astimezone(pytz.UTC)
+            logger.debug(
+                "duration parsed as hours",
+                extra={
+                    "duration_str": duration_str,
+                    "format": "hours_duration",
+                    "hours": hours,
+                    "result_utc": result.isoformat()
+                }
+            )
+            return result
+
+        # No pattern matched
+        logger.error(
+            "parse_duration failed: no format matched",
+            extra={"duration_str": duration_str, "start_time_utc": start_time.isoformat()}
+        )
+        raise ValueError(f"Cannot parse duration format: {duration_str}")
+    except ValueError:
+        # Re-raise ValueError (already logged)
+        raise
+    except Exception as e:
+        logger.error(
+            "parse_duration failed with unexpected error",
+            extra={
+                "duration_str": duration_str,
+                "start_time_utc": start_time.isoformat(),
+                "error": str(e)
+            },
+            exc_info=True
+        )
+        raise
 
 
 def parse_period(
@@ -252,58 +413,146 @@ def parse_period(
     Raises:
         ValueError: If period format is invalid or end time is before start time
     """
-    period_str = period_str.strip()
-    tz = pytz.timezone(timezone)
-
-    # Use reference time or current time
-    if reference_time:
-        now = reference_time.astimezone(tz)
-    else:
-        now = datetime.now(tz)
-
-    # Pattern 1: Relative period "30м", "2ч", etc.
-    # Minutes: "30м", "30", "30min"
-    minutes = _parse_minutes(period_str)
-    if minutes is not None:
-        start_time = now - timedelta(minutes=minutes)
-        end_time = now
-        return start_time.astimezone(pytz.UTC), end_time.astimezone(pytz.UTC)
-
-    # Hours: "2ч", "2h", "2час"
-    hours = _parse_hours(period_str)
-    if hours is not None:
-        start_time = now - timedelta(hours=hours)
-        end_time = now
-        return start_time.astimezone(pytz.UTC), end_time.astimezone(pytz.UTC)
-
-    # Pattern 2: Exact time period "14:30 — 15:30" or "14:30-15:30" or "14:30 - 15:30"
-    period_match = PERIOD_PATTERN.match(period_str)
-    if period_match:
-        start_hour = int(period_match.group(1))
-        start_minute = int(period_match.group(2))
-        end_hour = int(period_match.group(3))
-        end_minute = int(period_match.group(4))
-
-        # Validate time values
-        if not (0 <= start_hour <= 23 and 0 <= start_minute <= 59):
-            raise ValueError("Invalid start time: hour must be 0-23, minute 0-59")
-        if not (0 <= end_hour <= 23 and 0 <= end_minute <= 59):
-            raise ValueError("Invalid end time: hour must be 0-23, minute 0-59")
-
-        start_time = now.replace(
-            hour=start_hour, minute=start_minute, second=0, microsecond=0
-        )
-        end_time = now.replace(
-            hour=end_hour, minute=end_minute, second=0, microsecond=0
-        )
-
-        # Validate: end time must be after start time
-        if end_time <= start_time:
-            raise ValueError("End time must be after start time")
-
-        return start_time.astimezone(pytz.UTC), end_time.astimezone(pytz.UTC)
-
-    raise ValueError(
-        f"Cannot parse period format: {period_str}. "
-        f"Use formats like: 30м, 2ч, or 14:30 — 15:30"
+    logger.debug(
+        "parse_period started",
+        extra={
+            "period_str": period_str,
+            "timezone": timezone,
+            "has_reference_time": reference_time is not None
+        }
     )
+
+    try:
+        period_str = period_str.strip()
+        tz = pytz.timezone(timezone)
+
+        # Use reference time or current time
+        if reference_time:
+            now = reference_time.astimezone(tz)
+        else:
+            now = datetime.now(tz)
+
+        # Pattern 1: Relative period "30м", "2ч", etc.
+        # Minutes: "30м", "30", "30min"
+        minutes = _parse_minutes(period_str)
+        if minutes is not None:
+            start_time = now - timedelta(minutes=minutes)
+            end_time = now
+            start_utc = start_time.astimezone(pytz.UTC)
+            end_utc = end_time.astimezone(pytz.UTC)
+            logger.debug(
+                "period parsed as relative minutes",
+                extra={
+                    "period_str": period_str,
+                    "format": "relative_minutes",
+                    "minutes": minutes,
+                    "start_utc": start_utc.isoformat(),
+                    "end_utc": end_utc.isoformat()
+                }
+            )
+            return start_utc, end_utc
+
+        # Hours: "2ч", "2h", "2час"
+        hours = _parse_hours(period_str)
+        if hours is not None:
+            start_time = now - timedelta(hours=hours)
+            end_time = now
+            start_utc = start_time.astimezone(pytz.UTC)
+            end_utc = end_time.astimezone(pytz.UTC)
+            logger.debug(
+                "period parsed as relative hours",
+                extra={
+                    "period_str": period_str,
+                    "format": "relative_hours",
+                    "hours": hours,
+                    "start_utc": start_utc.isoformat(),
+                    "end_utc": end_utc.isoformat()
+                }
+            )
+            return start_utc, end_utc
+
+        # Pattern 2: Exact time period "14:30 — 15:30" or "14:30-15:30" or "14:30 - 15:30"
+        period_match = PERIOD_PATTERN.match(period_str)
+        if period_match:
+            start_hour = int(period_match.group(1))
+            start_minute = int(period_match.group(2))
+            end_hour = int(period_match.group(3))
+            end_minute = int(period_match.group(4))
+
+            # Validate time values
+            if not (0 <= start_hour <= 23 and 0 <= start_minute <= 59):
+                logger.warning(
+                    "invalid start time in period",
+                    extra={
+                        "period_str": period_str,
+                        "start_hour": start_hour,
+                        "start_minute": start_minute
+                    }
+                )
+                raise ValueError("Invalid start time: hour must be 0-23, minute 0-59")
+            if not (0 <= end_hour <= 23 and 0 <= end_minute <= 59):
+                logger.warning(
+                    "invalid end time in period",
+                    extra={
+                        "period_str": period_str,
+                        "end_hour": end_hour,
+                        "end_minute": end_minute
+                    }
+                )
+                raise ValueError("Invalid end time: hour must be 0-23, minute 0-59")
+
+            start_time = now.replace(
+                hour=start_hour, minute=start_minute, second=0, microsecond=0
+            )
+            end_time = now.replace(
+                hour=end_hour, minute=end_minute, second=0, microsecond=0
+            )
+
+            # Validate: end time must be after start time
+            if end_time <= start_time:
+                logger.warning(
+                    "end time before start time in period",
+                    extra={
+                        "period_str": period_str,
+                        "start_time": start_time.isoformat(),
+                        "end_time": end_time.isoformat()
+                    }
+                )
+                raise ValueError("End time must be after start time")
+
+            start_utc = start_time.astimezone(pytz.UTC)
+            end_utc = end_time.astimezone(pytz.UTC)
+            logger.debug(
+                "period parsed as exact time range",
+                extra={
+                    "period_str": period_str,
+                    "format": "exact_period",
+                    "start_hour": start_hour,
+                    "start_minute": start_minute,
+                    "end_hour": end_hour,
+                    "end_minute": end_minute,
+                    "start_utc": start_utc.isoformat(),
+                    "end_utc": end_utc.isoformat()
+                }
+            )
+            return start_utc, end_utc
+
+        # No pattern matched
+        logger.error(
+            "parse_period failed: no format matched",
+            extra={"period_str": period_str, "timezone": timezone}
+        )
+        raise ValueError(
+            f"Cannot parse period format: {period_str}. "
+            f"Use formats like: 30м, 2ч, or 14:30 — 15:30"
+        )
+    except ValueError:
+        # Re-raise ValueError (already logged)
+        raise
+    except Exception as e:
+        logger.error(
+            "parse_period failed with unexpected error",
+            extra={"period_str": period_str, "timezone": timezone, "error": str(e)},
+            exc_info=True
+        )
+        raise
