@@ -1,5 +1,6 @@
 """User service for interacting with users API."""
 from datetime import datetime
+from typing import List
 
 import httpx
 from src.infrastructure.http_clients.http_client import DataAPIClient
@@ -10,6 +11,14 @@ class UserService:
 
     def __init__(self, client: DataAPIClient):
         self.client = client
+
+    async def get_all_active_users(self) -> List[dict]:
+        """Get all active users for poll restoration.
+
+        Returns:
+            List of active users with their data
+        """
+        return await self.client.get("/api/v1/users/active")
 
     async def get_by_telegram_id(self, telegram_id: int) -> dict | None:
         """Get user by Telegram ID."""

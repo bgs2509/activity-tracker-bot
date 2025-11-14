@@ -2,7 +2,7 @@
 Users API router with service layer.
 """
 
-from typing import Annotated
+from typing import Annotated, List
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
@@ -57,3 +57,12 @@ async def update_last_poll_time(
     except ValueError as e:
         # Service may raise ValueError for not found cases
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/active", response_model=List[UserResponse])
+async def get_active_users(
+    service: Annotated[UserService, Depends(get_user_service)]
+) -> List[UserResponse]:
+    """Get all active users for poll restoration."""
+    users = await service.get_all_active_users()
+    return [UserResponse.model_validate(user) for user in users]

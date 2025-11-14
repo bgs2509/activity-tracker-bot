@@ -4,7 +4,7 @@ User application service.
 This module contains business logic for user operations.
 """
 
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from src.domain.models.user import User
@@ -98,3 +98,12 @@ class UserService:
             raise ValueError(f"User {user_id} not found")
 
         return await self.repository.update_last_poll_time(user_id, poll_time)
+
+    async def get_all_active_users(self) -> List[User]:
+        """
+        Get all active users for poll restoration.
+
+        Returns:
+            List of users who have been polled before
+        """
+        return await self.repository.get_all_active_users()

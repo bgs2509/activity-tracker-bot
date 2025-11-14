@@ -123,6 +123,35 @@ async def main():
     fsm_timeout_module.fsm_timeout_service = FSMTimeoutService(services.scheduler.scheduler)
     logger.info("FSM timeout service initialized")
 
+    # Restore scheduled polls for all active users
+    try:
+        from src.api.handlers.poll.poll_sender import send_automatic_poll
+
+        async def get_active_users_wrapper():
+            """Wrapper to get active users from API."""
+            return await services.user.get_all_active_users()
+
+        async def get_user_settings_wrapper(user_id: int):
+            """Wrapper to get user settings from API."""
+            return await services.settings.get_settings(user_id)
+
+        await services.scheduler.restore_scheduled_polls(
+            get_active_users=get_active_users_wrapper,
+            get_user_settings=get_user_settings_wrapper,
+            send_poll_callback=send_automatic_poll,
+            bot=bot
+        )
+        logger.info("Poll schedules restored successfully")
+    except Exception as e:
+        logger.error(
+            "Failed to restore poll schedules - continuing without restoration",
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__
+            },
+            exc_info=True
+        )
+
     # Start polling with graceful shutdown support
     logger.info("Bot started, polling...")
     try:

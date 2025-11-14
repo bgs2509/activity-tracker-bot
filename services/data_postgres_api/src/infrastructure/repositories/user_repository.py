@@ -1,5 +1,6 @@
 """User repository."""
 import logging
+from typing import List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,44 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
 
     def __init__(self, session: AsyncSession):
         super().__init__(session, User)
+
+    async def get_all_active_users(self) -> List[User]:
+        """Get all users who have recorded at least one activity.
+
+        Returns:
+            List of active users with their settings eager loaded
+        """
+        logger.debug("Retrieving all active users", extra={"operation": "read"})
+
+        try:
+            # Get users who have last_poll_time set (have been polled before)
+            # or have activities (implicit engagement)
+            result = await self.session.execute(
+                select(User).where(User.last_poll_time.isnot(None))
+            )
+            users = result.scalars().all()
+
+            logger.debug(
+                "Active users retrieved",
+                extra={
+                    "count": len(users),
+                    "operation": "read"
+                }
+            )
+
+            return list(users)
+
+        except Exception as e:
+            logger.error(
+                "Error retrieving active users",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "operation": "read"
+                },
+                exc_info=True
+            )
+            raise
 
     async def get_by_telegram_id(self, telegram_id: int) -> User | None:
         """Get user by Telegram ID.
