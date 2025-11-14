@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str
 
+    # AI Integration (OpenRouter)
+    openrouter_api_key: str | None = None
+
     # Application
     app_name: str = "tracker_activity_bot"
     log_level: str = "INFO"

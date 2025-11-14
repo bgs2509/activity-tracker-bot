@@ -17,6 +17,7 @@ from src.api.handlers.activity import router as activity_router
 from src.api.handlers.categories import router as categories_router
 from src.api.handlers.settings import router as settings_router
 from src.api.handlers.poll import router as poll_router, close_fsm_storage
+from src.api.handlers.ai_activity import router as ai_activity_router
 from src.api.dependencies import close_api_client, get_service_container
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 
@@ -107,11 +108,13 @@ async def main():
     logger.info("Logging middleware registered")
 
     # Register routers
+    # NOTE: ai_activity_router MUST be registered LAST to act as catch-all for text messages
     dp.include_router(start_router)
     dp.include_router(activity_router)
     dp.include_router(categories_router)
     dp.include_router(settings_router)
     dp.include_router(poll_router)
+    dp.include_router(ai_activity_router)  # LAST: catches all non-command text
 
     # Get service container and start scheduler for automatic polls
     services = get_service_container()
