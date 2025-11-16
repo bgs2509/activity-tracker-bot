@@ -295,6 +295,10 @@ class SchedulerService:
         # Get last poll time
         last_poll_time = user.get("last_poll_time")
         if last_poll_time:
+            # Convert string to datetime if needed
+            if isinstance(last_poll_time, str):
+                last_poll_time = datetime.fromisoformat(last_poll_time.replace('Z', '+00:00'))
+
             # If last_poll_time is naive, make it UTC aware
             if last_poll_time.tzinfo is None:
                 last_poll_time = pytz.UTC.localize(last_poll_time)
