@@ -33,6 +33,7 @@ from src.api.keyboards.ai_suggestions import (
 from src.api.keyboards.main_menu import get_main_menu_keyboard
 from src.api.states.ai_activity import AIActivityStates
 from src.application.services.ai_service import AIService
+from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.formatters import extract_tags, format_time, format_duration
 from src.application.utils.decorators import with_typing_action
 
@@ -234,6 +235,16 @@ async def _show_confirmation(
         start_time=result.start_time,
         end_time=result.end_time
     )
+    await state.set_state(AIActivityStates.waiting_for_ai_confirmation)
+
+    # Schedule FSM timeout (5 minutes)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+            user_id=message.from_user.id,
+            state_name="waiting_for_ai_confirmation",
+            timeout_minutes=5,
+            bot=message.bot
+        )
 
     # Build confirmation message
     emoji = category.get("emoji", "")
@@ -291,6 +302,15 @@ async def _show_suggestions(
     await state.update_data(ai_suggestions=suggestions)
     await state.set_state(AIActivityStates.waiting_for_ai_clarification)
 
+    # Schedule FSM timeout (5 minutes)
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+            user_id=message.from_user.id,
+            state_name="waiting_for_ai_clarification",
+            timeout_minutes=5,
+            bot=message.bot
+        )
+
     # Build message
     text = (
         "🤔 **Уточни активность:**\n\n"
@@ -334,6 +354,11 @@ async def handle_ai_confirm_save(
                 reply_markup=get_main_menu_keyboard()
             )
             await state.clear()
+
+            # Cancel FSM timeout
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
             await callback.answer()
             return
 
@@ -370,6 +395,11 @@ async def handle_ai_confirm_save(
             reply_markup=get_main_menu_keyboard()
         )
         await state.clear()
+
+        # Cancel FSM timeout
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
         await callback.answer()
 
 
@@ -418,6 +448,11 @@ async def handle_ai_suggestion_selection(
                 reply_markup=get_main_menu_keyboard()
             )
             await state.clear()
+
+            # Cancel FSM timeout
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
             await callback.answer()
             return
 
@@ -430,6 +465,11 @@ async def handle_ai_suggestion_selection(
                 reply_markup=get_main_menu_keyboard()
             )
             await state.clear()
+
+            # Cancel FSM timeout
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
             await callback.answer()
             return
 
@@ -475,6 +515,11 @@ async def handle_ai_suggestion_selection(
             reply_markup=get_main_menu_keyboard()
         )
         await state.clear()
+
+        # Cancel FSM timeout
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
         await callback.answer()
 
 
@@ -493,6 +538,15 @@ async def handle_ai_request_edit(
         state: FSM context
     """
     await state.set_state(AIActivityStates.waiting_for_ai_clarification)
+
+    # Reschedule FSM timeout for clarification state
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.schedule_timeout(
+            user_id=callback.from_user.id,
+            state_name="waiting_for_ai_clarification",
+            timeout_minutes=5,
+            bot=callback.message.bot
+        )
 
     await callback.message.answer(
         "✏️ Введи уточнённое описание активности.\n\n"
@@ -550,6 +604,11 @@ async def handle_ai_clarification_input(
                 reply_markup=get_main_menu_keyboard()
             )
             await state.clear()
+
+            # Cancel FSM timeout
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
             return
 
         # Get categories
@@ -581,6 +640,11 @@ async def handle_ai_clarification_input(
                 reply_markup=get_main_menu_keyboard()
             )
             await state.clear()
+
+            # Cancel FSM timeout
+            if fsm_timeout_module.fsm_timeout_service:
+                fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
             return
 
         # Update state
@@ -607,6 +671,10 @@ async def handle_ai_clarification_input(
         )
         await state.clear()
 
+        # Cancel FSM timeout
+        if fsm_timeout_module.fsm_timeout_service:
+            fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
+
 
 @router.callback_query(F.data == "ai_cancel")
 async def handle_ai_cancel(callback: types.CallbackQuery, state: FSMContext):
@@ -617,6 +685,11 @@ async def handle_ai_cancel(callback: types.CallbackQuery, state: FSMContext):
         state: FSM context
     """
     await state.clear()
+
+    # Cancel FSM timeout
+    if fsm_timeout_module.fsm_timeout_service:
+        fsm_timeout_module.fsm_timeout_service.cancel_timeout(callback.from_user.id)
+
     await callback.message.answer(
         "❌ Отменено.",
         reply_markup=get_main_menu_keyboard()
