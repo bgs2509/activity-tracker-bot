@@ -237,12 +237,11 @@ async def _show_confirmation(
     )
     await state.set_state(AIActivityStates.waiting_for_ai_confirmation)
 
-    # Schedule FSM timeout (5 minutes)
+    # Schedule FSM timeout
     if fsm_timeout_module.fsm_timeout_service:
         fsm_timeout_module.fsm_timeout_service.schedule_timeout(
             user_id=message.from_user.id,
-            state_name="waiting_for_ai_confirmation",
-            timeout_minutes=5,
+            state=AIActivityStates.waiting_for_ai_confirmation,
             bot=message.bot
         )
 
@@ -302,12 +301,11 @@ async def _show_suggestions(
     await state.update_data(ai_suggestions=suggestions)
     await state.set_state(AIActivityStates.waiting_for_ai_clarification)
 
-    # Schedule FSM timeout (5 minutes)
+    # Schedule FSM timeout
     if fsm_timeout_module.fsm_timeout_service:
         fsm_timeout_module.fsm_timeout_service.schedule_timeout(
             user_id=message.from_user.id,
-            state_name="waiting_for_ai_clarification",
-            timeout_minutes=5,
+            state=AIActivityStates.waiting_for_ai_clarification,
             bot=message.bot
         )
 
@@ -543,8 +541,7 @@ async def handle_ai_request_edit(
     if fsm_timeout_module.fsm_timeout_service:
         fsm_timeout_module.fsm_timeout_service.schedule_timeout(
             user_id=callback.from_user.id,
-            state_name="waiting_for_ai_clarification",
-            timeout_minutes=5,
+            state=AIActivityStates.waiting_for_ai_clarification,
             bot=callback.message.bot
         )
 
