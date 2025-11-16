@@ -123,6 +123,7 @@ class AIService:
         user_input: str,
         categories: List[Dict[str, Any]],
         recent_activities: List[Dict[str, Any]] | None = None,
+        user_timezone: str = "UTC",
         max_retries: int = 3
     ) -> AIParsingResult | None:
         """Parse user text input into structured activity data.
@@ -135,6 +136,7 @@ class AIService:
             user_input: Raw text from user (e.g., "читал книгу 2 часа")
             categories: List of user's available categories
             recent_activities: User's recent activities for context
+            user_timezone: User's timezone (e.g., "Europe/Moscow")
             max_retries: Maximum number of model attempts
 
         Returns:
@@ -178,7 +180,7 @@ class AIService:
                 self.consecutive_failures = 0
 
         # Build prompt with context
-        prompt = self._build_prompt(user_input, categories, recent_activities)
+        prompt = self._build_prompt(user_input, categories, recent_activities, user_timezone)
 
         # Try models with automatic failover
         current_model = self.model_selector.get_best_model()
@@ -347,7 +349,8 @@ class AIService:
         self,
         user_input: str,
         categories: List[Dict[str, Any]],
-        recent_activities: List[Dict[str, Any]] | None
+        recent_activities: List[Dict[str, Any]] | None,
+        user_timezone: str
     ) -> str:
         """Build AI prompt with user context.
 
@@ -361,13 +364,27 @@ class AIService:
             user_input: User's text input
             categories: Available categories
             recent_activities: Recent activities for context
+            user_timezone: User's timezone for accurate time parsing
 
         Returns:
             Complete prompt string
         """
-        now = datetime.now(timezone.utc)
-        current_date = now.strftime("%Y-%m-%d")
-        current_time = now.strftime("%H:%M")
+        # Import zoneinfo for timezone handling
+        from zoneinfo import ZoneInfo
+
+        # Get current time in user's timezone
+        now_utc = datetime.now(timezone.utc)
+        try:
+            user_tz = ZoneInfo(user_timezone)
+            now_local = now_utc.astimezone(user_tz)
+        except Exception:
+            # Fallback to UTC if timezone is invalid
+            logger.warning(f"Invalid timezone: {user_timezone}, falling back to UTC")
+            now_local = now_utc
+            user_timezone = "UTC"
+
+        current_date = now_local.strftime("%Y-%m-%d")
+        current_time = now_local.strftime("%H:%M")
 
         # Format categories
         categories_text = "\n".join([
@@ -388,7 +405,7 @@ class AIService:
         # Build comprehensive prompt
         prompt = f"""Ты — помощник для парсинга активностей пользователя.
 
-ТЕКУЩАЯ ДАТА И ВРЕМЯ:
+ТЕКУЩАЯ ДАТА И ВРЕМЯ (в часовом поясе пользователя {user_timezone}):
 Дата: {current_date}
 Время: {current_time}
 
@@ -408,11 +425,18 @@ class AIService:
 3. Время начала (в формате ISO 8601 с UTC timezone)
 4. Время окончания (в формате ISO 8601 с UTC timezone)
 
+ВАЖНО ПРО ЧАСОВОЙ ПОЯС:
+- Пользователь находится в часовом поясе: {user_timezone}
+- Все времена в тексте пользователя интерпретируй как локальные для этого часового пояса
+- В ответе конвертируй времена в UTC формат (ISO 8601 с +00:00)
+- Текущее время показано выше уже в часовом поясе пользователя
+
 ПРАВИЛА ПАРСИНГА ВРЕМЕНИ:
-- "с 14:00 до 15:30" → конкретные времена сегодня
+- "с 14:00 до 15:30" → конкретные времена сегодня в timezone пользователя, конвертируй в UTC
 - "2 часа" / "2ч" → период от текущего времени минус 2 часа до текущего времени
 - "30 минут" / "30м" → период от текущего времени минус 30 минут
-- "вчера с 18:00 до 19:00" → времена вчерашнего дня
+- "вчера с 18:00 до 19:00" → времена вчерашнего дня в timezone пользователя, конвертируй в UTC
+- "до полуночи" / "до 00:00" → полночь следующего дня в timezone пользователя
 - Если время не указано явно → null для обоих полей
 
 УРОВЕНЬ УВЕРЕННОСТИ:

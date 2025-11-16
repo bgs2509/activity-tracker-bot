@@ -150,7 +150,8 @@ async def handle_ai_activity_input(
         result = await ai_service.parse_activity_text(
             user_input=user_input,
             categories=categories,
-            recent_activities=recent_activities
+            recent_activities=recent_activities,
+            user_timezone=user.get("timezone", "UTC")
         )
 
         if not result:
@@ -541,6 +542,16 @@ async def handle_ai_clarification_input(
         data = await state.get_data()
         user_id = data.get("user_id")
 
+        # Get user info for timezone
+        user = await services.user.get_by_telegram_id(telegram_id)
+        if not user:
+            await message.answer(
+                "⚠️ Пользователь не найден. Используй /start для регистрации.",
+                reply_markup=get_main_menu_keyboard()
+            )
+            await state.clear()
+            return
+
         # Get categories
         categories = await services.category.get_user_categories(user_id)
 
@@ -559,7 +570,8 @@ async def handle_ai_clarification_input(
         result = await ai_service.parse_activity_text(
             user_input=user_input,
             categories=categories,
-            recent_activities=recent_activities
+            recent_activities=recent_activities,
+            user_timezone=user.get("timezone", "UTC")
         )
 
         if not result:
