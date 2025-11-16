@@ -144,6 +144,12 @@ def setup_logging(
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
+    # Configure log levels for third-party libraries
+    # Set openai and httpx to INFO to avoid verbose DEBUG logs with Unicode escapes
+    logging.getLogger("openai").setLevel("INFO")
+    logging.getLogger("httpx").setLevel("INFO")
+    logging.getLogger("httpcore").setLevel("INFO")
+
     # Log initialization (this will be in JSON format)
     log_extra = {"log_level": log_level}
     if debug_sample_rate is not None and debug_sample_rate < 1.0:

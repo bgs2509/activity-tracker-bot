@@ -22,9 +22,43 @@ Reference:
     - .framework/docs/reference/maturity-levels.md (Level 1, lines 48-52)
     - artifacts/prompts/step-01-v01.md (lines 1131-1234)
 """
+import json
 import logging
 import sys
 from pythonjsonlogger import jsonlogger
+
+
+class UnicodeJsonFormatter(jsonlogger.JsonFormatter):
+    """JSON formatter that preserves Unicode characters (no escaping).
+
+    Standard JsonFormatter uses json.dumps with ensure_ascii=True by default,
+    which escapes all non-ASCII characters (e.g., Cyrillic → \\uXXXX).
+
+    This formatter overrides the serialization to preserve Unicode characters
+    in readable form, making logs much more human-friendly for non-English text.
+
+    Example:
+        Standard formatter output:
+            {"message": "\\u0422\\u044b \\u2014 \\u043f\\u043e\\u043c\\u043e\\u0449\\u043d\\u0438\\u043a"}
+
+        UnicodeJsonFormatter output:
+            {"message": "Ты — помощник"}
+    """
+
+    def serialize(self, log_record: dict) -> str:
+        """Serialize log record to JSON with Unicode support.
+
+        Args:
+            log_record: Dictionary containing log data
+
+        Returns:
+            JSON string with unescaped Unicode characters
+        """
+        return json.dumps(
+            log_record,
+            ensure_ascii=False,  # Preserve Unicode instead of escaping
+            default=str
+        )
 
 
 def setup_logging(service_name: str, log_level: str = "INFO") -> None:
@@ -64,8 +98,8 @@ def setup_logging(service_name: str, log_level: str = "INFO") -> None:
     # Create console handler (stdout for Docker log capture)
     handler = logging.StreamHandler(sys.stdout)
 
-    # Create JSON formatter with field renaming for consistency
-    formatter = jsonlogger.JsonFormatter(
+    # Create JSON formatter with Unicode support and field renaming
+    formatter = UnicodeJsonFormatter(
         fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
         rename_fields={
             "asctime": "timestamp",  # More standard field name
