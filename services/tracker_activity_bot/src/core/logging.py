@@ -26,7 +26,8 @@ import logging
 import random
 import sys
 from typing import Optional
-from pythonjsonlogger import jsonlogger
+
+from src.core.formatters import UnicodeJsonFormatter
 
 
 class SamplingFilter(logging.Filter):
@@ -128,8 +129,8 @@ def setup_logging(
         )
         handler.addFilter(sampling_filter)
 
-    # Create JSON formatter with field renaming for consistency
-    formatter = jsonlogger.JsonFormatter(
+    # Create JSON formatter with Unicode support and field renaming
+    formatter = UnicodeJsonFormatter(
         fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
         rename_fields={
             "asctime": "timestamp",  # More standard field name
