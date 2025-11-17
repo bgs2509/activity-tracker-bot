@@ -23,7 +23,15 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any
 
-from openai import AsyncOpenAI, APITimeoutError, APIError
+from openai import (
+    AsyncOpenAI,
+    APITimeoutError,
+    APIError,
+    RateLimitError,
+    NotFoundError,
+    BadRequestError,
+    PermissionDeniedError
+)
 
 from src.core.config import settings
 from src.application.services.ai_model_selector import AIModelSelector
@@ -345,11 +353,92 @@ class AIService:
                         "error": str(e)
                     }
                 )
-                current_model = self.model_selector.get_next_model(current_model)
+                # Apply timeout penalty and get next model
+                self.model_selector.decrease_rating_by_error_type(
+                    model=current_model,
+                    error_type="TimeoutError"
+                )
+                current_model = self.model_selector.get_next_model(
+                    current_model,
+                    decrease_rating=False  # Already decreased above
+                )
+
+            except (NotFoundError, BadRequestError, PermissionDeniedError) as e:
+                # Critical errors - permanently disable model
+                error_code = getattr(e, 'status_code', None)
+                logger.error(
+                    "AI critical error, disabling model",
+                    extra={
+                        "model": current_model,
+                        "attempt": attempts,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "error_code": error_code
+                    },
+                    exc_info=True
+                )
+                # Disable model permanently
+                self.model_selector.decrease_rating_by_error_type(
+                    model=current_model,
+                    error_type=type(e).__name__,
+                    error_code=error_code
+                )
+                current_model = self.model_selector.get_next_model(
+                    current_model,
+                    decrease_rating=False  # Already decreased above
+                )
+
+            except RateLimitError as e:
+                # Rate limit - moderate penalty
+                error_code = getattr(e, 'status_code', 429)
+                logger.error(
+                    "AI rate limit error, switching to next model",
+                    extra={
+                        "model": current_model,
+                        "attempt": attempts,
+                        "error": str(e),
+                        "error_type": "RateLimitError",
+                        "error_code": error_code
+                    },
+                    exc_info=True
+                )
+                self.model_selector.decrease_rating_by_error_type(
+                    model=current_model,
+                    error_type="RateLimitError",
+                    error_code=error_code
+                )
+                current_model = self.model_selector.get_next_model(
+                    current_model,
+                    decrease_rating=False  # Already decreased above
+                )
 
             except APIError as e:
+                # Other API errors - default penalty
+                error_code = getattr(e, 'status_code', None)
                 logger.error(
                     "AI API error, switching to next model",
+                    extra={
+                        "model": current_model,
+                        "attempt": attempts,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "error_code": error_code
+                    },
+                    exc_info=True
+                )
+                self.model_selector.decrease_rating_by_error_type(
+                    model=current_model,
+                    error_type=type(e).__name__,
+                    error_code=error_code
+                )
+                current_model = self.model_selector.get_next_model(
+                    current_model,
+                    decrease_rating=False  # Already decreased above
+                )
+
+            except Exception as e:
+                logger.error(
+                    "Unexpected error during AI parsing",
                     extra={
                         "model": current_model,
                         "attempt": attempts,
@@ -358,20 +447,15 @@ class AIService:
                     },
                     exc_info=True
                 )
-                current_model = self.model_selector.get_next_model(current_model)
-
-            except Exception as e:
-                logger.error(
-                    "Unexpected error during AI parsing",
-                    extra={
-                        "model": current_model,
-                        "attempt": attempts,
-                        "error": str(e)
-                    },
-                    exc_info=True
-                )
                 # Try next model for any unexpected error
-                current_model = self.model_selector.get_next_model(current_model)
+                self.model_selector.decrease_rating_by_error_type(
+                    model=current_model,
+                    error_type=type(e).__name__
+                )
+                current_model = self.model_selector.get_next_model(
+                    current_model,
+                    decrease_rating=False  # Already decreased above
+                )
 
         # All models failed - increment failure counter
         self.consecutive_failures += 1

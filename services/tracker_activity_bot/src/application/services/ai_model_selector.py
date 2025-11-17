@@ -29,7 +29,16 @@ class AIModelSelector:
 
     The service ensures fault tolerance by automatically switching to backup
     models when the primary model is unavailable or slow.
+
+    Error handling strategy:
+    - Critical errors (404, 400, 403): Model disabled (rating = 0)
+    - Rate limit (429): Moderate penalty (rating -= 5)
+    - Timeout: Minor penalty (rating -= 3)
+    - Models with rating < 20 are excluded from selection
     """
+
+    # Minimum rating threshold - models below this won't be used
+    MIN_RATING_THRESHOLD = 20
 
     def __init__(self, models_file_path: str = "ai-models.json"):
         """Initialize model selector with models configuration file.
@@ -127,6 +136,8 @@ class AIModelSelector:
     def get_best_model(self) -> str:
         """Get model with highest reliability rating.
 
+        Only considers models with rating >= MIN_RATING_THRESHOLD.
+
         Returns:
             Model identifier (e.g., "meta-llama/llama-3.2-3b-instruct:free")
 
@@ -136,8 +147,24 @@ class AIModelSelector:
         if not self.models:
             raise RuntimeError("No AI models available")
 
+        # Filter models by minimum rating threshold
+        available_models = {
+            k: v for k, v in self.models.items()
+            if v >= self.MIN_RATING_THRESHOLD
+        }
+
+        if not available_models:
+            logger.error(
+                "No AI models available above minimum threshold",
+                extra={
+                    "threshold": self.MIN_RATING_THRESHOLD,
+                    "total_models": len(self.models)
+                }
+            )
+            raise RuntimeError("No AI models available above minimum threshold")
+
         sorted_models = sorted(
-            self.models.items(),
+            available_models.items(),
             key=lambda x: x[1],
             reverse=True
         )
@@ -148,38 +175,47 @@ class AIModelSelector:
             "Selected best AI model",
             extra={
                 "model": best_model,
-                "rating": self.models[best_model]
+                "rating": self.models[best_model],
+                "available_models": len(available_models)
             }
         )
 
         return best_model
 
-    def get_next_model(self, failed_model: str) -> str | None:
+    def get_next_model(
+        self,
+        failed_model: str,
+        decrease_rating: bool = True
+    ) -> str | None:
         """Get next best model after current one failed.
 
         This method is called when a model times out or returns an error.
-        It automatically decreases the failed model's rating and returns
-        the next best alternative.
+        Returns the next best alternative that meets the minimum rating threshold.
 
         Args:
             failed_model: Model that failed or timed out
+            decrease_rating: If True, apply default penalty (for backward compatibility)
 
         Returns:
             Next best model identifier, or None if no alternatives available
         """
-        # Decrease rating of failed model
-        self.decrease_rating(failed_model)
+        # Apply default penalty if requested (backward compatibility)
+        if decrease_rating:
+            self.decrease_rating(failed_model)
 
-        # Get all models except the failed one
+        # Get all models except the failed one and above threshold
         available_models = {
             k: v for k, v in self.models.items()
-            if k != failed_model
+            if k != failed_model and v >= self.MIN_RATING_THRESHOLD
         }
 
         if not available_models:
             logger.warning(
-                "No alternative AI models available",
-                extra={"failed_model": failed_model}
+                "No alternative AI models available above threshold",
+                extra={
+                    "failed_model": failed_model,
+                    "threshold": self.MIN_RATING_THRESHOLD
+                }
             )
             return None
 
@@ -197,7 +233,8 @@ class AIModelSelector:
             extra={
                 "failed_model": failed_model,
                 "next_model": next_model,
-                "rating": self.models[next_model]
+                "rating": self.models[next_model],
+                "available_models": len(available_models)
             }
         )
 
@@ -261,6 +298,105 @@ class AIModelSelector:
                 "old_rating": old_rating,
                 "new_rating": self.models[model],
                 "bonus": bonus
+            }
+        )
+
+        self._save_models()
+
+    def disable_model(self, model: str, reason: str = "") -> None:
+        """Permanently disable a model by setting its rating to 0.
+
+        Used for critical errors like 404 (model not found) or 400 (bad request).
+        These models will never be selected again.
+
+        Args:
+            model: Model identifier
+            reason: Reason for disabling (for logging)
+        """
+        if model not in self.models:
+            logger.warning(
+                "Attempted to disable unknown model",
+                extra={"model": model}
+            )
+            return
+
+        old_rating = self.models[model]
+        self.models[model] = 0
+
+        logger.warning(
+            "AI model permanently disabled",
+            extra={
+                "model": model,
+                "old_rating": old_rating,
+                "reason": reason
+            }
+        )
+
+        self._save_models()
+
+    def decrease_rating_by_error_type(
+        self,
+        model: str,
+        error_type: str,
+        error_code: int | None = None
+    ) -> None:
+        """Decrease model rating based on error type.
+
+        Different errors have different penalties:
+        - 404, 400, 403: Permanent disable (rating = 0)
+        - 429 (rate limit): Moderate penalty (-5)
+        - Timeout: Minor penalty (-3)
+        - Other errors: Default penalty (-10)
+
+        Args:
+            model: Model identifier
+            error_type: Type of error (e.g., "NotFoundError", "RateLimitError")
+            error_code: HTTP error code if applicable
+        """
+        if model not in self.models:
+            logger.warning(
+                "Attempted to decrease rating of unknown model",
+                extra={"model": model}
+            )
+            return
+
+        old_rating = self.models[model]
+
+        # Determine penalty based on error type
+        if error_type in ("NotFoundError", "BadRequestError", "PermissionDeniedError"):
+            # Critical errors - permanently disable
+            self.disable_model(
+                model,
+                reason=f"{error_type} (code: {error_code})"
+            )
+            return
+
+        elif error_type == "RateLimitError" or error_code == 429:
+            # Temporary rate limit - moderate penalty
+            penalty = 5
+            reason = "rate limit"
+
+        elif error_type == "TimeoutError":
+            # Timeout - minor penalty
+            penalty = 3
+            reason = "timeout"
+
+        else:
+            # Other errors - default penalty
+            penalty = 10
+            reason = f"error: {error_type}"
+
+        self.models[model] = max(0, self.models[model] - penalty)
+
+        logger.info(
+            "Decreased AI model rating",
+            extra={
+                "model": model,
+                "old_rating": old_rating,
+                "new_rating": self.models[model],
+                "penalty": penalty,
+                "reason": reason,
+                "error_type": error_type
             }
         )
 
