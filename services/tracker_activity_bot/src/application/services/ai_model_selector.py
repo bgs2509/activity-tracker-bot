@@ -4,10 +4,10 @@ This service manages a pool of free AI models from OpenRouter, automatically
 selecting the best performing model and implementing failover with rating updates.
 
 Architecture:
-- Models are loaded from ai-models.json with initial reliability ratings
+- Models are loaded from data/ai-models.json with initial reliability ratings
 - If a model fails or times out, its rating is decreased
 - The next best model is automatically selected
-- Ratings persist across service restarts
+- Ratings persist across service restarts (via Docker volume)
 """
 
 import json
@@ -42,7 +42,7 @@ class AIModelSelector:
     # Minimum rating threshold - models below this won't be used
     MIN_RATING_THRESHOLD = 20
 
-    def __init__(self, models_file_path: str = "ai-models.json"):
+    def __init__(self, models_file_path: str = "data/ai-models.json"):
         """Initialize model selector with models configuration file.
 
         Args:

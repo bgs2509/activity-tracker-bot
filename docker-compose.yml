@@ -100,7 +100,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
     volumes:
-      - ai_models_data:/app/ai-models.json
+      - ai_models_data:/app/data
     depends_on:
       - redis
       - data_postgres_api
