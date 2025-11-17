@@ -142,7 +142,81 @@ class AIParsingResult:
             self.start_time = start_time_str
             self.end_time = end_time_str
 
-        self.alternatives = data.get("alternatives", [])
+        # Validate and normalize time fields in alternatives
+        raw_alternatives = data.get("alternatives", [])
+        self.alternatives = []
+
+        for idx, alt in enumerate(raw_alternatives):
+            validated_alt = alt.copy()
+
+            # Validate time fields if present
+            alt_start = alt.get("start_time")
+            alt_end = alt.get("end_time")
+
+            if alt_start and alt_end:
+                try:
+                    # Parse timestamps and convert to UTC
+                    alt_start_dt = self._parse_and_normalize_time(alt_start)
+                    alt_end_dt = self._parse_and_normalize_time(alt_end)
+
+                    # Apply 60-second safety gap: end_time must not be in future
+                    now_utc = datetime.now(timezone.utc)
+                    safety_gap = timedelta(seconds=60)
+                    max_allowed_end = now_utc - safety_gap
+
+                    if alt_end_dt > max_allowed_end:
+                        logger.warning(
+                            f"Alternative {idx}: AI returned end_time in future, applying safety gap",
+                            extra={
+                                "alternative_idx": idx,
+                                "original_end_time": alt_end,
+                                "adjusted_to": max_allowed_end.isoformat()
+                            }
+                        )
+                        alt_end_dt = max_allowed_end
+
+                    # Ensure start_time < end_time (minimum 1 minute)
+                    min_duration = timedelta(minutes=1)
+                    if alt_start_dt >= alt_end_dt:
+                        logger.warning(
+                            f"Alternative {idx}: AI returned invalid duration, adjusting",
+                            extra={
+                                "alternative_idx": idx,
+                                "original_start": alt_start,
+                                "original_end": alt_end
+                            }
+                        )
+                        alt_start_dt = alt_end_dt - min_duration
+
+                    # Update validated times
+                    validated_alt["start_time"] = alt_start_dt.isoformat()
+                    validated_alt["end_time"] = alt_end_dt.isoformat()
+
+                    logger.debug(
+                        f"Alternative {idx}: Time validation completed",
+                        extra={
+                            "alternative_idx": idx,
+                            "original_start": alt_start,
+                            "original_end": alt_end,
+                            "validated_start": validated_alt["start_time"],
+                            "validated_end": validated_alt["end_time"]
+                        }
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"Alternative {idx}: Failed to validate times, keeping original",
+                        extra={
+                            "alternative_idx": idx,
+                            "start_time": alt_start,
+                            "end_time": alt_end,
+                            "error": str(e)
+                        },
+                        exc_info=True
+                    )
+                    # Keep original values if validation fails
+
+            self.alternatives.append(validated_alt)
 
     def is_complete(self) -> bool:
         """Check if parsing result has all required data.
