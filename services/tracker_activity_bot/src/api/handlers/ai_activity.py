@@ -435,12 +435,33 @@ async def handle_ai_suggestion_selection(
 
         # Get user categories to find category_id
         categories = await services.category.get_user_categories(user_id)
+
+        # Debug logging to track category matching issue
+        category_names = [c["name"] for c in categories]
+        logger.debug(
+            "Matching AI suggested category with user categories",
+            extra={
+                "user_id": user_id,
+                "suggested_category": suggestion.get("category"),
+                "available_categories": category_names,
+                "suggestion_data": suggestion
+            }
+        )
+
         category = next(
             (c for c in categories if c["name"] == suggestion["category"]),
             None
         )
 
         if not category:
+            logger.warning(
+                "AI suggested category not found in user categories",
+                extra={
+                    "user_id": user_id,
+                    "suggested_category": suggestion.get("category"),
+                    "available_categories": category_names
+                }
+            )
             await callback.message.answer(
                 "⚠️ Категория не найдена.",
                 reply_markup=get_main_menu_keyboard()
