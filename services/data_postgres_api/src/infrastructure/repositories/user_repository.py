@@ -1,5 +1,6 @@
 """User repository."""
 import logging
+from datetime import datetime
 from typing import List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,6 +107,77 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
                     "error": str(e),
                     "error_type": type(e).__name__,
                     "operation": "read"
+                },
+                exc_info=True
+            )
+            raise
+
+    async def update_last_poll_time(
+        self,
+        user_id: int,
+        poll_time: datetime
+    ) -> User | None:
+        """Update last poll time for user.
+
+        This method updates the last_poll_time field for a user, which tracks
+        when the bot last sent an activity poll to this user. This is used for
+        poll schedule restoration after bot restarts.
+
+        Args:
+            user_id: User identifier
+            poll_time: Timestamp of last poll (should be UTC)
+
+        Returns:
+            Updated user if found, None otherwise
+
+        Raises:
+            Exception: If database operation fails
+        """
+        logger.debug(
+            "Updating last_poll_time",
+            extra={
+                "user_id": user_id,
+                "poll_time": poll_time.isoformat(),
+                "operation": "update"
+            }
+        )
+
+        try:
+            # Use base repository's update method with UserUpdate schema
+            updated_user = await self.update(
+                user_id,
+                UserUpdate(last_poll_time=poll_time)
+            )
+
+            if updated_user:
+                logger.info(
+                    "last_poll_time updated successfully",
+                    extra={
+                        "user_id": user_id,
+                        "poll_time": poll_time.isoformat(),
+                        "operation": "update"
+                    }
+                )
+            else:
+                logger.warning(
+                    "User not found for last_poll_time update",
+                    extra={
+                        "user_id": user_id,
+                        "operation": "update"
+                    }
+                )
+
+            return updated_user
+
+        except Exception as e:
+            logger.error(
+                "Error updating last_poll_time",
+                extra={
+                    "user_id": user_id,
+                    "poll_time": poll_time.isoformat(),
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "operation": "update"
                 },
                 exc_info=True
             )
