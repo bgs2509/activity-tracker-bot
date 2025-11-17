@@ -36,6 +36,7 @@ from src.application.services.ai_service import AIService
 from src.application.services import fsm_timeout_service as fsm_timeout_module
 from src.application.utils.formatters import extract_tags, format_time, format_duration
 from src.application.utils.decorators import with_typing_action
+from src.application.utils.telegram_helpers import safe_callback_answer
 
 logger = logging.getLogger(__name__)
 
@@ -357,7 +358,7 @@ async def handle_ai_confirm_save(
             if fsm_timeout_module.fsm_timeout_service:
                 fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
 
-            await callback.answer()
+            await safe_callback_answer(callback)
             return
 
         # Parse times
@@ -380,7 +381,7 @@ async def handle_ai_confirm_save(
             post_save_callback=None  # No poll scheduling for AI flow
         )
 
-        await callback.answer("✅ Сохранено!")
+        await safe_callback_answer(callback, "✅ Сохранено!")
 
     except Exception as e:
         logger.error(
@@ -398,7 +399,7 @@ async def handle_ai_confirm_save(
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
 
-        await callback.answer()
+        await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data.startswith("ai_suggestion_"))
@@ -428,7 +429,7 @@ async def handle_ai_suggestion_selection(
         user_id = data.get("user_id")
 
         if idx >= len(suggestions):
-            await callback.answer("⚠️ Неверный выбор")
+            await safe_callback_answer(callback, "⚠️ Неверный выбор")
             return
 
         suggestion = suggestions[idx]
@@ -473,7 +474,7 @@ async def handle_ai_suggestion_selection(
             if fsm_timeout_module.fsm_timeout_service:
                 fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
 
-            await callback.answer()
+            await safe_callback_answer(callback)
             return
 
         # Check if time data is complete
@@ -490,7 +491,7 @@ async def handle_ai_suggestion_selection(
             if fsm_timeout_module.fsm_timeout_service:
                 fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
 
-            await callback.answer()
+            await safe_callback_answer(callback)
             return
 
         # Parse times
@@ -522,7 +523,7 @@ async def handle_ai_suggestion_selection(
             post_save_callback=None  # No poll scheduling for AI flow
         )
 
-        await callback.answer("✅ Сохранено!")
+        await safe_callback_answer(callback, "✅ Сохранено!")
 
     except Exception as e:
         logger.error(
@@ -540,7 +541,7 @@ async def handle_ai_suggestion_selection(
         if fsm_timeout_module.fsm_timeout_service:
             fsm_timeout_module.fsm_timeout_service.cancel_timeout(telegram_id)
 
-        await callback.answer()
+        await safe_callback_answer(callback)
 
 
 @router.callback_query(F.data == "ai_request_edit")
@@ -573,7 +574,7 @@ async def handle_ai_request_edit(
         "• «читал книгу по Python с 14:00 до 15:30»\n"
         "• «бег в парке 30 минут»"
     )
-    await callback.answer()
+    await safe_callback_answer(callback)
 
 
 @router.message(AIActivityStates.waiting_for_ai_clarification)
@@ -713,4 +714,4 @@ async def handle_ai_cancel(callback: types.CallbackQuery, state: FSMContext):
         "❌ Отменено.",
         reply_markup=get_main_menu_keyboard()
     )
-    await callback.answer()
+    await safe_callback_answer(callback)
