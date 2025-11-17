@@ -47,16 +47,94 @@ class AIParsingResult:
     def __init__(self, data: Dict[str, Any]):
         """Initialize parsing result from AI response.
 
+        Validates and normalizes time fields to ensure:
+        - All times are in UTC format (with +00:00 offset)
+        - end_time is not in the future (applies 60-second safety gap)
+        - start_time < end_time (minimum 1 minute duration)
+
         Args:
             data: Dictionary with AI response data
         """
         self.confidence = data.get("confidence", "low")
         self.category_name = data.get("category")
         self.description = data.get("description")
-        self.start_time = data.get("start_time")
-        self.end_time = data.get("end_time")
-        self.alternatives = data.get("alternatives", [])
         self.raw_response = data
+
+        # Validate and normalize time fields
+        start_time_str = data.get("start_time")
+        end_time_str = data.get("end_time")
+
+        if start_time_str and end_time_str:
+            try:
+                # Parse timestamps and convert to UTC
+                start_dt = self._parse_and_normalize_time(start_time_str)
+                end_dt = self._parse_and_normalize_time(end_time_str)
+
+                # Apply 60-second safety gap: end_time must not be in future
+                now_utc = datetime.now(timezone.utc)
+                safety_gap = timedelta(seconds=60)
+                max_allowed_end = now_utc - safety_gap
+
+                if end_dt > max_allowed_end:
+                    logger.warning(
+                        "AI returned end_time too close to present or in future, "
+                        "applying safety gap",
+                        extra={
+                            "original_end_time": end_time_str,
+                            "parsed_end_time": end_dt.isoformat(),
+                            "now_utc": now_utc.isoformat(),
+                            "adjusted_to": max_allowed_end.isoformat()
+                        }
+                    )
+                    end_dt = max_allowed_end
+
+                # Ensure start_time < end_time (minimum 1 minute)
+                min_duration = timedelta(minutes=1)
+                if start_dt >= end_dt:
+                    logger.warning(
+                        "AI returned invalid duration (start >= end), adjusting",
+                        extra={
+                            "original_start": start_time_str,
+                            "original_end": end_time_str,
+                            "duration_seconds": (end_dt - start_dt).total_seconds()
+                        }
+                    )
+                    # Set start_time to end_time - 1 minute
+                    start_dt = end_dt - min_duration
+
+                # Convert back to ISO format strings in UTC
+                self.start_time = start_dt.isoformat()
+                self.end_time = end_dt.isoformat()
+
+                logger.debug(
+                    "Time validation completed",
+                    extra={
+                        "original_start": start_time_str,
+                        "original_end": end_time_str,
+                        "validated_start": self.start_time,
+                        "validated_end": self.end_time,
+                        "duration_minutes": int((end_dt - start_dt).total_seconds() / 60)
+                    }
+                )
+
+            except Exception as e:
+                logger.error(
+                    "Failed to validate/normalize times from AI response",
+                    extra={
+                        "start_time": start_time_str,
+                        "end_time": end_time_str,
+                        "error": str(e)
+                    },
+                    exc_info=True
+                )
+                # Keep original values if parsing fails
+                self.start_time = start_time_str
+                self.end_time = end_time_str
+        else:
+            self.start_time = start_time_str
+            self.end_time = end_time_str
+
+        self.alternatives = data.get("alternatives", [])
 
     def is_complete(self) -> bool:
         """Check if parsing result has all required data.
@@ -76,6 +154,42 @@ class AIParsingResult:
             f"AIParsingResult(confidence={self.confidence}, "
             f"category={self.category_name}, complete={self.is_complete()})"
         )
+
+    @staticmethod
+    def _parse_and_normalize_time(time_str: str) -> datetime:
+        """Parse ISO 8601 timestamp and normalize to UTC.
+
+        Handles timestamps with any timezone offset and converts to UTC.
+        Examples:
+            "2025-11-17T11:37:00+02:00" -> datetime(2025, 11, 17, 9, 37, 0, tzinfo=UTC)
+            "2025-11-17T09:37:00+00:00" -> datetime(2025, 11, 17, 9, 37, 0, tzinfo=UTC)
+            "2025-11-17T09:37:00Z" -> datetime(2025, 11, 17, 9, 37, 0, tzinfo=UTC)
+
+        Args:
+            time_str: ISO 8601 formatted timestamp string
+
+        Returns:
+            datetime object in UTC timezone
+
+        Raises:
+            ValueError: If timestamp format is invalid
+        """
+        # Replace 'Z' suffix with '+00:00' for consistency
+        if time_str.endswith('Z'):
+            time_str = time_str[:-1] + '+00:00'
+
+        # Parse ISO format (handles timezone automatically)
+        dt = datetime.fromisoformat(time_str)
+
+        # Convert to UTC if not already
+        if dt.tzinfo is None:
+            # Treat naive datetime as UTC
+            dt = dt.replace(tzinfo=timezone.utc)
+        elif dt.tzinfo != timezone.utc:
+            # Convert to UTC
+            dt = dt.astimezone(timezone.utc)
+
+        return dt
 
 
 class AIService:
