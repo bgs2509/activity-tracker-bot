@@ -99,6 +99,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+    volumes:
+      - ai_models_data:/app/ai-models.json
     depends_on:
       - redis
       - data_postgres_api
@@ -120,6 +122,7 @@ services:
 
 volumes:
   postgres_data:
+  ai_models_data:
 
 networks:
   tracker_network:
