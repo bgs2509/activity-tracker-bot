@@ -620,15 +620,30 @@ class AIService:
             for cat in categories
         ])
 
-        # Format recent activities (last 10 for context)
+        # Format recent activities (last 5 unique for context)
+        # Deduplicate to avoid confusing weak AI models with repeated patterns
         activities_text = "Нет данных"
         last_activity_info = "Нет данных"
         if recent_activities:
             activities_list = []
-            for act in recent_activities[:10]:
+            seen_activities = set()  # Track (category, description) pairs
+
+            for act in recent_activities:
                 cat_name = act.get('category_name', 'Без категории')
                 desc = act.get('description', '')
+                activity_key = (cat_name, desc)
+
+                # Skip duplicates
+                if activity_key in seen_activities:
+                    continue
+
+                seen_activities.add(activity_key)
                 activities_list.append(f"- {cat_name}: {desc}")
+
+                # Limit to 5 unique activities to reduce context noise
+                if len(activities_list) >= 5:
+                    break
+
             activities_text = "\n".join(activities_list)
 
             # Extract last activity timing info for context
@@ -729,8 +744,17 @@ class AIService:
 Всегда выбирай категорию на основе СМЫСЛА активности пользователя из ДОСТУПНЫХ КАТЕГОРИЙ выше.
 Если пользователь использует синонимы или другие формулировки — ищи смысловое соответствие.
 
-ПОСЛЕДНИЕ АКТИВНОСТИ ПОЛЬЗОВАТЕЛЯ (для контекста):
+═══════════════════════════════════════════════════════════════════
+
+📋 ПОСЛЕДНИЕ АКТИВНОСТИ ПОЛЬЗОВАТЕЛЯ (для контекста):
 {activities_text}
+
+⚠️ КРИТИЧЕСКИ ВАЖНО:
+Активности выше - это ТОЛЬКО КОНТЕКСТ для понимания паттернов пользователя.
+НЕ КОПИРУЙ их в свой ответ!
+Обрабатывай ТОЛЬКО текст из раздела "ТЕКСТ ОТ ПОЛЬЗОВАТЕЛЯ" ниже!
+
+═══════════════════════════════════════════════════════════════════
 
 ПОСЛЕДНЯЯ АКТИВНОСТЬ:
 {last_activity_info}
