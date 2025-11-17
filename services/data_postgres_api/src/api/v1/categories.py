@@ -15,6 +15,7 @@ from src.schemas.category import (
     CategoryCreate,
     CategoryResponse,
     CategoryBulkCreate,
+    CategoryUpdate,
 )
 
 router = APIRouter(prefix="/categories", tags=["categories"])
@@ -62,6 +63,26 @@ async def get_categories(
     """Get all categories for user."""
     categories = await service.get_user_categories(user_id)
     return [CategoryResponse.model_validate(cat) for cat in categories]
+
+
+@router.patch("/{category_id}", response_model=CategoryResponse)
+@handle_service_errors_with_conflict
+async def update_category(
+    category_id: int,
+    category_data: CategoryUpdate,
+    service: Annotated[CategoryService, Depends(get_category_service)]
+) -> CategoryResponse:
+    """Update category with duplicate name check."""
+    try:
+        category = await service.update_category(category_id, category_data)
+        return CategoryResponse.model_validate(category)
+    except ValueError as e:
+        # Special handling: distinguish between not found (404) and validation errors (409)
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
+        # Duplicate name error
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
 
 
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -12,10 +12,11 @@ def build_category_list_keyboard() -> InlineKeyboardMarkup:
     """Build keyboard for category list view.
 
     Returns:
-        Inline keyboard with add/delete/menu buttons
+        Inline keyboard with add/edit/delete/menu buttons
     """
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Добавить категорию", callback_data="add_category")],
+        [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_category_start")],
         [InlineKeyboardButton(text="❌ Удалить категорию", callback_data="delete_category_start")],
         [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")],
     ])
@@ -228,3 +229,62 @@ def validate_emoji(emoji: str | None) -> str | None:
         field_name_ru="Эмодзи",
         allow_empty=True
     )
+
+
+def build_edit_category_keyboard(categories: list) -> InlineKeyboardMarkup:
+    """Build keyboard for category edit selection.
+
+    Args:
+        categories: List of user's categories
+
+    Returns:
+        Inline keyboard with category buttons (2 per row) and navigation
+    """
+    buttons = []
+
+    # Add category buttons (2 per row)
+    for i, cat in enumerate(categories):
+        emoji = cat.get("emoji", "")
+        name = cat["name"]
+        button = InlineKeyboardButton(
+            text=f"{emoji} {name}",
+            callback_data=f"edit_cat:{cat['id']}"
+        )
+        if i % 2 == 0:
+            buttons.append([button])
+        else:
+            buttons[-1].append(button)
+
+    # Add navigation buttons
+    buttons.append([InlineKeyboardButton(text="🔙 К категориям", callback_data="categories")])
+    buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def build_edit_field_keyboard(category_id: int) -> InlineKeyboardMarkup:
+    """Build keyboard for selecting which field to edit.
+
+    Args:
+        category_id: Category ID being edited
+
+    Returns:
+        Inline keyboard with field selection options
+    """
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✏️ Изменить название", callback_data=f"edit_field:name:{category_id}")],
+        [InlineKeyboardButton(text="🎨 Изменить эмодзи", callback_data=f"edit_field:emoji:{category_id}")],
+        [InlineKeyboardButton(text="❌ Отменить", callback_data="categories")],
+    ])
+
+
+def build_post_edit_keyboard() -> InlineKeyboardMarkup:
+    """Build keyboard shown after successful category edit.
+
+    Returns:
+        Inline keyboard with navigation options
+    """
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📂 К списку категорий", callback_data="categories")],
+        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")],
+    ])

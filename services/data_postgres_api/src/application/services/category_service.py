@@ -9,7 +9,7 @@ from typing import Optional
 
 from src.domain.models.category import Category
 from src.infrastructure.repositories.category_repository import CategoryRepository
-from src.schemas.category import CategoryCreate
+from src.schemas.category import CategoryCreate, CategoryUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +186,79 @@ class CategoryService:
             extra={"category_id": category_id, "found": category is not None}
         )
         return category
+
+    async def update_category(
+        self, category_id: int, category_data: CategoryUpdate
+    ) -> Category:
+        """
+        Update category with duplicate name check.
+
+        Args:
+            category_id: Category identifier
+            category_data: Category update data
+
+        Returns:
+            Updated category
+
+        Raises:
+            ValueError: If category not found or name already exists for user
+        """
+        logger.debug(
+            "update_category started",
+            extra={
+                "category_id": category_id,
+                "name": category_data.name,
+                "emoji": category_data.emoji
+            }
+        )
+
+        try:
+            # Business rule: category must exist
+            category = await self.repository.get_by_id(category_id)
+            if not category:
+                logger.warning("category not found", extra={"category_id": category_id})
+                raise ValueError(f"Category {category_id} not found")
+
+            # Business rule: check for duplicate category name per user (if name is being changed)
+            if category_data.name and category_data.name != category.name:
+                existing = await self.repository.get_by_user_and_name(
+                    category.user_id,
+                    category_data.name
+                )
+                if existing:
+                    logger.warning(
+                        "duplicate_category",
+                        extra={
+                            "user_id": category.user_id,
+                            "name": category_data.name,
+                            "category_id": existing.id
+                        }
+                    )
+                    raise ValueError(
+                        f"Category with name '{category_data.name}' already exists for user {category.user_id}"
+                    )
+
+            updated_category = await self.repository.update(category_id, category_data)
+            logger.info(
+                "category_updated",
+                extra={
+                    "category_id": category_id,
+                    "user_id": category.user_id,
+                    "name": updated_category.name if updated_category else None,
+                    "emoji": updated_category.emoji if updated_category else None
+                }
+            )
+            return updated_category
+        except Exception as e:
+            logger.error(
+                "update_category failed",
+                extra={
+                    "category_id": category_id,
+                    "error": str(e)
+                },
+                exc_info=True
+            )
+            raise
 
     async def delete_category(self, category_id: int) -> None:
         """

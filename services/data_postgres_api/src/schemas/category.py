@@ -20,6 +20,13 @@ class CategoryBulkCreate(BaseModel):
     categories: list[dict] = Field(..., description="List of categories to create")
 
 
+class CategoryUpdate(BaseModel):
+    """Schema for updating a category."""
+
+    name: str | None = Field(None, min_length=2, max_length=100, description="Category name")
+    emoji: str | None = Field(None, max_length=10, description="Category emoji")
+
+
 class CategoryResponse(BaseModel):
     """Schema for category response."""
 

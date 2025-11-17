@@ -2,19 +2,12 @@
 import logging
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
 
 from src.domain.models.category import Category
-from src.schemas.category import CategoryCreate
+from src.schemas.category import CategoryCreate, CategoryUpdate
 from src.infrastructure.repositories.base import BaseRepository
 
 logger = logging.getLogger(__name__)
-
-
-# Placeholder update schema for BaseRepository (categories don't have updates)
-class CategoryUpdate(BaseModel):
-    """Placeholder update schema for Category."""
-    pass
 
 
 class CategoryRepository(BaseRepository[Category, CategoryCreate, CategoryUpdate]):

@@ -39,6 +39,24 @@ class CategoryService:
         """Get all categories for a user."""
         return await self.client.get(f"/api/v1/categories?user_id={user_id}")
 
+    async def update_category(
+        self,
+        category_id: int,
+        name: str | None = None,
+        emoji: str | None = None
+    ) -> dict:
+        """Update a category."""
+        update_data = {}
+        if name is not None:
+            update_data["name"] = name
+        if emoji is not None:
+            update_data["emoji"] = emoji
+
+        return await self.client.patch(
+            f"/api/v1/categories/{category_id}",
+            json=update_data
+        )
+
     async def delete_category(self, category_id: int) -> None:
         """Delete a category."""
         try:
