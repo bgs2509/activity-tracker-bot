@@ -208,9 +208,9 @@ async def _show_confirmation(
         result: AI parsing result
         categories: User's categories list
     """
-    # Find matching category
+    # Find matching category (case-insensitive)
     category = next(
-        (c for c in categories if c["name"] == result.category_name),
+        (c for c in categories if c["name"].lower() == result.category_name.lower()),
         None
     )
 
@@ -448,8 +448,9 @@ async def handle_ai_suggestion_selection(
             }
         )
 
+        # Find matching category (case-insensitive)
         category = next(
-            (c for c in categories if c["name"] == suggestion["category"]),
+            (c for c in categories if c["name"].lower() == suggestion["category"].lower()),
             None
         )
 
