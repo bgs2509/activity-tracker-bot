@@ -32,8 +32,10 @@ class AIModelSelector:
 
     Error handling strategy:
     - Critical errors (404, 400, 403): Model disabled (rating = 0)
-    - Rate limit (429): Moderate penalty (rating -= 5)
-    - Timeout: Minor penalty (rating -= 3)
+    - Rate limit (429): Significant penalty (rating -= 20)
+    - Timeout: Minor penalty (rating -= 5)
+    - Other errors: Default penalty (rating -= 10)
+    - Success: Small bonus (rating += 2, max 100)
     - Models with rating < 20 are excluded from selection
     """
 
@@ -81,12 +83,11 @@ class AIModelSelector:
     def _initialize_default_models(self) -> None:
         """Initialize with default set of free OpenRouter models."""
         self.models = {
-            "meta-llama/llama-3.2-3b-instruct:free": 100,
-            "google/gemini-2.0-flash-exp:free": 95,
-            "deepseek/deepseek-chat:free": 90,
-            "deepseek/deepseek-r1:free": 88,
-            "google/gemma-3-27b-it:free": 85,
-            "mistralai/mistral-small-3.1-24b-instruct:free": 83,
+            "google/gemini-2.0-flash-exp:free": 100,
+            "google/gemma-3-27b-it:free": 95,
+            "meta-llama/llama-3.2-3b-instruct:free": 90,
+            "mistralai/mistral-small-3.1-24b-instruct:free": 85,
+            "deepseek/deepseek-r1:free": 80,
             "qwen/qwen2.5-vl-72b-instruct:free": 80,
             "meta-llama/llama-3.2-11b-vision-instruct:free": 78,
             "google/gemma-3-12b-it:free": 75,
@@ -272,14 +273,15 @@ class AIModelSelector:
 
         self._save_models()
 
-    def increase_rating(self, model: str, bonus: int = 5) -> None:
+    def increase_rating(self, model: str, bonus: int = 2) -> None:
         """Increase model's reliability rating after successful response.
 
         This rewards models that perform well. Rating is capped at 100.
+        Bonus is kept small (2) to prevent rapid rating fluctuations.
 
         Args:
             model: Model identifier
-            bonus: Rating increase amount (default: 5)
+            bonus: Rating increase amount (default: 2)
         """
         if model not in self.models:
             logger.warning(
@@ -372,13 +374,13 @@ class AIModelSelector:
             return
 
         elif error_type == "RateLimitError" or error_code == 429:
-            # Temporary rate limit - moderate penalty
-            penalty = 5
+            # Temporary rate limit - significant penalty to quickly rotate to alternatives
+            penalty = 20
             reason = "rate limit"
 
         elif error_type == "TimeoutError":
             # Timeout - minor penalty
-            penalty = 3
+            penalty = 5
             reason = "timeout"
 
         else:
