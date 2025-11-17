@@ -48,7 +48,7 @@ class CategoryService:
             "create_category started",
             extra={
                 "user_id": category_data.user_id,
-                "name": category_data.name,
+                "category_name": category_data.name,
                 "emoji": category_data.emoji,
                 "is_default": category_data.is_default
             }
@@ -65,7 +65,7 @@ class CategoryService:
                     "duplicate_category",
                     extra={
                         "user_id": category_data.user_id,
-                        "name": category_data.name,
+                        "category_name": category_data.name,
                         "category_id": existing.id
                     }
                 )
@@ -79,7 +79,7 @@ class CategoryService:
                 extra={
                     "category_id": category.id,
                     "user_id": category.user_id,
-                    "name": category.name,
+                    "category_name": category.name,
                     "emoji": category.emoji
                 }
             )
@@ -89,7 +89,7 @@ class CategoryService:
                 "create_category failed",
                 extra={
                     "user_id": category_data.user_id,
-                    "name": category_data.name,
+                    "category_name": category_data.name,
                     "error": str(e)
                 },
                 exc_info=True
@@ -124,7 +124,7 @@ class CategoryService:
             if existing:
                 logger.debug(
                     "skipping duplicate category",
-                    extra={"user_id": user_id, "name": category_data.name}
+                    extra={"user_id": user_id, "category_name": category_data.name}
                 )
                 # Skip duplicate
                 continue
@@ -136,7 +136,7 @@ class CategoryService:
                 extra={
                     "category_id": created.id,
                     "user_id": user_id,
-                    "name": created.name
+                    "category_name": created.name
                 }
             )
             created_categories.append(created)
@@ -207,7 +207,7 @@ class CategoryService:
             "update_category started",
             extra={
                 "category_id": category_id,
-                "name": category_data.name,
+                "category_name": category_data.name,
                 "emoji": category_data.emoji
             }
         )
@@ -230,7 +230,7 @@ class CategoryService:
                         "duplicate_category",
                         extra={
                             "user_id": category.user_id,
-                            "name": category_data.name,
+                            "category_name": category_data.name,
                             "category_id": existing.id
                         }
                     )
@@ -244,7 +244,7 @@ class CategoryService:
                 extra={
                     "category_id": category_id,
                     "user_id": category.user_id,
-                    "name": updated_category.name if updated_category else None,
+                    "category_name": updated_category.name if updated_category else None,
                     "emoji": updated_category.emoji if updated_category else None
                 }
             )
@@ -300,7 +300,7 @@ class CategoryService:
                     "cannot delete default category",
                     extra={
                         "category_id": category_id,
-                        "name": category.name,
+                        "category_name": category.name,
                         "user_id": category.user_id
                     }
                 )
@@ -315,7 +315,7 @@ class CategoryService:
                 extra={
                     "category_id": category_id,
                     "user_id": category.user_id,
-                    "name": category.name
+                    "category_name": category.name
                 }
             )
         except Exception as e:
