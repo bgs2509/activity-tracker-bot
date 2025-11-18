@@ -248,7 +248,7 @@ async def auto_calculate_period(
         # Send category selection message
         await callback.message.answer(
             text,
-            reply_markup=get_poll_category_keyboard(categories)
+            reply_markup=get_poll_category_keyboard(categories, cancel_callback="cancel")
         )
         await callback.answer()
 
@@ -366,7 +366,7 @@ async def quick_period_selection(callback: types.CallbackQuery, state: FSMContex
 
     await callback.message.answer(
         text,
-        reply_markup=get_poll_category_keyboard(categories)
+        reply_markup=get_poll_category_keyboard(categories, cancel_callback="cancel")
     )
     await callback.answer()
 
@@ -549,7 +549,7 @@ async def handle_end_time_selection(callback: types.CallbackQuery, state: FSMCon
 
         await callback.message.answer(
             text,
-            reply_markup=get_poll_category_keyboard(categories)
+            reply_markup=get_poll_category_keyboard(categories, cancel_callback="cancel")
         )
         await callback.answer()
 
