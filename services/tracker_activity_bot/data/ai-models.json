@@ -8,7 +8,6 @@
   "meta-llama/llama-3.2-11b-vision-instruct:free": 78,
   "google/gemma-3-12b-it:free": 75,
   "qwen/qwen2.5-vl-32b-instruct:free": 73,
-  "google/gemma-2.5-flash-lite:free": 70,
   "microsoft/phi-3-mini-128k-instruct:free": 68,
   "meta-llama/llama-3.2-1b-instruct:free": 65,
   "google/gemma-3-4b-it:free": 63,
