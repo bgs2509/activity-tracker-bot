@@ -168,7 +168,7 @@ async def send_reminder(bot: Bot, user_id: int, state: State, action: str):
     """
     try:
         # Get shared FSM storage (reuses existing connection pool)
-        from src.api.handlers.poll import get_fsm_storage
+        from src.api.handlers.poll.helpers import get_fsm_storage
         storage = get_fsm_storage()
 
         # Check if user is still in same state
@@ -228,7 +228,7 @@ async def cleanup_stale_state(bot: Bot, user_id: int, state: State):
     """
     try:
         # Get shared FSM storage (reuses existing connection pool)
-        from src.api.handlers.poll import get_fsm_storage
+        from src.api.handlers.poll.helpers import get_fsm_storage
         storage = get_fsm_storage()
 
         # Check if user is still in same state (didn't click Continue)
