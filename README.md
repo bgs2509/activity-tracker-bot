@@ -18,11 +18,12 @@ This project implements a **Proof of Concept (Level 1)** Telegram bot for tracki
 │  (Aiogram)       │       JSON responses         │  (FastAPI)      │
 └──────────────────┘                              └──────────────────┘
        │                                                  │
-       │ FSM Storage                                      │ SQL Queries
-       ▼                                                  ▼
-┌──────────────────┐                              ┌──────────────────┐
-│     Redis        │                              │   PostgreSQL     │
-└──────────────────┘                              └──────────────────┘
+       │ FSM Storage         AI Models Config            │ SQL Queries
+       ▼                     (ai_models_data)            ▼
+┌──────────────────┐       ┌──────────────────┐  ┌──────────────────┐
+│     Redis        │       │   Volume Store   │  │   PostgreSQL     │
+│                  │       │  (Model Ratings) │  │                  │
+└──────────────────┘       └──────────────────┘  └──────────────────┘
 ```
 
 ### Key Principles
@@ -84,24 +85,41 @@ activity-tracker-bot/
 │
 ├── services/
 │   ├── data_postgres_api/             # FastAPI data service
-│   │   ├── routers/                   # API endpoints
-│   │   ├── models/                    # SQLAlchemy models
-│   │   ├── repositories/              # Repository pattern
-│   │   ├── schemas/                   # Pydantic DTOs
-│   │   ├── database/                  # DB connection
-│   │   └── main.py                    # Entry point
+│   │   ├── src/
+│   │   │   ├── api/v1/                # API endpoints (routers)
+│   │   │   ├── application/           # Service layer
+│   │   │   ├── core/                  # Core configuration
+│   │   │   ├── domain/                # Domain models
+│   │   │   ├── infrastructure/        # Repositories & database
+│   │   │   ├── schemas/               # Pydantic DTOs
+│   │   │   └── main.py                # Entry point
+│   │   ├── alembic/                   # Database migrations
+│   │   └── tests/                     # Service tests
 │   │
 │   └── tracker_activity_bot/          # Aiogram bot service
-│       ├── handlers/                  # Message handlers
-│       ├── keyboards/                 # Inline keyboards
-│       ├── states/                    # FSM states
-│       ├── services/                  # HTTP clients
-│       ├── utils/                     # Utilities
-│       └── main.py                    # Entry point
+│       ├── src/
+│       │   ├── api/
+│       │   │   ├── handlers/          # Message handlers
+│       │   │   ├── keyboards/         # Inline keyboards
+│       │   │   ├── states/            # FSM states
+│       │   │   ├── messages/          # Message templates
+│       │   │   └── middleware/        # Middleware
+│       │   ├── application/
+│       │   │   ├── services/          # HTTP clients & AI services
+│       │   │   └── utils/             # Utilities
+│       │   ├── core/                  # Core configuration
+│       │   └── main.py                # Entry point
+│       ├── data/                      # AI models configuration
+│       └── tests/                     # Service tests
 │
+├── tests/                             # Integration tests
+├── docs/                              # Project documentation
 ├── docker-compose.yml                 # Docker configuration
 ├── .env.example                       # Environment template
+├── .env.test                          # Test environment
 ├── Makefile                           # Development commands
+├── pytest.ini                         # Pytest configuration
+├── deploy.sh                          # Deployment script
 └── README.md                          # This file
 ```
 
@@ -109,7 +127,10 @@ activity-tracker-bot/
 
 ```bash
 # Start services
-make up
+make up                # Start all services
+make build             # Build Docker images
+make down              # Stop all services
+make clean             # Stop services and remove volumes
 
 # View logs
 make logs              # All services
@@ -121,16 +142,28 @@ make restart           # All services
 make restart-bot       # Bot only
 make restart-api       # API only
 
-# Stop services
-make down
-
-# Clean up (remove volumes)
-make clean
-
 # Open shells
 make shell-bot         # Bot container
 make shell-api         # API container
 make shell-db          # PostgreSQL shell
+
+# Database migrations
+make migrate           # Run Alembic migrations
+make migrate-create    # Create new migration (use MSG="description")
+make migrate-downgrade # Downgrade one migration
+make migrate-history   # Show migration history
+
+# Testing
+make test-unit         # Run unit tests
+make test-integration  # Run integration tests
+make test-smoke        # Run smoke tests
+make test-coverage     # Run tests with coverage
+make test-all          # Run all tests
+
+# Docker-based testing
+make test-unit-docker        # Unit tests in containers
+make test-integration-docker # Integration tests in containers
+make test-all-docker         # All tests in containers
 
 # Code quality
 make lint              # Run Ruff linting
@@ -174,7 +207,13 @@ make format            # Format code
 - `POST /api/v1/activities` - Create activity
 - `GET /api/v1/activities?user_id={id}&limit={n}` - Get user activities
 
-**API Documentation**: http://localhost:8000/docs (Swagger UI)
+### User Settings API
+
+- `POST /api/v1/user-settings` - Create user settings
+- `GET /api/v1/user-settings?user_id={id}` - Get user settings
+- `PATCH /api/v1/user-settings/{id}` - Update user settings
+
+**API Documentation**: http://localhost:8080/docs (Swagger UI)
 
 ## 🗄️ Database Schema
 
@@ -197,6 +236,10 @@ See `.env.example` for all available variables:
 - `POSTGRES_USER` - PostgreSQL username
 - `POSTGRES_PASSWORD` - PostgreSQL password
 - `POSTGRES_DB` - Database name
+- `DATABASE_URL` - PostgreSQL connection URL
+- `REDIS_URL` - Redis connection URL for FSM storage
+- `DATA_API_URL` - Data API service URL
+- `OPENROUTER_API_KEY` - **Optional**: OpenRouter API key for AI-powered activity parsing
 - `LOG_LEVEL` - Logging level (default: INFO)
 
 ## 🧪 Testing
