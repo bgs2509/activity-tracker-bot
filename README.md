@@ -1,6 +1,15 @@
-# Activity Tracker Bot
+# 🤖 Activity Tracker Bot
 
-Telegram bot for personal activity tracking with microservices architecture.
+AI-powered Telegram bot for intelligent personal activity tracking with microservices architecture.
+
+## ✨ Key Features
+
+- 🤖 **AI-Powered Activity Parsing** - Natural language processing for activity descriptions using OpenRouter AI models
+- 🕐 **Smart Time Recognition** - Flexible time input formats (14:30, 30м, 2ч, сейчас)
+- 📊 **Automatic Categorization** - AI-assisted category suggestions based on activity context
+- 💬 **Interactive UI** - Seamless inline keyboard navigation
+- 🏗️ **Microservices Architecture** - Scalable design with HTTP REST API communication
+- 🐳 **Docker-Ready Deployment** - One-command setup with Docker Compose
 
 ## 🎯 Overview
 
